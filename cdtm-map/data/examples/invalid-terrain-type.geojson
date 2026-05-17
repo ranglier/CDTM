@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "name": "invalid_terrain_type_example",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id_case": "invalid_terrain_0001",
+        "region": "test",
+        "sous_region": null,
+        "terrain_cat": "plaine",
+        "terrain_type": "marais",
+        "terrain_secondaire": null,
+        "cote": false,
+        "faction": "neutre",
+        "peuple_majoritaire": "gondoriens",
+        "empl_base": 5,
+        "empl_max": 5,
+        "controleur": null,
+        "controle_type": "aucun",
+        "note_publique": "Exemple invalide : terrain_type incompatible avec terrain_cat.",
+        "note_staff": null
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0]
+          ]
+        ]
+      }
+    }
+  ]
+}
