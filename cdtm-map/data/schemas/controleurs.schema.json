@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "controleurs",
   "type": "array",
-  "description": "Liste d'entites pouvant controler une case.",
+  "description": "Liste d'entites nommees pouvant controler une case.",
   "items": {
     "type": "object",
     "additionalProperties": true,
@@ -13,13 +13,7 @@
       "nom": {
         "type": ["string", "null"]
       },
-      "controleur_type": {
-        "type": ["string", "null"]
-      },
-      "faction": {
-        "type": ["string", "null"]
-      },
-      "actif": {
+      "pnj": {
         "type": ["boolean", "null"]
       }
     },
