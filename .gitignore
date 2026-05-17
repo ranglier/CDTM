@@ -1,0 +1,22 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+.vite/
+
+# Environment files
+.env
+.env.*
+
+# Coverage
+coverage/

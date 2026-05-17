@@ -1,0 +1,10 @@
+[
+  {
+    "id_style": "style_faction_exemple",
+    "cible_type": "faction",
+    "cible_id": "faction_exemple",
+    "fill": "#8aa4b8",
+    "stroke": "#324a5f",
+    "opacity": 0.8
+  }
+]

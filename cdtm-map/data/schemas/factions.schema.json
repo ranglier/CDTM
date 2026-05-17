@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "factions",
+  "type": "array",
+  "description": "Liste simple des factions referencees dans le projet.",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id_faction": {
+        "type": "string"
+      },
+      "nom": {
+        "type": ["string", "null"]
+      },
+      "description_courte": {
+        "type": ["string", "null"]
+      },
+      "statut": {
+        "type": ["string", "null"]
+      }
+    },
+    "required": ["id_faction"]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cases",
+  "type": "array",
+  "description": "Liste de donnees RP rattachees aux cases cartographiques.",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id_case": {
+        "type": "string"
+      },
+      "region": {
+        "type": ["string", "null"]
+      },
+      "sous_region": {
+        "type": ["string", "null"]
+      },
+      "terrain_cat": {
+        "type": ["string", "null"]
+      },
+      "terrain_type": {
+        "type": ["string", "null"]
+      },
+      "faction": {
+        "type": ["string", "null"]
+      },
+      "race": {
+        "type": ["string", "null"]
+      },
+      "empl_base": {
+        "type": ["number", "null"]
+      },
+      "empl_max": {
+        "type": ["number", "null"]
+      },
+      "controleur": {
+        "type": ["string", "null"]
+      },
+      "controleur_type": {
+        "type": ["string", "null"]
+      },
+      "controle_type": {
+        "type": ["string", "null"]
+      },
+      "note_publique": {
+        "type": ["string", "null"]
+      },
+      "note_staff": {
+        "type": ["string", "null"]
+      }
+    },
+    "required": ["id_case"]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "localites",
+  "type": "array",
+  "description": "Liste de localites rattachees a une case ou a une geometrie future.",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id_localite": {
+        "type": "string"
+      },
+      "id_case": {
+        "type": ["string", "null"]
+      },
+      "nom": {
+        "type": ["string", "null"]
+      },
+      "type": {
+        "type": ["string", "null"]
+      },
+      "visibilite": {
+        "type": ["string", "null"]
+      },
+      "note_publique": {
+        "type": ["string", "null"]
+      },
+      "note_staff": {
+        "type": ["string", "null"]
+      }
+    },
+    "required": ["id_localite"]
+  }
+}

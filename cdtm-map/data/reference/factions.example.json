@@ -1,0 +1,8 @@
+[
+  {
+    "id_faction": "faction_exemple",
+    "nom": "Faction exemple",
+    "description_courte": "Entree fictive de demonstration.",
+    "statut": "provisoire"
+  }
+]

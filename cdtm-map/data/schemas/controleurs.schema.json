@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "controleurs",
+  "type": "array",
+  "description": "Liste d'entites pouvant controler une case.",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id_controleur": {
+        "type": "string"
+      },
+      "nom": {
+        "type": ["string", "null"]
+      },
+      "controleur_type": {
+        "type": ["string", "null"]
+      },
+      "faction": {
+        "type": ["string", "null"]
+      },
+      "actif": {
+        "type": ["boolean", "null"]
+      }
+    },
+    "required": ["id_controleur"]
+  }
+}

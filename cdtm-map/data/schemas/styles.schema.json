@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "styles",
+  "type": "array",
+  "description": "Definitions de styles metier pour l'affichage cartographique.",
+  "items": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id_style": {
+        "type": "string"
+      },
+      "cible_type": {
+        "type": ["string", "null"]
+      },
+      "cible_id": {
+        "type": ["string", "null"]
+      },
+      "fill": {
+        "type": ["string", "null"]
+      },
+      "stroke": {
+        "type": ["string", "null"]
+      },
+      "opacity": {
+        "type": ["number", "null"]
+      }
+    },
+    "required": ["id_style"]
+  }
+}
