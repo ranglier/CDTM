@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "name": "invalid_cote_string_example",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id_case": "invalid_cote_0001",
+        "region": "test",
+        "sous_region": null,
+        "terrain_cat": "plaine",
+        "terrain_type": "prairie",
+        "terrain_secondaire": null,
+        "cote": "true",
+        "faction": "neutre",
+        "peuple_majoritaire": "gondoriens",
+        "empl_base": 5,
+        "empl_max": 5,
+        "controleur": null,
+        "controle_type": "aucun",
+        "note_publique": "Exemple invalide : cote est une chaîne au lieu d'un booléen.",
+        "note_staff": null
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0]
+          ]
+        ]
+      }
+    }
+  ]
+}
