@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/cdtm/schemas/cases.schema.json",
+  "title": "CDTM Case",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["id_case"],
+  "properties": {
+    "id_case": { "type": "string" },
+    "region": { "type": "string" },
+    "sous_region": { "type": "string" },
+    "terrain_cat": { "type": "string" },
+    "terrain_type": { "type": "string" },
+    "faction": { "type": "string" },
+    "race": { "type": "string" },
+    "empl_base": { "type": ["integer", "null"], "minimum": 0 },
+    "empl_max": { "type": ["integer", "null"], "minimum": 0 },
+    "controleur": { "type": "string" },
+    "controleur_type": { "type": "string" },
+    "controle_type": { "type": "string" },
+    "note_publique": { "type": "string" },
+    "note_staff": { "type": "string" }
+  }
+}
