@@ -1,41 +1,17 @@
-# CDTM — Carte interactive
+# CDTM
 
-Projet de carte interactive pour le RP **Les Chroniques de la Terre du Milieu**.
+Dépôt Git du projet **Les Chroniques de la Terre du Milieu**.
 
-## Objectif
+## Carte interactive
 
-Ce dépôt vise à préparer une carte web consultable par les joueurs et maintenable par le staff.
-
-La carte représentera la Terre du Milieu découpée en cases territoriales. Chaque case pourra porter des informations de terrain, de contrôle politique, de faction, de race dominante et d’emplacements disponibles.
-
-## Statut actuel
-
-Le projet est en phase de cadrage technique.
-
-La géométrie définitive des cases sera produite dans QGIS à partir des cartes fournies par le staff, puis exportée en GeoPackage et/ou GeoJSON.
-
-## Workflow prévu
+Le projet de carte interactive se trouve dans le dossier :
 
 ```txt
-cartes source staff
-→ QGIS / GIMP
-→ masque de contours
-→ polygonisation
-→ nettoyage GeoPackage
-→ export GeoJSON
-→ application web
+cdtm-map/
 ```
 
-## Principes
+Voir : [`cdtm-map/README.md`](cdtm-map/README.md)
 
-- La géométrie des cases reste séparée des données RP détaillées.
-- La couche `cases` contient uniquement les champs essentiels à l’identification, l’affichage et le filtrage.
-- Les localités, historiques, bâtiments et données staff détaillées pourront être stockés dans des fichiers ou tables séparés reliés par `id_case`.
+## Note d'organisation
 
-## Documentation
-
-- [`docs/SPEC_CARTE_INTERACTIVE_CDTM.md`](docs/SPEC_CARTE_INTERACTIVE_CDTM.md)
-- [`docs/WORKFLOW_QGIS_VECTORISATION_CASES.md`](docs/WORKFLOW_QGIS_VECTORISATION_CASES.md)
-- [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)
-- [`docs/NOMENCLATURES.md`](docs/NOMENCLATURES.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
+La racine du dépôt sert uniquement de point d'entrée. L'arborescence applicative et documentaire de la carte est centralisée dans `cdtm-map/` afin d'éviter les doublons entre la racine et le sous-projet.
