@@ -7,13 +7,38 @@
     "montagne",
     "inconnu"
   ],
+  "terrain_type_by_cat": {
+    "plaine": [
+      "prairie",
+      "plaine_aride",
+      "bocage"
+    ],
+    "desert": [
+      "desert_chaud",
+      "desert_gele",
+      "terre_desolee"
+    ],
+    "marais": [
+      "marais"
+    ],
+    "foret": [
+      "foret",
+      "foret_luxuriante",
+      "taiga"
+    ],
+    "montagne": [
+      "colline",
+      "montagne",
+      "montagne_riche",
+      "paturage"
+    ]
+  },
   "terrain_type": [
     "prairie",
     "plaine_aride",
     "bocage",
+    "desert_chaud",
     "desert_gele",
-    "toundra",
-    "desert",
     "terre_desolee",
     "marais",
     "foret",
@@ -26,11 +51,15 @@
     "inconnu"
   ],
   "terrain_secondaire": [
-    "colline",
-    "cote",
-    "foret",
-    "paturage",
+    "prairie",
+    "plaine_aride",
+    "bocage",
+    "desert_chaud",
+    "desert_gele",
     "terre_desolee",
+    "foret",
+    "foret_luxuriante",
+    "taiga",
     "inconnu"
   ],
   "controle_type": [
@@ -48,6 +77,7 @@
     "daliens",
     "esgarothiens",
     "dunlandais",
+    "hommes_sauvages",
     "orientaux",
     "corsaires",
     "haradrim",
@@ -69,6 +99,7 @@
     "pieds_de_pierre",
     "cheveux_noirs",
     "hobbits",
+    "lossoth",
     "mixte",
     "inconnu"
   ],
