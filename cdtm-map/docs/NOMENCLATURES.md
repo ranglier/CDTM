@@ -26,22 +26,34 @@ Catégorie mécanique principale du terrain.
 
 Type de terrain dominant dans une case.
 
+### `plaine`
+
 - `prairie`
 - `plaine_aride`
 - `bocage`
+
+### `desert`
+
+- `desert_chaud`
 - `desert_gele`
-- `toundra`
-- `desert`
 - `terre_desolee`
+
+### `marais`
+
 - `marais`
+
+### `foret`
+
 - `foret`
 - `foret_luxuriante`
 - `taiga`
+
+### `montagne`
+
 - `colline`
 - `montagne`
 - `montagne_riche`
 - `paturage`
-- `inconnu`
 
 ## `terrain_secondaire`
 
@@ -49,14 +61,25 @@ Type secondaire ou modificateur local.
 
 Ce champ peut rester vide.
 
-Valeurs initiales possibles :
+Si `terrain_type = colline`, `terrain_secondaire` peut contenir un type de plaine, de forêt ou de désert.
 
-- `colline`
-- `cote`
-- `foret`
-- `paturage`
+- `prairie`
+- `plaine_aride`
+- `bocage`
+- `desert_chaud`
+- `desert_gele`
 - `terre_desolee`
+- `foret`
+- `foret_luxuriante`
+- `taiga`
 - `inconnu`
+
+## `cote`
+
+Booléen indiquant si la case est côtière.
+
+- `true`
+- `false`
 
 ## `controle_type`
 
@@ -72,7 +95,7 @@ Statut du contrôle territorial.
 
 ## `peuple_majoritaire`
 
-Valeurs techniques fondées sur la liste des peuples jouables ou référencés par les règles de création de personnage.
+Valeurs techniques fondées sur la liste des peuples jouables ou référencés par les règles de création de personnage et les règles d'emplacements.
 
 ### Hommes de l'Ouest
 
@@ -87,6 +110,7 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 ### Hommes du Milieu
 
 - `dunlandais`
+- `hommes_sauvages`
 
 ### Hommes de l'Est
 
@@ -126,9 +150,10 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 - `pieds_de_pierre`
 - `cheveux_noirs`
 
-### Hobbits
+### Autres peuples
 
 - `hobbits`
+- `lossoth`
 
 ### Valeurs transversales
 
