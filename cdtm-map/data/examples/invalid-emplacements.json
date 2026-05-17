@@ -1,0 +1,36 @@
+[
+  {
+    "id_case": "invalid_emplacements_0001",
+    "region": "test",
+    "sous_region": null,
+    "terrain_cat": "foret",
+    "terrain_type": "foret",
+    "terrain_secondaire": null,
+    "cote": false,
+    "faction": "neutre",
+    "peuple_majoritaire": "noldor",
+    "empl_base": 5,
+    "empl_max": 3,
+    "controleur": null,
+    "controle_type": "aucun",
+    "note_publique": "Exemple invalide : empl_base et empl_max ne correspondent pas aux règles.",
+    "note_staff": null
+  },
+  {
+    "id_case": "invalid_emplacements_0002",
+    "region": "test",
+    "sous_region": null,
+    "terrain_cat": "montagne",
+    "terrain_type": "montagne",
+    "terrain_secondaire": null,
+    "cote": false,
+    "faction": "neutre",
+    "peuple_majoritaire": "longues_barbes",
+    "empl_base": 3,
+    "empl_max": 6,
+    "controleur": null,
+    "controle_type": "total",
+    "note_publique": "Exemple invalide : empl_max dépasse le plafond autorisé.",
+    "note_staff": null
+  }
+]
