@@ -1,0 +1,10 @@
+[
+  {
+    "id_faction": "faction_exemple",
+    "nom": "Faction exemple",
+    "type": "royaume",
+    "camp": "neutre",
+    "couleur": "#888888",
+    "note": "Exemple non canonique à remplacer."
+  }
+]
