@@ -1,0 +1,146 @@
+{
+  "bounds": {
+    "min": 1,
+    "max": 5
+  },
+  "base_by_terrain_cat": {
+    "plaine": 5,
+    "desert": 3,
+    "montagne": 3,
+    "foret": 3,
+    "marais": 2
+  },
+  "people_groups": {
+    "nains": [
+      "longues_barbes",
+      "barbes_de_feu",
+      "ventrus",
+      "poignes_de_fer",
+      "barbes_raides",
+      "pieds_de_pierre",
+      "cheveux_noirs"
+    ],
+    "orcs": [
+      "snagas",
+      "uruk_hai",
+      "gobelins"
+    ],
+    "elfes": [
+      "noldor",
+      "sindar",
+      "nandor",
+      "avari"
+    ]
+  },
+  "bonus_by_people": [
+    {
+      "label": "Nains dans les montagnes",
+      "people": "nains",
+      "conditions": {
+        "terrain_cat": "montagne"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Haradrim et Variags dans les deserts chauds",
+      "people": ["haradrim", "variags"],
+      "conditions": {
+        "terrain_type": "desert_chaud"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Orcs dans les terres desolees",
+      "people": "orcs",
+      "conditions": {
+        "terrain_type": "terre_desolee"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Orcs dans les montagnes",
+      "people": "orcs",
+      "conditions": {
+        "terrain_cat": "montagne"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Lossoth dans les deserts geles",
+      "people": ["lossoth"],
+      "conditions": {
+        "terrain_type": "desert_gele"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Elfes en foret",
+      "people": "elfes",
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Hobbits dans les marais",
+      "people": ["hobbits"],
+      "conditions": {
+        "terrain_cat": "marais"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Hobbits dans les collines",
+      "people": ["hobbits"],
+      "conditions": {
+        "terrain_type": "colline"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Hommes sauvages en foret",
+      "people": ["hommes_sauvages"],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Corsaires sur les cotes",
+      "people": ["corsaires"],
+      "conditions": {
+        "cote": true
+      },
+      "modifier": 1
+    }
+  ],
+  "malus_by_people": [
+    {
+      "label": "Nains en plaines, forets ou deserts",
+      "people": "nains",
+      "conditions": {
+        "terrain_cat_any": ["plaine", "foret", "desert"]
+      },
+      "modifier": -1
+    }
+  ],
+  "bonus_by_faction": [
+    {
+      "label": "Empire dans les deserts geles",
+      "faction": "empire",
+      "conditions": {
+        "terrain_type": "desert_gele"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Empire dans les montagnes",
+      "faction": "empire",
+      "conditions": {
+        "terrain_cat": "montagne"
+      },
+      "modifier": 1
+    }
+  ],
+  "calculation_note": "empl_max = clamp(empl_base + modifiers, bounds.min, bounds.max). Les modificateurs applicables dependent du peuple_majoritaire, de la faction, du terrain et du booleen cote."
+}
