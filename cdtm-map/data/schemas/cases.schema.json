@@ -17,14 +17,47 @@
         "type": ["string", "null"]
       },
       "terrain_cat": {
-        "type": ["string", "null"],
-        "enum": ["plaine", "desert", "marais", "foret", "montagne", "inconnu", null]
+        "type": "string",
+        "enum": ["plaine", "desert", "marais", "foret", "montagne", "inconnu"]
       },
       "terrain_type": {
-        "type": ["string", "null"]
+        "type": "string",
+        "enum": [
+          "prairie",
+          "plaine_aride",
+          "bocage",
+          "desert_chaud",
+          "desert_gele",
+          "terre_desolee",
+          "marais",
+          "foret",
+          "foret_luxuriante",
+          "taiga",
+          "colline",
+          "montagne",
+          "montagne_riche",
+          "paturage",
+          "inconnu"
+        ]
       },
       "terrain_secondaire": {
-        "type": ["string", "null"]
+        "type": ["string", "null"],
+        "enum": [
+          "prairie",
+          "plaine_aride",
+          "bocage",
+          "desert_chaud",
+          "desert_gele",
+          "terre_desolee",
+          "foret",
+          "foret_luxuriante",
+          "taiga",
+          "inconnu",
+          null
+        ]
+      },
+      "cote": {
+        "type": ["boolean", "null"]
       },
       "faction": {
         "type": ["string", "null"]
@@ -38,7 +71,8 @@
       },
       "empl_max": {
         "type": ["integer", "null"],
-        "minimum": 0
+        "minimum": 1,
+        "maximum": 5
       },
       "controleur": {
         "type": ["string", "null"]
@@ -54,6 +88,6 @@
         "type": ["string", "null"]
       }
     },
-    "required": ["id_case"]
+    "required": ["id_case", "terrain_cat", "terrain_type"]
   }
 }
