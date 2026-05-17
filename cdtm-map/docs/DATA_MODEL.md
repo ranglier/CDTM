@@ -15,6 +15,7 @@ Champs prevus :
 - `sous_region`
 - `terrain_cat`
 - `terrain_type`
+- `terrain_type_colline`
 - `faction`
 - `race`
 - `empl_base`
@@ -28,10 +29,36 @@ Champs prevus :
 ### Notes
 
 - `id_case` doit etre unique et stable dans le temps.
-- `terrain_cat` vise une nomenclature controlee.
-- `terrain_type` peut rester plus libre si besoin.
-- `controleur` reference une entite RP ou politique.
+- `region`
+- `sous_region`
+- `terrain_cat` définit la categorie du terrain de la case parmi : plaine, desert, marais, foret, montagne
+- `terrain_type` définit un type de terrain spécifique dans une categorie :
+    - plaine : prairie, plaine aride, boccage
+    - desert : desert gele, toundra, desert, terre desolee
+    - marais : marais
+    - foret : foret, foret luxuriante, taiga
+    - montagne : colline, montagne, montagne riche, paturage
+- `terrain_type_colline` par defaut vide, si la case est une colline elle peut posseder un second type de terrain. cf les types dans `terrain_type` excluant les types pour les cases montagnes.
+- `faction` par defaut vide. Definit la faction controlant la case, ex : modor, royaume des hommes.
+- `race`
+- `empl_base`
+- `empl_max`
+- `controleur` par defaut vide. Reference une entite RP, un PJ ou PNJ.
+- `controleur_type`
+- `controle_type`
 - `note_publique` et `note_staff` doivent rester clairement distinctes.
+
+## Future table `races`
+
+Usage :
+
+- Referencer les differentes peuple pouvant occuper les cases.
+
+Champs possibles :
+
+- `id_race`
+- `nom`
+- `description_courte`
 
 ## Future table `localites`
 
@@ -45,6 +72,7 @@ Champs possibles :
 - `id_case`
 - `nom`
 - `type`
+- `empl`
 - `visibilite`
 - `note_publique`
 - `note_staff`
@@ -74,7 +102,7 @@ Champs possibles :
 - `nom`
 - `controleur_type`
 - `faction`
-- `actif`
+- `pnj`
 
 ## Future table `styles`
 
