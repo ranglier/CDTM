@@ -1,0 +1,154 @@
+:root {
+  color-scheme: light;
+  --bg: #f3ede3;
+  --panel: rgba(255, 250, 242, 0.88);
+  --panel-border: rgba(95, 75, 50, 0.18);
+  --text: #2d2418;
+  --muted: #6d5d49;
+  --earth: #9d5f2d;
+  --forest: #466246;
+  --sand: #b9924f;
+  --shadow: 0 18px 50px rgba(61, 42, 20, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(212, 171, 99, 0.24), transparent 40%),
+    linear-gradient(180deg, #f8f3eb 0%, #efe2ca 100%);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
+code {
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+}
+
+.app-shell {
+  width: min(1100px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 4rem 0 5rem;
+}
+
+.hero {
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--earth);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(2.5rem, 8vw, 4.8rem);
+  line-height: 0.94;
+}
+
+.lede {
+  max-width: 60ch;
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+.status-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.status-card,
+.panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 22px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.status-card {
+  padding: 1.4rem;
+}
+
+.status-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+.status-card ul,
+.file-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}
+
+.status-card li + li,
+.file-list li + li {
+  margin-top: 0.4rem;
+}
+
+.status-card[data-accent="earth"] {
+  border-top: 4px solid var(--earth);
+}
+
+.status-card[data-accent="forest"] {
+  border-top: 4px solid var(--forest);
+}
+
+.status-card[data-accent="sand"] {
+  border-top: 4px solid var(--sand);
+}
+
+.panel {
+  padding: 1.5rem;
+}
+
+.panel + .panel {
+  margin-top: 1rem;
+}
+
+.panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+.command-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.command-list code {
+  display: block;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(82, 63, 33, 0.08);
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    width: min(100% - 1.25rem, 1100px);
+    padding-top: 2.5rem;
+  }
+
+  .hero h1 {
+    max-width: none;
+  }
+}
