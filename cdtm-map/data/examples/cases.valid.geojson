@@ -1,0 +1,102 @@
+{
+  "type": "FeatureCollection",
+  "name": "cases_valid_example",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id_case": "case_0001",
+        "region": "calenardhon",
+        "sous_region": "eastfold",
+        "terrain_cat": "plaine",
+        "terrain_type": "prairie",
+        "terrain_secondaire": null,
+        "cote": false,
+        "faction": "royaume_des_hommes",
+        "peuple_majoritaire": "eotheods",
+        "empl_base": 5,
+        "empl_max": 5,
+        "controleur": "deorl",
+        "controle_type": "total",
+        "note_publique": "Case d'exemple publique pour les tests de validation.",
+        "note_staff": "Note staff d'exemple. Ne pas exposer dans les exports publics."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id_case": "case_0002",
+        "region": "ered_luin",
+        "sous_region": null,
+        "terrain_cat": "montagne",
+        "terrain_type": "colline",
+        "terrain_secondaire": "prairie",
+        "cote": null,
+        "faction": "neutre",
+        "peuple_majoritaire": "hobbits",
+        "empl_base": 3,
+        "empl_max": 4,
+        "controleur": null,
+        "controle_type": "aucun",
+        "note_publique": "Exemple de colline avec terrain secondaire autorisé.",
+        "note_staff": null
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [1, 0],
+            [2, 0],
+            [2, 1],
+            [1, 1],
+            [1, 0]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id_case": "case_0003",
+        "region": "umbar",
+        "sous_region": "cote",
+        "terrain_cat": "desert",
+        "terrain_type": "desert_chaud",
+        "terrain_secondaire": null,
+        "cote": true,
+        "faction": "umbar",
+        "peuple_majoritaire": "corsaires",
+        "empl_base": 3,
+        "empl_max": 4,
+        "controleur": null,
+        "controle_type": "partiel",
+        "note_publique": "Exemple de case côtière contrôlée partiellement.",
+        "note_staff": "Permet de tester le bonus côtier des Corsaires."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [0, 1],
+            [1, 1],
+            [1, 2],
+            [0, 2],
+            [0, 1]
+          ]
+        ]
+      }
+    }
+  ]
+}
