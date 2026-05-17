@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/cdtm/schemas/controleurs.schema.json",
+  "title": "CDTM Controleur",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["id_controleur", "nom"],
+  "properties": {
+    "id_controleur": { "type": "string" },
+    "nom": { "type": "string" },
+    "type": { "type": "string" },
+    "faction": { "type": "string" },
+    "statut": { "type": "string" },
+    "note": { "type": "string" }
+  }
+}
