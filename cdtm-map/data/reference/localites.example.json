@@ -3,7 +3,9 @@
     "id_localite": "localite_0001",
     "id_case": "case_0001",
     "nom": "Localite exemple",
-    "type": "ville",
+    "niveau": "village",
+    "type": "domaine",
+    "empl": 1,
     "visibilite": "publique",
     "note_publique": "Exemple minimal a completer.",
     "note_staff": null
