@@ -16,11 +16,21 @@
       "nom": {
         "type": ["string", "null"]
       },
+      "niveau": {
+        "type": ["string", "null"],
+        "enum": ["hameau", "village", "bourg", "ville", "cite", null]
+      },
       "type": {
-        "type": ["string", "null"]
+        "type": ["string", "null"],
+        "enum": ["avant_poste", "fort", "domaine", "ruine", null]
+      },
+      "empl": {
+        "type": ["integer", "null"],
+        "minimum": 0
       },
       "visibilite": {
-        "type": ["string", "null"]
+        "type": ["string", "null"],
+        "enum": ["publique", "staff", "secrete", "incertaine", null]
       },
       "note_publique": {
         "type": ["string", "null"]
