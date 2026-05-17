@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/cdtm/schemas/styles.schema.json",
+  "title": "CDTM Style",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["id"],
+  "properties": {
+    "id": { "type": "string" },
+    "fill": { "type": "string" },
+    "stroke": { "type": "string" },
+    "fillOpacity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "strokeOpacity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "weight": { "type": "number", "minimum": 0 }
+  }
+}
