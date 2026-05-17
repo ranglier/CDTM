@@ -1,0 +1,15 @@
+[
+  {
+    "id_localite": "loc_exemple_0001",
+    "id_case": "case_0001",
+    "nom": "Localité exemple",
+    "niveau": "village",
+    "type": "seigneurie",
+    "faction": "Faction exemple",
+    "controleur": "Contrôleur exemple",
+    "race": "humains",
+    "fortifie": false,
+    "note_publique": "Exemple non canonique à remplacer.",
+    "note_staff": ""
+  }
+]
