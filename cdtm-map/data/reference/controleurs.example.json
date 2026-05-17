@@ -2,8 +2,6 @@
   {
     "id_controleur": "controleur_exemple",
     "nom": "Controleur exemple",
-    "controleur_type": "faction",
-    "faction": "faction_exemple",
-    "actif": true
+    "pnj": true
   }
 ]
