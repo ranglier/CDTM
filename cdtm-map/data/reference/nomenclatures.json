@@ -72,12 +72,6 @@
     "mixte",
     "inconnu"
   ],
-  "peuple_statut_creation": [
-    "ouvert",
-    "ouvert_connaissances",
-    "sous_conditions",
-    "ferme"
-  ],
   "localite_niveau": [
     "hameau",
     "village",
