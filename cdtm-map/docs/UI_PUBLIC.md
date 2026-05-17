@@ -2,41 +2,67 @@
 
 ## Objectif
 
-Definir une interface de consultation simple, lisible et limitee aux informations publiques.
+Définir une interface de consultation simple, lisible et limitée aux informations publiques.
 
-## Elements prevus
+## Éléments prévus
 
 ### Carte
 
 - Affichage principal de la carte interactive.
-- Navigation de base : zoom, deplacement, selection de case.
+- Navigation de base : zoom, déplacement, sélection de case.
+- Affichage optionnel des contours des cases.
 
-### Legende
+### Légende
 
-- Explication des couleurs et styles visibles.
-- Version initiale volontairement simple.
+- Explication des couleurs de faction.
+- Explication des styles liés au contrôle : total, partiel, contesté, occupé, vassalisé.
+- Explication des éventuelles couches affichées.
 
 ### Popup de case
 
-- Resume des informations publiques utiles.
-- Pas de donnees staff dans cette vue.
+La popup publique doit afficher les informations utiles sans donnée staff.
+
+Ordre d'affichage recommandé :
+
+1. `id_case`
+2. `region`
+3. `sous_region`
+4. `terrain_cat`
+5. `terrain_type`
+6. `terrain_secondaire` si présent
+7. `cote` si `true`
+8. `faction`
+9. `peuple_majoritaire`
+10. `empl_base` / `empl_max`
+11. `controleur` si présent
+12. `controle_type`
+13. `note_publique`
+
+`note_staff` ne doit jamais apparaître dans cette vue.
 
 ### Filtres simples
 
-- Filtre par terrain.
+- Filtre par région.
+- Filtre par catégorie de terrain.
+- Filtre par type de terrain.
 - Filtre par faction.
-- Filtre par race.
+- Filtre par peuple majoritaire.
+- Filtre par type de contrôle.
+- Filtre des cases côtières.
 
 ### Affichage ou masquage des contours
 
-- Option pour afficher ou alleger les bordures des cases.
+- Option pour afficher ou alléger les bordures des cases.
+- Les contours doivent rester disponibles pour conserver la lisibilité du découpage territorial.
 
 ## Contraintes
 
 - Ne montrer que des informations publiques.
 - Garder une interface claire sur desktop et mobile.
+- Ne pas charger inutilement les données réservées au staff dans la vue publique.
 
 ## TODO
 
-- Definir l'ordre d'affichage des champs dans le popup.
-- Precisier la forme de la legende initiale.
+- Préciser la forme de la légende initiale.
+- Définir les couleurs de faction dans `styles_factions`.
+- Définir le rendu visuel des contrôles partiels ou contestés.
