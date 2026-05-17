@@ -22,6 +22,7 @@ Elle contient la géométrie de chaque case et les informations minimales néces
 - `terrain_cat`
 - `terrain_type`
 - `terrain_secondaire`
+- `cote`
 - `faction`
 - `peuple_majoritaire`
 - `empl_base`
@@ -30,6 +31,16 @@ Elle contient la géométrie de chaque case et les informations minimales néces
 - `controle_type`
 - `note_publique`
 - `note_staff`
+
+### Champs obligatoires
+
+Une case doit toujours avoir :
+
+- `id_case`
+- `terrain_cat`
+- `terrain_type`
+
+Les autres champs peuvent rester vides si l'information n'est pas encore connue ou non applicable.
 
 ### Définitions des champs
 
@@ -53,7 +64,7 @@ Exemples :
 
 ```txt
 calenardhon
-anórien
+anorien
 ithilien
 rhovanion
 ```
@@ -93,7 +104,27 @@ Cette catégorie sert notamment au calcul de base des emplacements disponibles d
 
 #### `terrain_type`
 
-Type de terrain plus précis à l'intérieur d'une catégorie.
+Type de terrain dominant dans une catégorie.
+
+Valeurs autorisées par catégorie :
+
+```txt
+plaine : prairie, plaine_aride, bocage
+desert : desert_chaud, desert_gele, terre_desolee
+marais : marais
+foret : foret, foret_luxuriante, taiga
+montagne : colline, montagne, montagne_riche, paturage
+```
+
+Une case doit toujours avoir un `terrain_type` compatible avec son `terrain_cat`.
+
+#### `terrain_secondaire`
+
+Type de terrain secondaire.
+
+Ce champ est optionnel et sert surtout aux cases de type `colline`.
+
+Si `terrain_type = colline`, `terrain_secondaire` peut indiquer un type de plaine, de forêt ou de désert associé à la colline.
 
 Valeurs envisagées :
 
@@ -101,41 +132,28 @@ Valeurs envisagées :
 prairie
 plaine_aride
 bocage
+desert_chaud
 desert_gele
-toundra
-desert
 terre_desolee
-marais
 foret
 foret_luxuriante
 taiga
-colline
-montagne
-montagne_riche
-paturage
 ```
 
-Le champ `terrain_type` décrit le terrain dominant de la case.
+Pour les cases côtières, ne pas utiliser `terrain_secondaire = cote`. Utiliser le champ booléen `cote`.
 
-#### `terrain_secondaire`
+#### `cote`
 
-Type de terrain secondaire ou modificateur local.
+Booléen indiquant si la case se trouve sur une côte.
 
-Ce champ est optionnel.
-
-Il sert notamment pour les cas où une case possède un terrain principal mais aussi un trait secondaire utile pour les règles ou l'affichage.
-
-Exemples :
+Valeurs attendues :
 
 ```txt
-colline
-cote
-foret
-paturage
-terre_desolee
+true
+false
 ```
 
-Pour une case de colline ayant un autre caractère dominant, `terrain_type` peut indiquer `colline` et `terrain_secondaire` préciser le contexte local.
+Ce champ sert notamment aux règles d'emplacements des Corsaires.
 
 #### `faction`
 
@@ -160,23 +178,42 @@ Une case peut avoir une faction sans contrôleur nommé.
 
 Peuple ou population majoritaire associée à la case. Ce champ est optionnel et peut être vide.
 
-Valeurs envisagées :
+Le champ décrit la population ou le peuple dominant de la case, pas nécessairement le peuple personnel du contrôleur.
+
+Valeurs initiales envisagées :
 
 ```txt
-humains
-orcs
-nains
-elfes
-hobbits
+gondoriens
+eotheods
+daliens
+esgarothiens
+dunlandais
+orientaux
+corsaires
 haradrim
 variags
+dunedain_du_nord
+numenoreens_noirs
+noldor
+sindar
+nandor
+avari
+snagas
+uruk_hai
+gobelins
+longues_barbes
+barbes_de_feu
+ventrus
+poignes_de_fer
+barbes_raides
+pieds_de_pierre
+cheveux_noirs
+hobbits
 lossoth
-corsaires
+hommes_sauvages
 mixte
 inconnu
 ```
-
-Le champ décrit la population ou le peuple dominant de la case, pas nécessairement la race personnelle du contrôleur.
 
 #### `empl_base`
 
@@ -184,7 +221,7 @@ Nombre d'emplacements de base fourni par le terrain brut de la case.
 
 Ce champ découle de `terrain_cat`.
 
-Exemple de logique métier :
+Règles officielles :
 
 ```txt
 plaine   → 5
@@ -199,6 +236,19 @@ marais   → 2
 Nombre maximal d'emplacements disponibles dans la case après application des règles pertinentes.
 
 Ce champ peut tenir compte de modificateurs liés au peuple, à la faction, au terrain secondaire ou à une règle validée par le staff.
+
+Règles générales :
+
+```txt
+empl_max ne peut pas dépasser 5
+empl_max ne peut pas descendre sous 1
+```
+
+Les règles détaillées sont documentées dans :
+
+```txt
+data/reference/emplacements_rules.json
+```
 
 #### `controleur`
 
@@ -215,6 +265,8 @@ deorl
 moggash
 seigneur_local
 ```
+
+Le statut PNJ ou non d'un contrôleur est stocké dans la table `controleurs`, pas directement dans `cases`.
 
 #### `controle_type`
 
@@ -248,7 +300,7 @@ Elle peut contenir des informations internes, incertaines, secrètes ou prépara
 
 Ce champ ne doit pas être exposé dans les exports publics.
 
-## Future table `races`
+## Future table `peuples`
 
 Usage :
 
@@ -257,25 +309,9 @@ Usage :
 
 Champs possibles :
 
-- `id_race`
+- `id_peuple`
 - `nom`
 - `description_courte`
-
-Valeurs initiales à prévoir :
-
-```txt
-humains
-orcs
-nains
-elfes
-hobbits
-haradrim
-variags
-lossoth
-corsaires
-mixte
-inconnu
-```
 
 ## Future table `localites`
 
@@ -414,7 +450,6 @@ Champs possibles :
 
 ## TODO
 
-- Confirmer les valeurs exactes de `terrain_cat`, `terrain_type` et `terrain_secondaire` avec le staff.
-- Confirmer les règles définitives de calcul de `empl_base` et `empl_max`.
+- Valider la nomenclature exacte des régions et sous-régions.
 - Définir les clés secondaires et références exactes entre fichiers.
-- Aligner `NOMENCLATURES.md`, `nomenclatures.json` et `cases.schema.json` sur ce modèle.
+- Implémenter la validation conditionnelle `terrain_cat` / `terrain_type` si nécessaire.
