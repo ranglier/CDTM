@@ -1,14 +1,36 @@
 {
   "terrain_cat": [
-    "plaines",
-    "montagnes",
-    "foret",
-    "marais",
+    "plaine",
     "desert",
-    "desert_glace",
+    "marais",
+    "foret",
+    "montagne",
+    "inconnu"
+  ],
+  "terrain_type": [
+    "prairie",
+    "plaine_aride",
+    "bocage",
+    "desert_gele",
+    "toundra",
+    "desert",
     "terre_desolee",
+    "marais",
+    "foret",
+    "foret_luxuriante",
+    "taiga",
+    "colline",
+    "montagne",
+    "montagne_riche",
+    "paturage",
+    "inconnu"
+  ],
+  "terrain_secondaire": [
+    "colline",
     "cote",
-    "collines",
+    "foret",
+    "paturage",
+    "terre_desolee",
     "inconnu"
   ],
   "controle_type": [
@@ -20,25 +42,80 @@
     "vassalise",
     "inconnu"
   ],
-  "controleur_type": [
-    "pj",
-    "pnj",
-    "faction",
-    "royaume",
-    "neutre",
-    "inconnu"
-  ],
-  "race": [
-    "humains",
-    "orcs",
-    "nains",
-    "elfes",
-    "hobbits",
+  "peuple_majoritaire": [
+    "gondoriens",
+    "eotheods",
+    "daliens",
+    "esgarothiens",
+    "dunlandais",
+    "orientaux",
+    "corsaires",
     "haradrim",
     "variags",
-    "lossoth",
-    "corsaires",
+    "dunedain_du_nord",
+    "numenoreens_noirs",
+    "noldor",
+    "sindar",
+    "nandor",
+    "avari",
+    "snagas",
+    "uruk_hai",
+    "gobelins",
+    "longues_barbes",
+    "barbes_de_feu",
+    "ventrus",
+    "poignes_de_fer",
+    "barbes_raides",
+    "pieds_de_pierre",
+    "cheveux_noirs",
+    "hobbits",
     "mixte",
+    "inconnu"
+  ],
+  "peuple_statut_creation": [
+    "ouvert",
+    "ouvert_connaissances",
+    "sous_conditions",
+    "ferme"
+  ],
+  "localite_niveau": [
+    "hameau",
+    "village",
+    "bourg",
+    "ville",
+    "cite"
+  ],
+  "localite_type": [
+    "avant_poste",
+    "fort",
+    "domaine",
+    "ruine"
+  ],
+  "visibilite": [
+    "publique",
+    "staff",
+    "secrete",
+    "incertaine"
+  ],
+  "statut_note": [
+    "brouillon",
+    "a_valider",
+    "valide",
+    "archive"
+  ],
+  "faction": [
+    "royaume_des_hommes",
+    "gondor",
+    "eotheods",
+    "mordor",
+    "empire",
+    "harad",
+    "umbar",
+    "rhun",
+    "lindon",
+    "arnor",
+    "nouvelle_numenor",
+    "neutre",
     "inconnu"
   ]
 }
