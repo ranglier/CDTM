@@ -70,15 +70,6 @@ Statut du contrôle territorial.
 - `vassalise`
 - `inconnu`
 
-## `controleur_pnj`
-
-Booléen.
-
-- `true` : le contrôleur nommé est un PNJ.
-- `false` : le contrôleur nommé n'est pas un PNJ.
-
-Ce champ ne doit être utilisé que si le champ `controleur` est renseigné.
-
 ## `peuple_majoritaire`
 
 Valeurs techniques fondées sur la liste des peuples jouables ou référencés par les règles de création de personnage.
@@ -143,17 +134,6 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 
 - `mixte`
 - `inconnu`
-
-## `peuple_statut_creation`
-
-Statut issu des règles de création de personnage.
-
-- `ouvert`
-- `ouvert_connaissances`
-- `sous_conditions`
-- `ferme`
-
-Ce statut décrit la disponibilité d'un peuple à la création de personnage. Il ne signifie pas nécessairement qu'un peuple n'existe pas en RP.
 
 ## `localite_niveau`
 
