@@ -43,9 +43,6 @@
       "controleur": {
         "type": ["string", "null"]
       },
-      "controleur_pnj": {
-        "type": ["boolean", "null"]
-      },
       "controle_type": {
         "type": ["string", "null"],
         "enum": ["aucun", "total", "partiel", "conteste", "occupe", "vassalise", "inconnu", null]
