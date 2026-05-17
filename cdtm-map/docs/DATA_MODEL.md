@@ -27,7 +27,6 @@ Elle contient la géométrie de chaque case et les informations minimales néces
 - `empl_base`
 - `empl_max`
 - `controleur`
-- `controleur_pnj`
 - `controle_type`
 - `note_publique`
 - `note_staff`
@@ -159,9 +158,7 @@ Une case peut avoir une faction sans contrôleur nommé.
 
 #### `peuple_majoritaire`
 
-Peuple ou population majoritaire associée à la case.
-
-Ce champ remplace l'ancien champ `race`.
+Peuple ou population majoritaire associée à la case. Ce champ est optionnel et peut être vide.
 
 Valeurs envisagées :
 
@@ -197,15 +194,11 @@ foret    → 3
 marais   → 2
 ```
 
-Ces valeurs devront être confirmées avec les règles staff définitives.
-
 #### `empl_max`
 
 Nombre maximal d'emplacements disponibles dans la case après application des règles pertinentes.
 
 Ce champ peut tenir compte de modificateurs liés au peuple, à la faction, au terrain secondaire ou à une règle validée par le staff.
-
-Il doit rester compris dans les limites du système de jeu.
 
 #### `controleur`
 
@@ -221,29 +214,6 @@ Exemples :
 deorl
 moggash
 seigneur_local
-```
-
-#### `controleur_pnj`
-
-Booléen indiquant si le contrôleur nommé est un PNJ.
-
-Valeurs attendues :
-
-```txt
-true
-false
-```
-
-Ce champ ne doit être renseigné que si `controleur` est renseigné.
-
-Exemples :
-
-```txt
-controleur = deorl
-controleur_pnj = false
-
-controleur = seigneur_local
-controleur_pnj = true
 ```
 
 #### `controle_type`
