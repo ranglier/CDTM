@@ -165,6 +165,7 @@ Les fichiers invalides ne commencent volontairement pas par `cases` afin de ne p
 ## Documentation principale
 
 - `docs/ROADMAP.md` : trajectoire generale du projet.
+- `docs/FORGEJO_CI.md` : baseline CI minimale pour Forgejo prive.
 - `docs/SPEC_CARTE_INTERACTIVE_CDTM.md` : specification fonctionnelle initiale de la carte.
 - `docs/DATA_MODEL.md` : modele de donnees cible.
 - `docs/NOMENCLATURES.md` : valeurs controlees.
