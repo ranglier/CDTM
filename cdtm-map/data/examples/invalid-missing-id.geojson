@@ -1,17 +1,15 @@
 {
   "type": "FeatureCollection",
-  "name": "invalid_business_field_example",
+  "name": "invalid_missing_id_example",
   "features": [
     {
       "type": "Feature",
       "properties": {
-        "id_case": "invalid_business_0001",
         "region": "test",
         "sous_region": null,
         "cote": false,
         "lac_majeur": false,
-        "cours_eau_majeur": false,
-        "terrain_type": "foret"
+        "cours_eau_majeur": false
       },
       "geometry": {
         "type": "Polygon",

@@ -9,12 +9,52 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
 const projectRoot = path.resolve(scriptsDir, "..");
 
-const schemaPath = path.join(projectRoot, "data/schemas/cases.schema.json");
 const nomenclaturesPath = path.join(projectRoot, "data/reference/nomenclatures.json");
-const emplacementsRulesPath = path.join(projectRoot, "data/reference/emplacements_rules.json");
 
-const ignoredDirectories = new Set([".git", "node_modules", "dist", "build", "coverage", ".next"]);
-const ignoredRelativePrefixes = ["data/reference/", "data/schemas/"];
+const ignoredDirectories = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+]);
+
+const ignoredRelativePrefixes = [
+  "data/reference/",
+  "data/schemas/",
+];
+
+const fallbackReservedBusinessFields = [
+  "terrain_cat",
+  "terrain_type",
+  "relief",
+  "terrain_secondaire",
+  "faction",
+  "peuple_majoritaire",
+  "bonus_speciaux",
+  "empl_base",
+  "empl_max",
+  "controleur",
+  "controle_type",
+  "note_publique",
+  "note_staff",
+];
+
+const coreFields = [
+  "id_case",
+  "region",
+  "sous_region",
+  "cote",
+  "lac_majeur",
+  "cours_eau_majeur",
+];
+
+const waterBooleanFields = [
+  "cote",
+  "lac_majeur",
+  "cours_eau_majeur",
+];
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -46,18 +86,17 @@ async function walkFiles(directory) {
   const results = [];
 
   for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-
     if (entry.isDirectory()) {
       if (ignoredDirectories.has(entry.name)) {
         continue;
       }
-      results.push(...(await walkFiles(entryPath)));
+
+      results.push(...(await walkFiles(path.join(directory, entry.name))));
       continue;
     }
 
     if (entry.isFile()) {
-      results.push(entryPath);
+      results.push(path.join(directory, entry.name));
     }
   }
 
@@ -77,7 +116,10 @@ function isCasesDataFile(filePath) {
 
 async function discoverCaseFiles() {
   const files = await walkFiles(projectRoot);
-  return files.filter((filePath) => isCasesDataFile(filePath)).sort((left, right) => left.localeCompare(right));
+
+  return files
+    .filter((filePath) => isCasesDataFile(filePath))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function extractCases(data, filePath) {
@@ -88,8 +130,10 @@ function extractCases(data, filePath) {
     return {
       cases: data.map((item, index) => ({
         record: item,
+        geometry: null,
         scope: `[feature #${index + 1}]`,
         sourcePath: `${relativePath}[${index}]`,
+        requiresGeometry: false,
       })),
       issues,
     };
@@ -102,28 +146,50 @@ function extractCases(data, filePath) {
       "root",
       "Unsupported JSON root. Expected an array, a GeoJSON FeatureCollection, a GeoJSON Feature, or an object with a cases array."
     );
+
     return { cases: [], issues };
   }
 
   if (data.type === "FeatureCollection") {
     if (!Array.isArray(data.features)) {
-      pushIssue(issues, `[file ${relativePath}]`, "features", "Invalid GeoJSON FeatureCollection. Expected a features array.");
+      pushIssue(
+        issues,
+        `[file ${relativePath}]`,
+        "features",
+        "Invalid GeoJSON FeatureCollection. Expected a features array."
+      );
+
       return { cases: [], issues };
     }
 
     return {
-      cases: data.features.map((feature, index) => ({
-        record: isPlainObject(feature) ? feature.properties : undefined,
-        scope: `[feature #${index + 1}]`,
-        sourcePath: `${relativePath}.features[${index}].properties`,
-      })),
+      cases: data.features.map((feature, index) => {
+        const properties = isPlainObject(feature) ? feature.properties : undefined;
+        const geometry = isPlainObject(feature) ? feature.geometry : undefined;
+
+        return {
+          record: properties,
+          geometry,
+          scope: `[feature #${index + 1}]`,
+          sourcePath: `${relativePath}.features[${index}].properties`,
+          requiresGeometry: true,
+        };
+      }),
       issues,
     };
   }
 
   if (data.type === "Feature") {
     return {
-      cases: [{ record: data.properties, scope: "[feature #1]", sourcePath: `${relativePath}.properties` }],
+      cases: [
+        {
+          record: data.properties,
+          geometry: data.geometry,
+          scope: "[feature #1]",
+          sourcePath: `${relativePath}.properties`,
+          requiresGeometry: true,
+        },
+      ],
       issues,
     };
   }
@@ -132,227 +198,111 @@ function extractCases(data, filePath) {
     return {
       cases: data.cases.map((item, index) => ({
         record: item,
+        geometry: null,
         scope: `[feature #${index + 1}]`,
         sourcePath: `${relativePath}.cases[${index}]`,
+        requiresGeometry: false,
       })),
       issues,
     };
   }
 
-  pushIssue(issues, `[file ${relativePath}]`, "root", "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of cases.");
+  pushIssue(
+    issues,
+    `[file ${relativePath}]`,
+    "root",
+    "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of case records."
+  );
+
   return { cases: [], issues };
 }
 
-function getAllowedTerrainTypes(terrainCat, nomenclatures) {
-  if (!terrainCat || !isPlainObject(nomenclatures.terrain_type_by_cat)) {
-    return [];
-  }
-
-  const values = nomenclatures.terrain_type_by_cat[terrainCat];
-  return Array.isArray(values) ? values : [];
-}
-
-function hasMajorWater(caseRecord) {
-  return caseRecord.cote === true || caseRecord.lac_majeur === true || caseRecord.cours_eau_majeur === true;
-}
-
-function matchesConditions(ruleConditions, caseRecord) {
-  if (!isPlainObject(ruleConditions)) {
-    return true;
-  }
-
-  return Object.entries(ruleConditions).every(([key, expected]) => {
-    if (key === "terrain_cat_any") {
-      return Array.isArray(expected) && expected.includes(caseRecord.terrain_cat);
-    }
-
-    if (key === "terrain_type_any") {
-      return Array.isArray(expected) && expected.includes(caseRecord.terrain_type);
-    }
-
-    if (key === "eau_majeure") {
-      return expected === hasMajorWater(caseRecord);
-    }
-
-    return caseRecord[key] === expected;
-  });
-}
-
-function expandPeopleSelector(selector, peopleGroups) {
-  if (Array.isArray(selector)) {
-    return selector.flatMap((value) => expandPeopleSelector(value, peopleGroups));
-  }
-
-  if (typeof selector !== "string" || selector.length === 0) {
-    return [];
-  }
-
-  if (Array.isArray(peopleGroups?.[selector])) {
-    return peopleGroups[selector];
-  }
-
-  return [selector];
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function getBonusSpecialRulesById(emplacementsRules) {
-  return new Map((emplacementsRules.bonus_by_special ?? []).map((rule) => [rule.id, rule]));
-}
-
-function calculateExpectedEmplacements(caseRecord, emplacementsRules) {
-  const terrainBase = emplacementsRules.base_by_terrain_type?.[caseRecord.terrain_type];
-  if (!Number.isInteger(terrainBase)) {
-    return { expectedBase: null, expectedMax: null };
-  }
-
-  let reliefModifiers = 0;
-  for (const rule of emplacementsRules.relief_modifiers ?? []) {
-    if (caseRecord.relief === rule.relief && matchesConditions(rule.conditions, caseRecord)) {
-      reliefModifiers += Number(rule.modifier) || 0;
-    }
-  }
-
-  const expectedBase = terrainBase + reliefModifiers;
-  let modifiers = 0;
-  const peopleGroups = emplacementsRules.people_groups ?? {};
-
-  for (const rule of emplacementsRules.bonus_by_people ?? []) {
-    const eligiblePeople = expandPeopleSelector(rule.people, peopleGroups);
-    if (eligiblePeople.includes(caseRecord.peuple_majoritaire) && matchesConditions(rule.conditions, caseRecord)) {
-      modifiers += Number(rule.modifier) || 0;
-    }
-  }
-
-  const specialRulesById = getBonusSpecialRulesById(emplacementsRules);
-  const bonusSpeciaux = Array.isArray(caseRecord.bonus_speciaux) ? caseRecord.bonus_speciaux : [];
-
-  for (const bonusId of bonusSpeciaux) {
-    const rule = specialRulesById.get(bonusId);
-    if (rule && matchesConditions(rule.conditions, caseRecord)) {
-      modifiers += Number(rule.modifier) || 0;
-    }
-  }
-
-  const min = emplacementsRules.bounds?.min ?? 1;
-  const max = emplacementsRules.bounds?.max ?? 5;
-
-  return { expectedBase, expectedMax: clamp(expectedBase + modifiers, min, max) };
-}
-
-function validateNomenclatures(schema, nomenclatures, emplacementsRules) {
+function validateReferenceData(nomenclatures) {
   const issues = [];
-  const schemaProperties = schema?.items?.properties ?? {};
-  const expectedArrayKeys = ["terrain_cat", "terrain_type", "relief", "controle_type", "peuple_majoritaire", "faction", "bonus_special"];
 
-  for (const key of expectedArrayKeys) {
-    if (!Array.isArray(nomenclatures[key])) {
-      pushIssue(issues, "[reference data/reference/nomenclatures.json]", key, `Expected an array for "${key}".`);
-    }
+  if (!Array.isArray(nomenclatures.case_core_fields)) {
+    pushIssue(
+      issues,
+      "[reference data/reference/nomenclatures.json]",
+      "case_core_fields",
+      "Expected an array of stable case fields."
+    );
   }
 
-  if (!isPlainObject(nomenclatures.terrain_type_by_cat)) {
-    pushIssue(issues, "[reference data/reference/nomenclatures.json]", "terrain_type_by_cat", 'Expected an object for "terrain_type_by_cat".');
-  } else {
-    for (const [terrainCat, terrainTypes] of Object.entries(nomenclatures.terrain_type_by_cat)) {
-      if (!nomenclatures.terrain_cat?.includes(terrainCat)) {
-        pushIssue(issues, "[reference data/reference/nomenclatures.json]", `terrain_type_by_cat.${terrainCat}`, `Unknown terrain_cat "${terrainCat}".`);
-      }
-
-      if (!Array.isArray(terrainTypes)) {
-        pushIssue(issues, "[reference data/reference/nomenclatures.json]", `terrain_type_by_cat.${terrainCat}`, "Expected an array of terrain types.");
-        continue;
-      }
-
-      for (const terrainType of terrainTypes) {
-        if (!nomenclatures.terrain_type?.includes(terrainType)) {
-          pushIssue(issues, "[reference data/reference/nomenclatures.json]", `terrain_type_by_cat.${terrainCat}`, `Unknown terrain_type "${terrainType}" referenced by terrain_cat "${terrainCat}".`);
-        }
-      }
-    }
+  if (!Array.isArray(nomenclatures.water_boolean_fields)) {
+    pushIssue(
+      issues,
+      "[reference data/reference/nomenclatures.json]",
+      "water_boolean_fields",
+      "Expected an array of water boolean fields."
+    );
   }
 
-  const schemaToNomenclatureChecks = [
-    ["terrain_cat", schemaProperties.terrain_cat?.enum],
-    ["terrain_type", schemaProperties.terrain_type?.enum],
-    ["relief", schemaProperties.relief?.enum?.filter((value) => value !== null)],
-    ["controle_type", schemaProperties.controle_type?.enum?.filter((value) => value !== null)],
-    ["bonus_special", schemaProperties.bonus_speciaux?.items?.enum],
-  ];
-
-  for (const [key, schemaValues] of schemaToNomenclatureChecks) {
-    if (!Array.isArray(nomenclatures[key]) || !Array.isArray(schemaValues)) {
-      continue;
-    }
-
-    const missingFromSchema = nomenclatures[key].filter((value) => !schemaValues.includes(value));
-    const missingFromNomenclatures = schemaValues.filter((value) => !nomenclatures[key].includes(value));
-
-    if (missingFromSchema.length > 0) {
-      pushIssue(issues, "[reference consistency]", key, `Values present in nomenclatures but missing from schema: ${missingFromSchema.join(", ")}`);
-    }
-
-    if (missingFromNomenclatures.length > 0) {
-      pushIssue(issues, "[reference consistency]", key, `Values present in schema but missing from nomenclatures: ${missingFromNomenclatures.join(", ")}`);
-    }
-  }
-
-  if (!isPlainObject(emplacementsRules.base_by_terrain_type)) {
-    pushIssue(issues, "[reference data/reference/emplacements_rules.json]", "base_by_terrain_type", 'Expected an object for "base_by_terrain_type".');
-  } else {
-    for (const [terrainType, value] of Object.entries(emplacementsRules.base_by_terrain_type)) {
-      if (!nomenclatures.terrain_type?.includes(terrainType)) {
-        pushIssue(issues, "[reference data/reference/emplacements_rules.json]", `base_by_terrain_type.${terrainType}`, `Unknown terrain_type "${terrainType}".`);
-      }
-      if (!Number.isInteger(value)) {
-        pushIssue(issues, "[reference data/reference/emplacements_rules.json]", `base_by_terrain_type.${terrainType}`, "Expected an integer base value.");
-      }
-    }
-  }
-
-  for (const rule of emplacementsRules.relief_modifiers ?? []) {
-    if (!nomenclatures.relief?.includes(rule.relief)) {
-      pushIssue(issues, "[reference data/reference/emplacements_rules.json]", "relief_modifiers", `Unknown relief "${rule.relief}".`);
-    }
-  }
-
-  if (isPlainObject(emplacementsRules.people_groups)) {
-    for (const [groupName, people] of Object.entries(emplacementsRules.people_groups)) {
-      if (!Array.isArray(people)) {
-        pushIssue(issues, "[reference data/reference/emplacements_rules.json]", `people_groups.${groupName}`, "Expected an array of people identifiers.");
-        continue;
-      }
-      for (const peopleId of people) {
-        if (!nomenclatures.peuple_majoritaire?.includes(peopleId)) {
-          pushIssue(issues, "[reference data/reference/emplacements_rules.json]", `people_groups.${groupName}`, `Unknown peuple_majoritaire "${peopleId}".`);
-        }
-      }
-    }
-  }
-
-  for (const rule of emplacementsRules.bonus_by_special ?? []) {
-    if (!nomenclatures.bonus_special?.includes(rule.id)) {
-      pushIssue(issues, "[reference data/reference/emplacements_rules.json]", "bonus_by_special", `Unknown bonus_special "${rule.id}".`);
-    }
+  if (!Array.isArray(nomenclatures.reserved_business_fields)) {
+    pushIssue(
+      issues,
+      "[reference data/reference/nomenclatures.json]",
+      "reserved_business_fields",
+      "Expected an array of reserved business fields."
+    );
   }
 
   return issues;
 }
 
-function validateStrictBoolean(caseRecord, key, issues, scope) {
-  if (caseRecord[key] !== undefined && caseRecord[key] !== null && caseRecord[key] !== true && caseRecord[key] !== false) {
-    pushIssue(issues, scope, `properties.${key}`, [`Invalid value ${JSON.stringify(caseRecord[key])}.`, "Expected boolean true, boolean false, or null."]);
+function validateGeometry(geometry, context) {
+  const { scope } = context;
+  const issues = [];
+
+  if (!isPlainObject(geometry)) {
+    pushIssue(
+      issues,
+      scope,
+      "geometry",
+      "Missing or invalid geometry. Expected a GeoJSON Polygon or MultiPolygon."
+    );
+    return issues;
   }
+
+  if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
+    pushIssue(
+      issues,
+      scope,
+      "geometry.type",
+      `Invalid geometry type "${geometry.type}". Expected Polygon or MultiPolygon.`
+    );
+  }
+
+  if (!Array.isArray(geometry.coordinates)) {
+    pushIssue(
+      issues,
+      scope,
+      "geometry.coordinates",
+      "Missing or invalid geometry coordinates."
+    );
+  }
+
+  return issues;
 }
 
 function validateCaseRecord(caseRecord, context) {
-  const { scope, seenIds, nomenclatures, emplacementsRules, relativePath } = context;
+  const {
+    scope,
+    seenIds,
+    reservedBusinessFields,
+    relativePath,
+    geometry,
+    requiresGeometry,
+  } = context;
   const issues = [];
 
   if (!isPlainObject(caseRecord)) {
-    pushIssue(issues, scope, "properties", `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`);
+    pushIssue(
+      issues,
+      scope,
+      "properties",
+      `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`
+    );
     return issues;
   }
 
@@ -361,98 +311,84 @@ function validateCaseRecord(caseRecord, context) {
   const effectiveScope = hasValidId ? `[case ${rawId.trim()}]` : scope;
 
   if (!hasValidId) {
-    pushIssue(issues, effectiveScope, "properties.id_case", "Missing or empty id_case.");
+    pushIssue(
+      issues,
+      effectiveScope,
+      "properties.id_case",
+      "Missing or empty id_case."
+    );
   } else if (seenIds.has(rawId.trim())) {
-    pushIssue(issues, effectiveScope, "properties.id_case", `Duplicate id_case "${rawId.trim()}" across validated files.`);
+    pushIssue(
+      issues,
+      effectiveScope,
+      "properties.id_case",
+      `Duplicate id_case "${rawId.trim()}" across validated files.`
+    );
   } else {
     seenIds.add(rawId.trim());
   }
 
-  if (!isNilOrEmpty(caseRecord.terrain_secondaire)) {
-    pushIssue(issues, effectiveScope, "properties.terrain_secondaire", "terrain_secondaire is deprecated. Use relief instead.");
-  }
+  for (const field of ["region", "sous_region"]) {
+    const value = caseRecord[field];
+    if (value === undefined || value === null) {
+      continue;
+    }
 
-  const terrainCat = caseRecord.terrain_cat;
-  if (typeof terrainCat !== "string" || terrainCat.length === 0) {
-    pushIssue(issues, effectiveScope, "properties.terrain_cat", "Missing terrain_cat.");
-  } else if (!nomenclatures.terrain_cat.includes(terrainCat)) {
-    pushIssue(issues, effectiveScope, "properties.terrain_cat", [`Invalid terrain_cat "${terrainCat}".`, `Expected one of: ${nomenclatures.terrain_cat.join(", ")}`]);
-  }
-
-  const terrainType = caseRecord.terrain_type;
-  if (typeof terrainType !== "string" || terrainType.length === 0) {
-    pushIssue(issues, effectiveScope, "properties.terrain_type", "Missing terrain_type.");
-  } else if (!nomenclatures.terrain_type.includes(terrainType)) {
-    pushIssue(issues, effectiveScope, "properties.terrain_type", [`Invalid terrain_type "${terrainType}".`, `Expected one of: ${nomenclatures.terrain_type.join(", ")}`]);
-  } else if (typeof terrainCat === "string" && nomenclatures.terrain_cat.includes(terrainCat)) {
-    const allowedTerrainTypes = getAllowedTerrainTypes(terrainCat, nomenclatures);
-    if (allowedTerrainTypes.length > 0 && !allowedTerrainTypes.includes(terrainType)) {
-      pushIssue(issues, effectiveScope, "properties.terrain_type", [`Invalid terrain_type "${terrainType}" for terrain_cat "${terrainCat}".`, `Expected one of: ${allowedTerrainTypes.join(", ")}`]);
+    if (typeof value !== "string" || value.trim().length === 0) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `Invalid ${field}. Expected a non-empty string or null.`
+      );
     }
   }
 
-  if (!isNilOrEmpty(caseRecord.relief) && !nomenclatures.relief.includes(caseRecord.relief)) {
-    pushIssue(issues, effectiveScope, "properties.relief", [`Invalid relief "${caseRecord.relief}".`, `Expected one of: ${nomenclatures.relief.join(", ")}, null`]);
-  }
+  for (const field of waterBooleanFields) {
+    const value = caseRecord[field];
 
-  validateStrictBoolean(caseRecord, "cote", issues, effectiveScope);
-  validateStrictBoolean(caseRecord, "lac_majeur", issues, effectiveScope);
-  validateStrictBoolean(caseRecord, "cours_eau_majeur", issues, effectiveScope);
-
-  if (!isNilOrEmpty(caseRecord.peuple_majoritaire) && !nomenclatures.peuple_majoritaire.includes(caseRecord.peuple_majoritaire)) {
-    pushIssue(issues, effectiveScope, "properties.peuple_majoritaire", [`Invalid peuple_majoritaire "${caseRecord.peuple_majoritaire}".`, `Expected one of: ${nomenclatures.peuple_majoritaire.join(", ")}`]);
-  }
-
-  if (!isNilOrEmpty(caseRecord.controle_type) && !nomenclatures.controle_type.includes(caseRecord.controle_type)) {
-    pushIssue(issues, effectiveScope, "properties.controle_type", [`Invalid controle_type "${caseRecord.controle_type}".`, `Expected one of: ${nomenclatures.controle_type.join(", ")}`]);
-  }
-
-  if (!isNilOrEmpty(caseRecord.faction) && Array.isArray(nomenclatures.faction) && !nomenclatures.faction.includes(caseRecord.faction)) {
-    pushIssue(issues, effectiveScope, "properties.faction", [`Invalid faction "${caseRecord.faction}".`, `Expected one of: ${nomenclatures.faction.join(", ")}`]);
-  }
-
-  const specialRulesById = getBonusSpecialRulesById(emplacementsRules);
-  if (caseRecord.bonus_speciaux !== undefined && caseRecord.bonus_speciaux !== null && !Array.isArray(caseRecord.bonus_speciaux)) {
-    pushIssue(issues, effectiveScope, "properties.bonus_speciaux", "Invalid bonus_speciaux. Expected an array of strings or null.");
-  }
-
-  if (Array.isArray(caseRecord.bonus_speciaux)) {
-    for (const bonusId of caseRecord.bonus_speciaux) {
-      if (typeof bonusId !== "string") {
-        pushIssue(issues, effectiveScope, "properties.bonus_speciaux", `Invalid bonus special value ${JSON.stringify(bonusId)}. Expected a string identifier.`);
-        continue;
-      }
-
-      if (!nomenclatures.bonus_special.includes(bonusId) && !specialRulesById.has(bonusId)) {
-        pushIssue(issues, effectiveScope, "properties.bonus_speciaux", `Unknown bonus special "${bonusId}".`);
-        continue;
-      }
-
-      const rule = specialRulesById.get(bonusId);
-      if (rule && !matchesConditions(rule.conditions, caseRecord)) {
-        pushIssue(issues, effectiveScope, "properties.bonus_speciaux", `Bonus special "${bonusId}" is not applicable to this case.`);
-      }
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== true &&
+      value !== false
+    ) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        [
+          `Invalid value ${JSON.stringify(value)}.`,
+          "Expected boolean true, boolean false, or null.",
+        ]
+      );
     }
   }
 
-  const { expectedBase, expectedMax } = calculateExpectedEmplacements(caseRecord, emplacementsRules);
-  if (expectedBase !== null) {
-    if (!Number.isInteger(caseRecord.empl_base)) {
-      pushIssue(issues, effectiveScope, "properties.empl_base", `Missing or invalid empl_base. Expected integer ${expectedBase}.`);
-    } else if (caseRecord.empl_base !== expectedBase) {
-      pushIssue(issues, effectiveScope, "properties.empl_base", `Invalid empl_base ${caseRecord.empl_base}. Expected ${expectedBase} from terrain_type and relief.`);
+  for (const field of reservedBusinessFields) {
+    if (!isNilOrEmpty(caseRecord[field])) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `${field} is a business field and must not be stored in the stable cases layer. Move it to a future business table.`
+      );
     }
+  }
 
-    if (!Number.isInteger(caseRecord.empl_max)) {
-      pushIssue(issues, effectiveScope, "properties.empl_max", `Missing or invalid empl_max. Expected integer ${expectedMax}.`);
-    } else {
-      if (caseRecord.empl_max < 1 || caseRecord.empl_max > 5) {
-        pushIssue(issues, effectiveScope, "properties.empl_max", `Invalid empl_max ${caseRecord.empl_max}. Expected an integer between 1 and 5.`);
-      }
-      if (caseRecord.empl_max !== expectedMax) {
-        pushIssue(issues, effectiveScope, "properties.empl_max", `Invalid empl_max ${caseRecord.empl_max}. Expected ${expectedMax} from emplacements_rules.json.`);
-      }
+  for (const field of Object.keys(caseRecord)) {
+    if (!coreFields.includes(field) && !reservedBusinessFields.includes(field)) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `Unknown field "${field}" in stable cases layer. Expected one of: ${coreFields.join(", ")}.`
+      );
     }
+  }
+
+  if (requiresGeometry) {
+    issues.push(...validateGeometry(geometry, { scope: effectiveScope }));
   }
 
   return issues;
@@ -460,6 +396,7 @@ function validateCaseRecord(caseRecord, context) {
 
 function formatIssues(issues) {
   const lines = [`Validation failed: ${issues.length} error(s)`, ""];
+
   for (const issue of issues) {
     lines.push(`${issue.scope} ${issue.propertyPath}`);
     for (const message of issue.messages) {
@@ -467,6 +404,7 @@ function formatIssues(issues) {
     }
     lines.push("");
   }
+
   return lines.join("\n").trimEnd();
 }
 
@@ -474,14 +412,28 @@ async function resolveCandidateFiles(args) {
   if (args.length === 0) {
     return discoverCaseFiles();
   }
+
   return args.map((inputPath) => path.resolve(process.cwd(), inputPath));
 }
 
+async function loadNomenclatures() {
+  try {
+    return await loadJson(nomenclaturesPath);
+  } catch {
+    return {
+      reserved_business_fields: fallbackReservedBusinessFields,
+    };
+  }
+}
+
 async function main() {
-  const schema = await loadJson(schemaPath);
-  const nomenclatures = await loadJson(nomenclaturesPath);
-  const emplacementsRules = await loadJson(emplacementsRulesPath);
-  const issues = validateNomenclatures(schema, nomenclatures, emplacementsRules);
+  const nomenclatures = await loadNomenclatures();
+
+  const issues = validateReferenceData(nomenclatures);
+  const reservedBusinessFields = Array.isArray(nomenclatures.reserved_business_fields)
+    ? nomenclatures.reserved_business_fields
+    : fallbackReservedBusinessFields;
+
   const candidateFiles = await resolveCandidateFiles(process.argv.slice(2));
   let checkedCases = 0;
 
@@ -493,7 +445,12 @@ async function main() {
     try {
       data = await loadJson(filePath);
     } catch (error) {
-      pushIssue(issues, `[file ${relativePath}]`, "root", `Unable to read or parse JSON: ${error.message}`);
+      pushIssue(
+        issues,
+        `[file ${relativePath}]`,
+        "root",
+        `Unable to read or parse JSON: ${error.message}`
+      );
       continue;
     }
 
@@ -506,9 +463,10 @@ async function main() {
         ...validateCaseRecord(item.record, {
           scope: item.scope,
           seenIds,
-          nomenclatures,
-          emplacementsRules,
+          reservedBusinessFields,
           relativePath,
+          geometry: item.geometry,
+          requiresGeometry: item.requiresGeometry,
         })
       );
     }

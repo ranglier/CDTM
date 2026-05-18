@@ -1,146 +1,176 @@
 {
-  "terrain_cat": [
-    "plaine",
-    "desert",
-    "marais",
-    "foret",
-    "montagne",
-    "inconnu"
+  "case_core_fields": [
+    "id_case",
+    "region",
+    "sous_region",
+    "cote",
+    "lac_majeur",
+    "cours_eau_majeur"
   ],
-  "terrain_type_by_cat": {
-    "plaine": [
+  "water_boolean_fields": [
+    "cote",
+    "lac_majeur",
+    "cours_eau_majeur"
+  ],
+  "reserved_business_fields": [
+    "terrain_cat",
+    "terrain_type",
+    "relief",
+    "terrain_secondaire",
+    "faction",
+    "peuple_majoritaire",
+    "bonus_speciaux",
+    "empl_base",
+    "empl_max",
+    "controleur",
+    "controle_type",
+    "note_publique",
+    "note_staff"
+  ],
+  "future_business": {
+    "terrain_cat": [
+      "plaine",
+      "desert",
+      "marais",
+      "foret",
+      "montagne",
+      "inconnu"
+    ],
+    "terrain_type_by_cat": {
+      "plaine": [
+        "prairie",
+        "plaine_aride",
+        "plaine_boisee",
+        "toundra"
+      ],
+      "desert": [
+        "desert_glace",
+        "desert_sable",
+        "terre_desolee"
+      ],
+      "marais": [
+        "marais"
+      ],
+      "foret": [
+        "foret",
+        "taiga",
+        "foret_luxuriante"
+      ],
+      "montagne": [
+        "montagne",
+        "montagne_riche"
+      ],
+      "inconnu": [
+        "inconnu"
+      ]
+    },
+    "terrain_type": [
       "prairie",
       "plaine_aride",
       "plaine_boisee",
-      "toundra"
-    ],
-    "desert": [
+      "toundra",
       "desert_glace",
       "desert_sable",
-      "terre_desolee"
-    ],
-    "marais": [
-      "marais"
-    ],
-    "foret": [
+      "terre_desolee",
+      "marais",
       "foret",
       "taiga",
-      "foret_luxuriante"
-    ],
-    "montagne": [
+      "foret_luxuriante",
       "montagne",
-      "montagne_riche"
+      "montagne_riche",
+      "inconnu"
     ],
-    "inconnu": [
+    "relief": [
+      "colline"
+    ],
+    "controle_type": [
+      "aucun",
+      "total",
+      "partiel",
+      "conteste",
+      "occupe",
+      "vassalise",
+      "inconnu"
+    ],
+    "peuple_majoritaire": [
+      "gondoriens",
+      "eotheods",
+      "daliens",
+      "esgarothiens",
+      "hommes_de_vertbois",
+      "dunlandais",
+      "enedwaithrim",
+      "druedain",
+      "hommes_sauvages",
+      "orientaux",
+      "corsaires",
+      "umbareens",
+      "haradrim",
+      "variags",
+      "dunedain_du_nord",
+      "numenoreens_noirs",
+      "noldor",
+      "sindar",
+      "nandor",
+      "avari",
+      "snagas",
+      "uruk_hai",
+      "gobelins",
+      "longues_barbes",
+      "barbes_de_feu",
+      "ventrus",
+      "poignes_de_fer",
+      "barbes_raides",
+      "pieds_de_pierre",
+      "cheveux_noirs",
+      "hobbits",
+      "lossoth",
+      "mixte",
+      "inconnu"
+    ],
+    "bonus_special": [
+      "ancien_bonus_empire_desert_glace",
+      "ancien_bonus_empire_montagne"
+    ],
+    "localite_niveau": [
+      "hameau",
+      "village",
+      "bourg",
+      "ville",
+      "cite"
+    ],
+    "localite_type": [
+      "avant_poste",
+      "fort",
+      "domaine",
+      "ruine"
+    ],
+    "visibilite": [
+      "publique",
+      "staff",
+      "secrete",
+      "incertaine"
+    ],
+    "statut_note": [
+      "brouillon",
+      "a_valider",
+      "valide",
+      "archive"
+    ],
+    "faction": [
+      "royaume_des_hommes",
+      "gondor",
+      "eotheods",
+      "mordor",
+      "empire",
+      "harad",
+      "umbar",
+      "rhun",
+      "lindon",
+      "arnor",
+      "nouvelle_numenor",
+      "neutre",
       "inconnu"
     ]
-  },
-  "terrain_type": [
-    "prairie",
-    "plaine_aride",
-    "plaine_boisee",
-    "toundra",
-    "desert_glace",
-    "desert_sable",
-    "terre_desolee",
-    "marais",
-    "foret",
-    "taiga",
-    "foret_luxuriante",
-    "montagne",
-    "montagne_riche",
-    "inconnu"
-  ],
-  "relief": [
-    "colline"
-  ],
-  "controle_type": [
-    "aucun",
-    "total",
-    "partiel",
-    "conteste",
-    "occupe",
-    "vassalise",
-    "inconnu"
-  ],
-  "peuple_majoritaire": [
-    "gondoriens",
-    "eotheods",
-    "daliens",
-    "esgarothiens",
-    "dunlandais",
-    "enedwaithrim",
-    "druedain",
-    "hommes_sauvages",
-    "orientaux",
-    "corsaires",
-    "umbareens",
-    "haradrim",
-    "variags",
-    "dunedain_du_nord",
-    "numenoreens_noirs",
-    "noldor",
-    "sindar",
-    "nandor",
-    "avari",
-    "snagas",
-    "uruk_hai",
-    "gobelins",
-    "longues_barbes",
-    "barbes_de_feu",
-    "ventrus",
-    "poignes_de_fer",
-    "barbes_raides",
-    "pieds_de_pierre",
-    "cheveux_noirs",
-    "hobbits",
-    "lossoth",
-    "hommes_de_vertbois",
-    "mixte",
-    "inconnu"
-  ],
-  "localite_niveau": [
-    "hameau",
-    "village",
-    "bourg",
-    "ville",
-    "cite"
-  ],
-  "localite_type": [
-    "avant_poste",
-    "fort",
-    "domaine",
-    "ruine"
-  ],
-  "visibilite": [
-    "publique",
-    "staff",
-    "secrete",
-    "incertaine"
-  ],
-  "statut_note": [
-    "brouillon",
-    "a_valider",
-    "valide",
-    "archive"
-  ],
-  "faction": [
-    "royaume_des_hommes",
-    "gondor",
-    "eotheods",
-    "mordor",
-    "empire",
-    "harad",
-    "umbar",
-    "rhun",
-    "lindon",
-    "arnor",
-    "nouvelle_numenor",
-    "neutre",
-    "inconnu"
-  ],
-  "bonus_special": [
-    "ancien_bonus_empire_desert_glace",
-    "ancien_bonus_empire_montagne"
-  ]
+  }
 }
