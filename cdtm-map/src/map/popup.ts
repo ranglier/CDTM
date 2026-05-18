@@ -4,10 +4,13 @@ export type CaseProperties = {
   sous_region?: string | null;
   terrain_cat?: string | null;
   terrain_type?: string | null;
-  terrain_secondaire?: string | null;
+  relief?: string | null;
   cote?: boolean | null;
+  lac_majeur?: boolean | null;
+  cours_eau_majeur?: boolean | null;
   faction?: string | null;
   peuple_majoritaire?: string | null;
+  bonus_speciaux?: string[] | null;
   empl_base?: number | null;
   empl_max?: number | null;
   controleur?: string | null;
@@ -62,8 +65,12 @@ export function buildCasePopup(
     renderRow("Région", properties.region),
     renderRow("Sous-région", properties.sous_region),
     renderRow("Terrain", formatTerrain(properties)),
-    renderRow("Terrain secondaire", properties.terrain_secondaire),
+    renderRow("Relief", properties.relief),
     properties.cote === true ? renderRow("Côte", properties.cote) : "",
+    properties.lac_majeur === true ? renderRow("Lac majeur", properties.lac_majeur) : "",
+    properties.cours_eau_majeur === true
+      ? renderRow("Cours d'eau majeur", properties.cours_eau_majeur)
+      : "",
     renderRow("Faction", properties.faction),
     renderRow("Peuple majoritaire", properties.peuple_majoritaire),
     renderRow("Emplacements", formatEmplacements(properties)),

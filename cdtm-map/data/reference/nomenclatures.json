@@ -11,11 +11,12 @@
     "plaine": [
       "prairie",
       "plaine_aride",
-      "bocage"
+      "plaine_boisee",
+      "toundra"
     ],
     "desert": [
-      "desert_chaud",
-      "desert_gele",
+      "desert_glace",
+      "desert_sable",
       "terre_desolee"
     ],
     "marais": [
@@ -23,44 +24,35 @@
     ],
     "foret": [
       "foret",
-      "foret_luxuriante",
-      "taiga"
+      "taiga",
+      "foret_luxuriante"
     ],
     "montagne": [
-      "colline",
       "montagne",
-      "montagne_riche",
-      "paturage"
+      "montagne_riche"
+    ],
+    "inconnu": [
+      "inconnu"
     ]
   },
   "terrain_type": [
     "prairie",
     "plaine_aride",
-    "bocage",
-    "desert_chaud",
-    "desert_gele",
+    "plaine_boisee",
+    "toundra",
+    "desert_glace",
+    "desert_sable",
     "terre_desolee",
     "marais",
     "foret",
-    "foret_luxuriante",
     "taiga",
-    "colline",
+    "foret_luxuriante",
     "montagne",
     "montagne_riche",
-    "paturage",
     "inconnu"
   ],
-  "terrain_secondaire": [
-    "prairie",
-    "plaine_aride",
-    "bocage",
-    "desert_chaud",
-    "desert_gele",
-    "terre_desolee",
-    "foret",
-    "foret_luxuriante",
-    "taiga",
-    "inconnu"
+  "relief": [
+    "colline"
   ],
   "controle_type": [
     "aucun",
@@ -77,9 +69,12 @@
     "daliens",
     "esgarothiens",
     "dunlandais",
+    "enedwaithrim",
+    "druedain",
     "hommes_sauvages",
     "orientaux",
     "corsaires",
+    "umbareens",
     "haradrim",
     "variags",
     "dunedain_du_nord",
@@ -100,6 +95,7 @@
     "cheveux_noirs",
     "hobbits",
     "lossoth",
+    "hommes_de_vertbois",
     "mixte",
     "inconnu"
   ],
@@ -142,5 +138,9 @@
     "nouvelle_numenor",
     "neutre",
     "inconnu"
+  ],
+  "bonus_special": [
+    "ancien_bonus_empire_desert_glace",
+    "ancien_bonus_empire_montagne"
   ]
 }

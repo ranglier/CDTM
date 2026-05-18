@@ -29,14 +29,16 @@ Ordre d'affichage recommandé :
 3. `sous_region`
 4. `terrain_cat`
 5. `terrain_type`
-6. `terrain_secondaire` si présent
+6. `relief` si présent
 7. `cote` si `true`
-8. `faction`
-9. `peuple_majoritaire`
-10. `empl_base` / `empl_max`
-11. `controleur` si présent
-12. `controle_type`
-13. `note_publique`
+8. `lac_majeur` si `true`
+9. `cours_eau_majeur` si `true`
+10. `faction`
+11. `peuple_majoritaire`
+12. `empl_base` / `empl_max`
+13. `controleur` si présent
+14. `controle_type`
+15. `note_publique`
 
 `note_staff` ne doit jamais apparaître dans cette vue.
 
@@ -49,6 +51,9 @@ Ordre d'affichage recommandé :
 - Filtre par peuple majoritaire.
 - Filtre par type de contrôle.
 - Filtre des cases côtières.
+- Filtre par relief.
+- Filtre par lac majeur.
+- Filtre par cours d'eau majeur.
 
 ### Affichage ou masquage des contours
 

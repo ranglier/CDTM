@@ -1,8 +1,8 @@
 # Nomenclatures
 
-Valeurs contrôlées initiales pour les attributs métier.
+Valeurs contrôlées initiales pour les attributs métier de la carte CDTM.
 
-Ces listes sont provisoires et devront être validées avec le staff avant production.
+Ces listes restent provisoires et devront être validées avec le staff avant production.
 
 ## Règles générales
 
@@ -30,12 +30,13 @@ Type de terrain dominant dans une case.
 
 - `prairie`
 - `plaine_aride`
-- `bocage`
+- `plaine_boisee`
+- `toundra`
 
 ### `desert`
 
-- `desert_chaud`
-- `desert_gele`
+- `desert_glace`
+- `desert_sable`
 - `terre_desolee`
 
 ### `marais`
@@ -45,41 +46,53 @@ Type de terrain dominant dans une case.
 ### `foret`
 
 - `foret`
-- `foret_luxuriante`
 - `taiga`
+- `foret_luxuriante`
 
 ### `montagne`
 
-- `colline`
 - `montagne`
 - `montagne_riche`
-- `paturage`
 
-## `terrain_secondaire`
+### `inconnu`
 
-Type secondaire ou modificateur local.
-
-Ce champ peut rester vide.
-
-Si `terrain_type = colline`, `terrain_secondaire` peut contenir un type de plaine, de forêt ou de désert.
-
-- `prairie`
-- `plaine_aride`
-- `bocage`
-- `desert_chaud`
-- `desert_gele`
-- `terre_desolee`
-- `foret`
-- `foret_luxuriante`
-- `taiga`
 - `inconnu`
 
-## `cote`
+## `relief`
 
-Booléen indiquant si la case est côtière.
+Modificateur local de relief.
 
-- `true`
-- `false`
+Ce champ est optionnel.
+
+Valeur actuelle :
+
+- `colline`
+
+Une colline forestière doit donc être représentée ainsi :
+
+```txt
+terrain_cat = foret
+terrain_type = foret
+relief = colline
+```
+
+Le champ déprécié `terrain_secondaire` ne doit plus être utilisé.
+
+## Eau majeure
+
+Trois booléens décrivent les contacts avec une eau importante :
+
+- `cote` : côte maritime ;
+- `lac_majeur` : lac important ;
+- `cours_eau_majeur` : fleuve ou rivière majeure.
+
+La condition métier `eau_majeure` est dérivée :
+
+```txt
+eau_majeure = cote || lac_majeur || cours_eau_majeur
+```
+
+Elle sert notamment aux Sindar et aux Umbaréens.
 
 ## `controle_type`
 
@@ -95,7 +108,7 @@ Statut du contrôle territorial.
 
 ## `peuple_majoritaire`
 
-Valeurs techniques fondées sur la liste des peuples jouables ou référencés par les règles de création de personnage et les règles d'emplacements.
+Valeurs techniques fondées sur la liste des peuples jouables ou référencés par les règles d'emplacements.
 
 ### Hommes de l'Ouest
 
@@ -106,10 +119,13 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 - `eotheods`
 - `daliens`
 - `esgarothiens`
+- `hommes_de_vertbois`
 
 ### Hommes du Milieu
 
 - `dunlandais`
+- `enedwaithrim`
+- `druedain`
 - `hommes_sauvages`
 
 ### Hommes de l'Est
@@ -119,6 +135,7 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 ### Hommes du Sud
 
 - `corsaires`
+- `umbareens`
 - `haradrim`
 - `variags`
 
@@ -159,6 +176,17 @@ Valeurs techniques fondées sur la liste des peuples jouables ou référencés p
 
 - `mixte`
 - `inconnu`
+
+## `bonus_special`
+
+Bonus appliqué explicitement à une case, indépendamment d'une faction active.
+
+Valeurs initiales :
+
+- `ancien_bonus_empire_desert_glace`
+- `ancien_bonus_empire_montagne`
+
+Ces valeurs remplacent l'ancien modèle `bonus_by_faction`.
 
 ## `localite_niveau`
 

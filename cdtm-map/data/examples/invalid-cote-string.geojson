@@ -10,10 +10,13 @@
         "sous_region": null,
         "terrain_cat": "plaine",
         "terrain_type": "prairie",
-        "terrain_secondaire": null,
+        "relief": null,
         "cote": "true",
+        "lac_majeur": false,
+        "cours_eau_majeur": false,
         "faction": "neutre",
         "peuple_majoritaire": "gondoriens",
+        "bonus_speciaux": [],
         "empl_base": 5,
         "empl_max": 5,
         "controleur": null,
@@ -25,11 +28,26 @@
         "type": "Polygon",
         "coordinates": [
           [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-            [0, 0]
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              0,
+              1
+            ],
+            [
+              0,
+              0
+            ]
           ]
         ]
       }

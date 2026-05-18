@@ -3,13 +3,28 @@
     "min": 1,
     "max": 5
   },
-  "base_by_terrain_cat": {
-    "plaine": 5,
-    "desert": 3,
-    "montagne": 3,
+  "base_by_terrain_type": {
+    "prairie": 5,
+    "plaine_aride": 5,
+    "plaine_boisee": 4,
+    "toundra": 3,
     "foret": 3,
-    "marais": 2
+    "taiga": 3,
+    "foret_luxuriante": 2,
+    "montagne": 3,
+    "montagne_riche": 3,
+    "marais": 2,
+    "desert_glace": 2,
+    "desert_sable": 2,
+    "terre_desolee": 2
   },
+  "relief_modifiers": [
+    {
+      "label": "Collines",
+      "relief": "colline",
+      "modifier": -1
+    }
+  ],
   "people_groups": {
     "nains": [
       "longues_barbes",
@@ -25,11 +40,11 @@
       "uruk_hai",
       "gobelins"
     ],
-    "elfes": [
-      "noldor",
-      "sindar",
-      "nandor",
-      "avari"
+    "heritiers_de_numenor": [
+      "gondoriens",
+      "dunedain_du_nord",
+      "numenoreens_noirs",
+      "umbareens"
     ]
   },
   "bonus_by_people": [
@@ -42,15 +57,23 @@
       "modifier": 2
     },
     {
-      "label": "Haradrim et Variags dans les deserts chauds",
-      "people": ["haradrim", "variags"],
+      "label": "Nains dans les collines",
+      "people": "nains",
       "conditions": {
-        "terrain_type": "desert_chaud"
+        "relief": "colline"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Orques dans les montagnes",
+      "people": "orcs",
+      "conditions": {
+        "terrain_cat": "montagne"
       },
       "modifier": 2
     },
     {
-      "label": "Orcs dans les terres desolees",
+      "label": "Orques dans les terres desolees",
       "people": "orcs",
       "conditions": {
         "terrain_type": "terre_desolee"
@@ -58,89 +81,191 @@
       "modifier": 2
     },
     {
-      "label": "Orcs dans les montagnes",
-      "people": "orcs",
-      "conditions": {
-        "terrain_cat": "montagne"
-      },
-      "modifier": 1
-    },
-    {
-      "label": "Lossoth dans les deserts geles",
-      "people": ["lossoth"],
-      "conditions": {
-        "terrain_type": "desert_gele"
-      },
-      "modifier": 2
-    },
-    {
-      "label": "Elfes en foret",
-      "people": "elfes",
+      "label": "Nandor en foret",
+      "people": [
+        "nandor"
+      ],
       "conditions": {
         "terrain_cat": "foret"
       },
       "modifier": 2
     },
     {
-      "label": "Hobbits dans les marais",
-      "people": ["hobbits"],
+      "label": "Noldor dans les montagnes",
+      "people": [
+        "noldor"
+      ],
       "conditions": {
-        "terrain_cat": "marais"
+        "terrain_cat": "montagne"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Noldor dans les collines",
+      "people": [
+        "noldor"
+      ],
+      "conditions": {
+        "relief": "colline"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Noldor en foret",
+      "people": [
+        "noldor"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Sindar pres d'une eau majeure",
+      "people": [
+        "sindar"
+      ],
+      "conditions": {
+        "eau_majeure": true
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Sindar en foret",
+      "people": [
+        "sindar"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Avari en foret",
+      "people": [
+        "avari"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Lossoth dans les deserts de glace",
+      "people": [
+        "lossoth"
+      ],
+      "conditions": {
+        "terrain_type": "desert_glace"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Enedwaithrim dans les collines",
+      "people": [
+        "enedwaithrim"
+      ],
+      "conditions": {
+        "relief": "colline"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Enedwaithrim en foret",
+      "people": [
+        "enedwaithrim"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Druedain en foret",
+      "people": [
+        "druedain"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Haradrim dans les deserts de sable",
+      "people": [
+        "haradrim"
+      ],
+      "conditions": {
+        "terrain_type": "desert_sable"
+      },
+      "modifier": 2
+    },
+    {
+      "label": "Heritiers de Numenor dans les collines",
+      "people": "heritiers_de_numenor",
+      "conditions": {
+        "relief": "colline"
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Umbareens pres d'une eau majeure",
+      "people": [
+        "umbareens"
+      ],
+      "conditions": {
+        "eau_majeure": true
+      },
+      "modifier": 1
+    },
+    {
+      "label": "Hommes de Vertbois en foret",
+      "people": [
+        "hommes_de_vertbois"
+      ],
+      "conditions": {
+        "terrain_cat": "foret"
       },
       "modifier": 1
     },
     {
       "label": "Hobbits dans les collines",
-      "people": ["hobbits"],
+      "people": [
+        "hobbits"
+      ],
       "conditions": {
-        "terrain_type": "colline"
-      },
-      "modifier": 1
-    },
-    {
-      "label": "Hommes sauvages en foret",
-      "people": ["hommes_sauvages"],
-      "conditions": {
-        "terrain_cat": "foret"
-      },
-      "modifier": 1
-    },
-    {
-      "label": "Corsaires sur les cotes",
-      "people": ["corsaires"],
-      "conditions": {
-        "cote": true
-      },
-      "modifier": 1
-    }
-  ],
-  "malus_by_people": [
-    {
-      "label": "Nains en plaines, forets ou deserts",
-      "people": "nains",
-      "conditions": {
-        "terrain_cat_any": ["plaine", "foret", "desert"]
-      },
-      "modifier": -1
-    }
-  ],
-  "bonus_by_faction": [
-    {
-      "label": "Empire dans les deserts geles",
-      "faction": "empire",
-      "conditions": {
-        "terrain_type": "desert_gele"
+        "relief": "colline"
       },
       "modifier": 2
     },
     {
-      "label": "Empire dans les montagnes",
-      "faction": "empire",
+      "label": "Hobbits dans les marais",
+      "people": [
+        "hobbits"
+      ],
+      "conditions": {
+        "terrain_cat": "marais"
+      },
+      "modifier": 1
+    }
+  ],
+  "bonus_by_special": [
+    {
+      "id": "ancien_bonus_empire_desert_glace",
+      "label": "Ancien bonus special de l'Empire dans les deserts de glace",
+      "conditions": {
+        "terrain_type": "desert_glace"
+      },
+      "modifier": 2
+    },
+    {
+      "id": "ancien_bonus_empire_montagne",
+      "label": "Ancien bonus special de l'Empire dans les montagnes",
       "conditions": {
         "terrain_cat": "montagne"
       },
       "modifier": 1
     }
   ],
-  "calculation_note": "empl_max = clamp(empl_base + modifiers, bounds.min, bounds.max). Les modificateurs applicables dependent du peuple_majoritaire, de la faction, du terrain et du booleen cote."
+  "calculation_note": "empl_base = base_by_terrain_type + relief_modifiers. empl_max = clamp(empl_base + bonus_by_people + bonus_by_special, bounds.min, bounds.max). Les bonus multiples applicables se cumulent. eau_majeure est derive de cote, lac_majeur et cours_eau_majeur."
 }

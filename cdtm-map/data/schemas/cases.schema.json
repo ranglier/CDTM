@@ -11,161 +11,289 @@
         "type": "string"
       },
       "region": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "sous_region": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "terrain_cat": {
         "type": "string",
-        "enum": ["plaine", "desert", "marais", "foret", "montagne", "inconnu"]
+        "enum": [
+          "plaine",
+          "desert",
+          "marais",
+          "foret",
+          "montagne",
+          "inconnu"
+        ]
       },
       "terrain_type": {
         "type": "string",
         "enum": [
           "prairie",
           "plaine_aride",
-          "bocage",
-          "desert_chaud",
-          "desert_gele",
+          "plaine_boisee",
+          "toundra",
+          "desert_glace",
+          "desert_sable",
           "terre_desolee",
           "marais",
           "foret",
-          "foret_luxuriante",
           "taiga",
-          "colline",
+          "foret_luxuriante",
           "montagne",
           "montagne_riche",
-          "paturage",
           "inconnu"
         ]
       },
-      "terrain_secondaire": {
-        "type": ["string", "null"],
+      "relief": {
+        "type": [
+          "string",
+          "null"
+        ],
         "enum": [
-          "prairie",
-          "plaine_aride",
-          "bocage",
-          "desert_chaud",
-          "desert_gele",
-          "terre_desolee",
-          "foret",
-          "foret_luxuriante",
-          "taiga",
-          "inconnu",
+          "colline",
           null
         ]
       },
       "cote": {
-        "type": ["boolean", "null"]
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "lac_majeur": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "cours_eau_majeur": {
+        "type": [
+          "boolean",
+          "null"
+        ]
       },
       "faction": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "peuple_majoritaire": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "bonus_speciaux": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string",
+          "enum": [
+            "ancien_bonus_empire_desert_glace",
+            "ancien_bonus_empire_montagne"
+          ]
+        },
+        "uniqueItems": true
       },
       "empl_base": {
-        "type": ["integer", "null"],
-        "minimum": 0
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 1,
+        "maximum": 5
       },
       "empl_max": {
-        "type": ["integer", "null"],
+        "type": [
+          "integer",
+          "null"
+        ],
         "minimum": 1,
         "maximum": 5
       },
       "controleur": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "controle_type": {
-        "type": ["string", "null"],
-        "enum": ["aucun", "total", "partiel", "conteste", "occupe", "vassalise", "inconnu", null]
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "aucun",
+          "total",
+          "partiel",
+          "conteste",
+          "occupe",
+          "vassalise",
+          "inconnu",
+          null
+        ]
       },
       "note_publique": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "note_staff": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       }
     },
-    "required": ["id_case", "terrain_cat", "terrain_type"],
+    "required": [
+      "id_case",
+      "terrain_cat",
+      "terrain_type"
+    ],
     "allOf": [
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "plaine" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "plaine"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "enum": ["prairie", "plaine_aride", "bocage"] }
+            "terrain_type": {
+              "enum": [
+                "prairie",
+                "plaine_aride",
+                "plaine_boisee",
+                "toundra"
+              ]
+            }
           }
         }
       },
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "desert" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "desert"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "enum": ["desert_chaud", "desert_gele", "terre_desolee"] }
+            "terrain_type": {
+              "enum": [
+                "desert_glace",
+                "desert_sable",
+                "terre_desolee"
+              ]
+            }
           }
         }
       },
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "marais" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "marais"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "const": "marais" }
+            "terrain_type": {
+              "enum": [
+                "marais"
+              ]
+            }
           }
         }
       },
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "foret" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "foret"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "enum": ["foret", "foret_luxuriante", "taiga"] }
+            "terrain_type": {
+              "enum": [
+                "foret",
+                "taiga",
+                "foret_luxuriante"
+              ]
+            }
           }
         }
       },
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "montagne" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "montagne"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "enum": ["colline", "montagne", "montagne_riche", "paturage"] }
+            "terrain_type": {
+              "enum": [
+                "montagne",
+                "montagne_riche"
+              ]
+            }
           }
         }
       },
       {
         "if": {
-          "properties": { "terrain_cat": { "const": "inconnu" } },
-          "required": ["terrain_cat"]
+          "properties": {
+            "terrain_cat": {
+              "const": "inconnu"
+            }
+          },
+          "required": [
+            "terrain_cat"
+          ]
         },
         "then": {
           "properties": {
-            "terrain_type": { "const": "inconnu" }
-          }
-        }
-      },
-      {
-        "if": {
-          "not": {
-            "properties": { "terrain_type": { "const": "colline" } },
-            "required": ["terrain_type"]
-          }
-        },
-        "then": {
-          "properties": {
-            "terrain_secondaire": { "type": "null" }
+            "terrain_type": {
+              "enum": [
+                "inconnu"
+              ]
+            }
           }
         }
       }
