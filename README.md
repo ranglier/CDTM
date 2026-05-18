@@ -14,7 +14,7 @@ Voir : [`cdtm-map/README.md`](cdtm-map/README.md)
 
 ## Forgejo
 
-Le dépôt privé Forgejo `jules/CDTM` est la source de vérité de travail.
+Le dépôt privé Forgejo est la source de vérité de travail.
 Le dépôt GitHub public `ranglier/CDTM` reste un miroir public.
 
 Pour la CI minimale Forgejo du sous-projet `cdtm-map`, voir :
