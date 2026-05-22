@@ -26,6 +26,7 @@ import {
 } from "@/map/config";
 import { getCaseStyle } from "@/map/styles";
 import {
+  type CaseSelectionIntent,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
   isStableCaseFeatureCollection,
@@ -34,12 +35,16 @@ import {
 
 type CasesMapProps = {
   dataUrl: string;
-  selectedCaseId: string | null;
+  activeCaseId: string | null;
+  selectedCaseIds: string[];
   focusCaseId: string | null;
   focusRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
-  onCaseSelect: (selectedCase: StableCaseProperties | null) => void;
+  onCaseSelectionChange: (
+    selectedCase: StableCaseProperties | null,
+    intent: CaseSelectionIntent,
+  ) => void;
   onCasesVisibilityChange: (visible: boolean) => void;
   onPanelVisibilityChange: (visible: boolean) => void;
   onFeaturesLoad?: (count: number) => void;
@@ -57,12 +62,13 @@ const geoJsonFormat = new GeoJSON();
 
 export function CasesMap({
   dataUrl,
-  selectedCaseId,
+  activeCaseId,
+  selectedCaseIds,
   focusCaseId,
   focusRequest,
   casesVisible,
   panelVisible,
-  onCaseSelect,
+  onCaseSelectionChange,
   onCasesVisibilityChange,
   onPanelVisibilityChange,
   onFeaturesLoad,
@@ -72,7 +78,9 @@ export function CasesMap({
   const sourceRef = useRef<VectorSource | null>(null);
   const layerRef = useRef<VectorLayer | null>(null);
   const casesVisibleRef = useRef(casesVisible);
-  const selectedCaseIdRef = useRef<string | null>(selectedCaseId);
+  const activeCaseIdRef = useRef<string | null>(activeCaseId);
+  const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
+  const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
 
   const view = useMemo(
     () =>
@@ -115,20 +123,24 @@ export function CasesMap({
         return;
       }
 
-      onCaseSelect(toStableCaseProperties(feature.getProperties()) ?? null);
       map.getView().fit(geometry.getExtent(), {
         duration,
         padding: [60, 60, 60, 60],
         maxZoom: MAP_MAX_ZOOM,
       });
     },
-    [onCaseSelect],
+    [],
   );
 
   useEffect(() => {
-    selectedCaseIdRef.current = selectedCaseId;
+    onCaseSelectionChangeRef.current = onCaseSelectionChange;
+  }, [onCaseSelectionChange]);
+
+  useEffect(() => {
+    activeCaseIdRef.current = activeCaseId;
+    selectedCaseIdsRef.current = new Set(selectedCaseIds);
     layerRef.current?.changed();
-  }, [selectedCaseId]);
+  }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
     if (!focusCaseId) {
@@ -144,9 +156,9 @@ export function CasesMap({
     layerRef.current?.changed();
 
     if (!casesVisible) {
-      onCaseSelect(null);
+      onCaseSelectionChangeRef.current(null, "replace");
     }
-  }, [casesVisible, onCaseSelect]);
+  }, [casesVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -181,7 +193,17 @@ export function CasesMap({
     const layer = new VectorLayer({
       source,
       visible: casesVisibleRef.current,
-      style: (feature) => getCaseStyle(feature.get("id_case") === selectedCaseIdRef.current),
+      style: (feature) => {
+        const idCase = feature.get("id_case");
+        const selectionState =
+          idCase === activeCaseIdRef.current
+            ? "active"
+            : selectedCaseIdsRef.current.has(idCase)
+              ? "selected"
+              : "default";
+
+        return getCaseStyle(selectionState);
+      },
     });
 
     const map = new Map({
@@ -199,6 +221,11 @@ export function CasesMap({
         return;
       }
 
+      const originalEvent = event.originalEvent;
+      const isToggleSelection =
+        originalEvent instanceof MouseEvent &&
+        (originalEvent.shiftKey || originalEvent.ctrlKey || originalEvent.metaKey);
+
       const feature = map.forEachFeatureAtPixel(
         event.pixel,
         (candidate) => {
@@ -214,11 +241,16 @@ export function CasesMap({
       );
 
       if (!feature) {
-        onCaseSelect(null);
+        if (!isToggleSelection) {
+          onCaseSelectionChangeRef.current(null, "replace");
+        }
         return;
       }
 
-      onCaseSelect(toStableCaseProperties(feature.getProperties()) ?? null);
+      onCaseSelectionChangeRef.current(
+        toStableCaseProperties(feature.getProperties()) ?? null,
+        isToggleSelection ? "toggle" : "replace",
+      );
     });
 
     sourceRef.current = source;
@@ -237,7 +269,7 @@ export function CasesMap({
       layerRef.current = null;
       mapRef.current = null;
     };
-  }, [onCaseSelect, view]);
+  }, [view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,7 +316,7 @@ export function CasesMap({
           return;
         }
         onFeaturesLoad?.(0);
-        onCaseSelect(null);
+        onCaseSelectionChangeRef.current(null, "replace");
         console.error("Impossible de charger la couche publique.", error);
       }
     }
@@ -294,7 +326,7 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, focusCaseById, focusCaseId, onCaseSelect, onFeaturesLoad]);
+  }, [dataUrl, focusCaseById, focusCaseId, onFeaturesLoad]);
 
   return (
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">

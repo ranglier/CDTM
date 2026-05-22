@@ -28,6 +28,8 @@ export type StableCaseFeatureCollection = {
   features: StableCaseFeature[];
 };
 
+export type CaseSelectionIntent = "replace" | "toggle";
+
 export const CASES_DATA_URL = "/data/cases.geojson";
 
 function isNullableString(value: unknown): value is string | null | undefined {

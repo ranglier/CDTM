@@ -14,6 +14,17 @@ const defaultCaseStyle = new Style({
 
 const selectedCaseStyle = new Style({
   fill: new Fill({
+    color: "rgba(94, 82, 57, 0.18)",
+  }),
+  stroke: new Stroke({
+    color: "rgba(174, 150, 98, 0.9)",
+    width: 1.9,
+  }),
+  zIndex: 8,
+});
+
+const activeCaseStyle = new Style({
+  fill: new Fill({
     color: "rgba(33, 30, 26, 0.34)",
   }),
   stroke: new Stroke({
@@ -23,6 +34,16 @@ const selectedCaseStyle = new Style({
   zIndex: 10,
 });
 
-export function getCaseStyle(isSelected = false): Style {
-  return isSelected ? selectedCaseStyle : defaultCaseStyle;
+export function getCaseStyle(
+  selectionState: "default" | "selected" | "active" = "default",
+): Style {
+  if (selectionState === "active") {
+    return activeCaseStyle;
+  }
+
+  if (selectionState === "selected") {
+    return selectedCaseStyle;
+  }
+
+  return defaultCaseStyle;
 }

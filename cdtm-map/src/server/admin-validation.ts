@@ -5,7 +5,11 @@ import {
   reliefOptions,
   terrainCategories,
 } from "@/admin/options";
-import { createEmptyAdminCaseDraft, type AdminCaseDraft } from "@/admin/types";
+import {
+  createEmptyAdminCaseDraft,
+  type AdminBulkPatch,
+  type AdminCaseDraft,
+} from "@/admin/types";
 
 function ensurePlainObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -23,6 +27,10 @@ function normalizeNullableText(value: unknown): string | null {
   const normalized = normalizeText(value);
 
   return normalized.length > 0 ? normalized : null;
+}
+
+function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function assertAllowedOption(
@@ -80,4 +88,98 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   }
 
   return draft;
+}
+
+export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
+  const payload = ensurePlainObject(value);
+  const patch = ensurePlainObject(payload.patch ?? payload);
+  const notes = patch.notes ? ensurePlainObject(patch.notes) : null;
+  const terrain = patch.terrain ? ensurePlainObject(patch.terrain) : null;
+  const control = patch.control ? ensurePlainObject(patch.control) : null;
+  const result: AdminBulkPatch = {};
+
+  if (notes) {
+    const notesPatch: NonNullable<AdminBulkPatch["notes"]> = {};
+
+    if (hasOwnProperty(notes, "note_publique")) {
+      notesPatch.note_publique = normalizeNullableText(notes.note_publique);
+    }
+
+    if (hasOwnProperty(notes, "note_staff")) {
+      notesPatch.note_staff = normalizeNullableText(notes.note_staff);
+    }
+
+    if (Object.keys(notesPatch).length > 0) {
+      result.notes = notesPatch;
+    }
+  }
+
+  if (terrain) {
+    const terrainPatch: NonNullable<AdminBulkPatch["terrain"]> = {};
+
+    if (hasOwnProperty(terrain, "terrain_cat")) {
+      terrainPatch.terrain_cat = normalizeNullableText(terrain.terrain_cat);
+    }
+
+    if (hasOwnProperty(terrain, "terrain_type")) {
+      terrainPatch.terrain_type = normalizeNullableText(terrain.terrain_type);
+    }
+
+    if (hasOwnProperty(terrain, "relief")) {
+      terrainPatch.relief = normalizeNullableText(terrain.relief);
+    }
+
+    if (Object.keys(terrainPatch).length > 0) {
+      const hasTerrainCategory = hasOwnProperty(terrainPatch, "terrain_cat");
+      const hasTerrainType = hasOwnProperty(terrainPatch, "terrain_type");
+
+      if (hasTerrainCategory !== hasTerrainType) {
+        throw new Error(
+          "terrain_cat et terrain_type doivent etre modifies ensemble en edition de masse.",
+        );
+      }
+
+      assertAllowedOption("terrain_cat", terrainPatch.terrain_cat ?? null, terrainCategories);
+      assertAllowedOption("relief", terrainPatch.relief ?? null, reliefOptions);
+
+      if (terrainPatch.terrain_type && terrainPatch.terrain_cat) {
+        const allowedTerrainTypes = getTerrainTypesForCategory(terrainPatch.terrain_cat);
+        assertAllowedOption("terrain_type", terrainPatch.terrain_type, allowedTerrainTypes);
+      }
+
+      result.terrain = terrainPatch;
+    }
+  }
+
+  if (control) {
+    const controlPatch: NonNullable<AdminBulkPatch["control"]> = {};
+
+    if (hasOwnProperty(control, "faction")) {
+      controlPatch.faction = normalizeNullableText(control.faction);
+    }
+
+    if (hasOwnProperty(control, "controleur")) {
+      controlPatch.controleur = normalizeNullableText(control.controleur);
+    }
+
+    if (hasOwnProperty(control, "controle_type")) {
+      controlPatch.controle_type = normalizeNullableText(control.controle_type);
+    }
+
+    if (Object.keys(controlPatch).length > 0) {
+      assertAllowedOption("faction", controlPatch.faction ?? null, factionOptions);
+      assertAllowedOption(
+        "controle_type",
+        controlPatch.controle_type ?? null,
+        controlTypeOptions,
+      );
+      result.control = controlPatch;
+    }
+  }
+
+  if (Object.keys(result).length === 0) {
+    throw new Error("Aucun champ modifie n'a ete fourni pour l'edition de masse.");
+  }
+
+  return result;
 }

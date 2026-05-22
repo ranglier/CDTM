@@ -1,6 +1,8 @@
 import type { PoolClient } from "pg";
 
 import {
+  type AdminBulkPatch,
+  type AdminBulkUpdateResult,
   createEmptyAdminCaseDraft,
   type AdminCaseDraft,
   type AdminCaseRecord,
@@ -112,6 +114,16 @@ function normalizeNullableField(value: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function getPresentEntries<T extends Record<string, string | null | undefined>>(
+  value: T,
+): Array<[keyof T & string, string | null]> {
+  return Object.entries(value).filter((entry): entry is [keyof T & string, string | null] => {
+    const [key, currentValue] = entry;
+
+    return Object.prototype.hasOwnProperty.call(value, key) && currentValue !== undefined;
+  });
+}
+
 async function ensureCaseExists(client: PoolClient, idCase: string): Promise<void> {
   const result = await client.query<{ id_case: string }>(
     `
@@ -125,6 +137,59 @@ async function ensureCaseExists(client: PoolClient, idCase: string): Promise<voi
   if (result.rowCount === 0) {
     throw new AdminCaseNotFoundError(idCase);
   }
+}
+
+async function ensureCasesExist(client: PoolClient, idCases: string[]): Promise<void> {
+  const uniqueIds = Array.from(new Set(idCases));
+  const result = await client.query<{ id_case: string }>(
+    `
+      SELECT id_case
+      FROM case_registry
+      WHERE id_case = ANY($1::text[])
+    `,
+    [uniqueIds],
+  );
+
+  if (result.rowCount !== uniqueIds.length) {
+    const existingIds = new Set(result.rows.map((row) => row.id_case));
+    const missingId = uniqueIds.find((idCase) => !existingIds.has(idCase));
+
+    throw new AdminCaseNotFoundError(missingId ?? uniqueIds[0] ?? "inconnue");
+  }
+}
+
+async function applyCurrentSectionPatch(
+  client: PoolClient,
+  tableName: "case_notes_current" | "case_terrain_current" | "case_control_current",
+  idCase: string,
+  patch: Record<string, string | null | undefined>,
+  userId: number,
+): Promise<void> {
+  const entries = getPresentEntries(patch);
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  const columnNames = entries.map(([columnName]) => columnName);
+  const values = entries.map(([, value]) => value);
+  const insertColumns = ["id_case", ...columnNames, "updated_by_user_id"];
+  const placeholders = insertColumns.map((_, index) => `$${index + 1}`);
+  const updateAssignments = [
+    ...columnNames.map((columnName) => `${columnName} = EXCLUDED.${columnName}`),
+    "updated_by_user_id = EXCLUDED.updated_by_user_id",
+    "updated_at = NOW()",
+  ];
+
+  await client.query(
+    `
+      INSERT INTO ${tableName} (${insertColumns.join(", ")})
+      VALUES (${placeholders.join(", ")})
+      ON CONFLICT (id_case) DO UPDATE
+      SET ${updateAssignments.join(", ")}
+    `,
+    [idCase, ...values, userId],
+  );
 }
 
 async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promise<AdminCaseRecord> {
@@ -303,6 +368,69 @@ export async function saveAdminCaseRecord(
     await client.query("COMMIT");
 
     return record;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function saveAdminCaseBulkPatch(
+  idCases: string[],
+  patch: AdminBulkPatch,
+  userId: number,
+): Promise<AdminBulkUpdateResult> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    throw new Error("La base de donnees n'est pas configuree.");
+  }
+
+  const uniqueIds = Array.from(new Set(idCases.filter((idCase) => idCase.trim().length > 0)));
+
+  if (uniqueIds.length === 0) {
+    throw new Error("Aucune case n'a ete fournie pour l'edition de masse.");
+  }
+
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN");
+    await ensureCasesExist(client, uniqueIds);
+
+    for (const idCase of uniqueIds) {
+      if (patch.notes) {
+        await applyCurrentSectionPatch(client, "case_notes_current", idCase, patch.notes, userId);
+      }
+
+      if (patch.terrain) {
+        await applyCurrentSectionPatch(
+          client,
+          "case_terrain_current",
+          idCase,
+          patch.terrain,
+          userId,
+        );
+      }
+
+      if (patch.control) {
+        await applyCurrentSectionPatch(
+          client,
+          "case_control_current",
+          idCase,
+          patch.control,
+          userId,
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      updated_count: uniqueIds.length,
+      id_cases: uniqueIds,
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
