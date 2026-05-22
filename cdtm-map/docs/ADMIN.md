@@ -8,6 +8,8 @@ L'admin V1 ajoute un acces staff a la carte pour :
 - consulter et modifier `notes`, `terrain` et `controle` ;
 - enregistrer ces donnees en base via `id_case`.
 
+L'application ne gere pas encore de roles distincts. En pratique, un compte admin cree aujourd'hui dispose de tous les droits staff existants.
+
 ## Runtime
 
 Variables utilisees :
@@ -34,6 +36,20 @@ Si ces variables sont absentes :
 
 - aucun compte staff n'est bootstrappe automatiquement ;
 - le deploiement standard continue sans erreur.
+
+## Creation manuelle d'un compte admin
+
+Pour creer ou mettre a jour un compte utilisable tout de suite :
+
+```bash
+DATABASE_URL=postgresql://... npm run create:admin -- --username superadmin --password '<mot_de_passe>'
+```
+
+La commande :
+
+- cree le compte s'il n'existe pas ;
+- met a jour son mot de passe s'il existe deja ;
+- invalide ses anciennes sessions.
 
 `POSTGRES_PASSWORD` ne doit jamais servir de mot de passe admin applicatif.
 
