@@ -18,8 +18,8 @@ const displayFont = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "CDTM - Map",
-  description: "Carte publique des cases stables du projet CDTM sur fond statique CTM.",
+  title: "Chroniques de la Terre du Milieu",
+  description: "Carte des cases du projet Chroniques de la Terre du Milieu.",
 };
 
 type RootLayoutProps = {

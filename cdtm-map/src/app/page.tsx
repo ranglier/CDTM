@@ -448,18 +448,16 @@ export default function HomePage() {
   return (
     <AppShell>
       <SiteHeader
-        totalCases={totalCases}
-        casesVisible={casesVisible}
         adminAuthenticated={adminSession.authenticated}
         adminModeEnabled={adminModeEnabled}
-        adminUsername={adminSession.username}
         onAdminAction={handleAdminModeAction}
       />
       <section
+        id="carte"
         className={
           panelVisible
-            ? "grid min-h-[calc(100svh-2rem)] flex-1 gap-6 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
-            : "grid min-h-[calc(100svh-2rem)] flex-1 gap-6"
+            ? "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
+            : "grid min-h-[calc(100svh-6rem)] flex-1 gap-6"
         }
         aria-label="Carte publique des cases"
       >

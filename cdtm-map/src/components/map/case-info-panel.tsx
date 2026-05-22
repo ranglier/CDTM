@@ -197,7 +197,7 @@ export function CaseInfoPanel({
                 </>
               ) : (
                 <Button type="button" variant="outline" size="sm" onClick={onOpenAdminLogin}>
-                  Connexion staff
+                  Admin
                 </Button>
               )}
             </div>
@@ -306,7 +306,7 @@ export function CaseInfoPanel({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-primary">
-                          Console admin
+                          Admin
                         </p>
                         <p className="mt-1 text-sm text-muted-foreground">
                           Recherche directe, edition et sauvegarde de l&apos;etat courant.
