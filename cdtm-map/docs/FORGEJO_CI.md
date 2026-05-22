@@ -49,7 +49,7 @@ Le workflow s'exécute aussi sur `push` vers `main` quand des changements touche
 - script de deploiement : `scripts/deploy-osgiliath.sh`
 - healthcheck : `src/app/api/health/route.ts`
 - variables applicatives actuellement lues : `APP_ENV`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_HOURS`
-- l'admin V1 depend de ces variables runtime pour bootstrapper le compte staff et ouvrir la console d'edition
+- le deploiement standard n'exige pas de secrets `ADMIN_*`
 
 ## Ce que le deploy fait
 
@@ -72,12 +72,9 @@ Le workflow s'exécute aussi sur `push` vers `main` quand des changements touche
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD`
 
-Secret optionnel :
-
-- `ADMIN_SESSION_TTL_HOURS` : `168` par defaut si absent
+Le workflow n'attend pas de secrets Forgejo `ADMIN_USERNAME`, `ADMIN_PASSWORD` ni `ADMIN_SESSION_TTL_HOURS`.
+Il ecrit `ADMIN_SESSION_TTL_HOURS=168` dans le runtime `.env`.
 
 `DATABASE_URL` attendue en reference :
 
@@ -89,9 +86,11 @@ Le service Compose PostgreSQL/PostGIS de production s'appelle `postgres`.
 
 Le fichier runtime `.env` genere par la CI ecrit aussi :
 
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD`
 - `ADMIN_SESSION_TTL_HOURS`
+
+Par defaut, le workflow n'ecrit pas `ADMIN_USERNAME` ni `ADMIN_PASSWORD`.
+Sans ces variables runtime, aucun compte staff n'est bootstrappe automatiquement.
+`POSTGRES_PASSWORD` ne doit pas etre reutilise comme mot de passe admin applicatif.
 
 Pour le fonctionnement de l'admin V1, voir aussi :
 `docs/ADMIN.md`

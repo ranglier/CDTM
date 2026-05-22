@@ -16,9 +16,12 @@ Les donnees admin sont stockees a part et rattachees aux cases via `id_case`.
 Les variables suivantes doivent etre presentes dans l'environnement runtime :
 
 - `DATABASE_URL`
+- `ADMIN_SESSION_TTL_HOURS`
+
+Variables optionnelles pour le bootstrap du compte staff :
+
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
-- `ADMIN_SESSION_TTL_HOURS`
 
 Valeur par defaut actuelle :
 
@@ -35,9 +38,16 @@ Au demarrage, l'application peut creer ou mettre a jour un compte staff a partir
 
 Le bootstrap actuel cree ou met a jour le compte dont le `username` correspond a `ADMIN_USERNAME`.
 
+Sans `ADMIN_USERNAME` et `ADMIN_PASSWORD` :
+
+- aucun compte staff n'est bootstrappe automatiquement ;
+- le deploiement standard peut continuer sans erreur ;
+- l'admin V1 reste simplement sans compte staff initialise par defaut.
+
 Attention :
 
 - si `ADMIN_USERNAME` et `ADMIN_PASSWORD` restent definis, redemarrer l'application reinitialise ce compte avec ces valeurs ;
+- `POSTGRES_PASSWORD` ne doit jamais servir de mot de passe admin applicatif ;
 - ce mecanisme est pratique pour la V1 mais ne constitue pas encore une gestion complete des comptes.
 
 ## Donnees stockees
