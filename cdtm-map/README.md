@@ -111,6 +111,51 @@ node scripts/validate-data.mjs data/examples/invalid-missing-id.geojson
 
 Les fichiers invalides ne commencent volontairement pas par `cases`, afin de ne pas être pris par la découverte automatique du script.
 
+## Déploiement Osgiliath
+
+Le dépôt applicatif embarque désormais les artefacts minimaux de déploiement pour la VM `osgiliath` :
+
+- `Dockerfile` : build Next.js production en mode `standalone` ;
+- `docker-compose.prod.yml` : application `cdtm-app` + base `postgres/postgis` ;
+- `src/app/api/health/route.ts` : healthcheck HTTP simple ;
+- `scripts/deploy-osgiliath.sh` : synchronisation SSH + `docker compose up -d --build`.
+
+Le workflow Forgejo visé est :
+
+```txt
+push main -> CI Forgejo (aldburg) -> sync SSH -> docker compose sur osgiliath
+```
+
+Le job de déploiement attend au minimum les secrets Forgejo suivants :
+
+- `OSGILIATH_SSH_HOST`
+- `OSGILIATH_SSH_PORT`
+- `OSGILIATH_SSH_USER`
+- `OSGILIATH_SSH_PRIVATE_KEY`
+- `OSGILIATH_DEPLOY_PATH`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+
+Le fichier d'environnement runtime est généré par la CI puis déposé sur la VM dans `${OSGILIATH_DEPLOY_PATH}/.env`.
+La valeur de référence de `DATABASE_URL` est :
+
+```text
+postgresql://cdtm:<password>@postgres:5432/cdtm
+```
+
+Le service Compose de base s'appelle `postgres` dans la stack de production.
+
+Pour tester la stack de production en local :
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.example config
+```
+
+Pour la préparation du reverse proxy Caddy, voir :
+`docs/deployment/caddy-cdtm.example.caddy`
+
 ## Documentation principale
 
 - `docs/ROADMAP.md` : trajectoire générale du projet.
@@ -118,6 +163,7 @@ Les fichiers invalides ne commencent volontairement pas par `cases`, afin de ne 
 - `docs/DATA_MODEL.md` : modèle de données cible.
 - `docs/NOMENCLATURES.md` : valeurs contrôlées.
 - `docs/WORKFLOW_QGIS_VECTORISATION_CASES.md` : workflow QGIS.
+- `docs/FORGEJO_CI.md` : pipeline Forgejo CI/CD et contrat de secrets.
 
 ## Prochaines étapes
 

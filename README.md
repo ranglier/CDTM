@@ -17,7 +17,7 @@ Voir : [`cdtm-map/README.md`](cdtm-map/README.md)
 Le dépôt privé Forgejo est la source de vérité de travail.
 Le dépôt GitHub public `ranglier/CDTM` reste un miroir public.
 
-Pour la CI minimale Forgejo du sous-projet `cdtm-map`, voir :
+Pour la CI/CD Forgejo et le déploiement automatique vers `osgiliath` du sous-projet `cdtm-map`, voir :
 [`cdtm-map/docs/FORGEJO_CI.md`](cdtm-map/docs/FORGEJO_CI.md)
 
 ## Note d'organisation

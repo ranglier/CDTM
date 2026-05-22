@@ -1,0 +1,11 @@
+.git
+.forgejo
+.next
+coverage
+dist
+build
+node_modules
+npm-debug.log*
+docker-compose*.yml
+data/exports
+*.tsbuildinfo

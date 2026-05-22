@@ -1,0 +1,9 @@
+cdtm.m-earth.fr {
+    reverse_proxy 10.10.20.30:3000
+}
+
+# A appliquer sur cirith-ungol uniquement quand :
+# - cdtm.m-earth.fr pointe vers la bonne chaine publique ;
+# - morannon redirige correctement HTTP/HTTPS vers cirith-ungol ;
+# - cirith-ungol peut joindre http://10.10.20.30:3000 ;
+# - le healthcheck interne Osgiliath est valide.

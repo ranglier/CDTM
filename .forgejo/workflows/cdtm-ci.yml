@@ -1,47 +1,151 @@
-name: CDTM CI
+name: CDTM CI/CD
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
-      - "cdtm-map/**"
       - ".forgejo/workflows/cdtm-ci.yml"
+      - "cdtm-map/**"
 
 jobs:
-  cdtm-map-ci:
-    name: cdtm-map baseline
+  ci:
+    name: CI
     runs-on: node20
     defaults:
       run:
-        shell: sh
         working-directory: cdtm-map
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show runner context
-        run: |
-          set -eu
-          echo "=== Runner ==="
-          hostname || true
-          whoami || true
-          node --version
-          npm --version
-          echo "=== Workspace ==="
-          pwd
-          ls -la
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: cdtm-map/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate data
+      - name: Validate stable data
         run: npm run validate:data
 
-      - name: Lint
+      - name: Lint sources
         run: npm run lint
 
-      - name: Typecheck
+      - name: Typecheck sources
         run: npm run typecheck
 
-      - name: Build
+      - name: Build production bundle
         run: npm run build
+
+  deploy-production:
+    name: Deploy production
+    needs: ci
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: node20
+    env:
+      OSGILIATH_SSH_HOST: ${{ secrets.OSGILIATH_SSH_HOST }}
+      OSGILIATH_SSH_PORT: ${{ secrets.OSGILIATH_SSH_PORT }}
+      OSGILIATH_SSH_USER: ${{ secrets.OSGILIATH_SSH_USER }}
+      OSGILIATH_SSH_PRIVATE_KEY: ${{ secrets.OSGILIATH_SSH_PRIVATE_KEY }}
+      OSGILIATH_DEPLOY_PATH: ${{ secrets.OSGILIATH_DEPLOY_PATH }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required deployment secrets
+        shell: sh
+        run: |
+          missing=""
+          for name in \
+            OSGILIATH_SSH_HOST \
+            OSGILIATH_SSH_PORT \
+            OSGILIATH_SSH_USER \
+            OSGILIATH_SSH_PRIVATE_KEY \
+            OSGILIATH_DEPLOY_PATH \
+            POSTGRES_DB \
+            POSTGRES_USER \
+            POSTGRES_PASSWORD \
+            DATABASE_URL
+          do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "Missing required deployment secrets:$missing" >&2
+            exit 1
+          fi
+
+      - name: Ensure SSH client is available
+        run: |
+          command -v ssh >/dev/null 2>&1
+          command -v scp >/dev/null 2>&1
+          command -v ssh-keyscan >/dev/null 2>&1
+
+      - name: Configure SSH key
+        shell: sh
+        run: |
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$OSGILIATH_SSH_PRIVATE_KEY" > "$HOME/.ssh/osgiliath"
+          chmod 600 "$HOME/.ssh/osgiliath"
+          if ssh-keyscan -p "${OSGILIATH_SSH_PORT:-22}" "$OSGILIATH_SSH_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null; then
+            echo "Using ssh-keyscan populated known_hosts."
+            printf '%s\n' "SSH_STRICT_OPTION=-o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+          else
+            echo "ssh-keyscan unavailable for target, falling back to StrictHostKeyChecking=accept-new."
+            : > "$HOME/.ssh/known_hosts"
+            printf '%s\n' "SSH_STRICT_OPTION=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build runtime environment file
+        shell: sh
+        run: |
+          printf '%s\n' \
+            'APP_ENV=production' \
+            'NEXT_PUBLIC_APP_NAME=CDTM Map' \
+            'APP_PORT=3000' \
+            "POSTGRES_DB=$POSTGRES_DB" \
+            "POSTGRES_USER=$POSTGRES_USER" \
+            "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
+            "DATABASE_URL=$DATABASE_URL" \
+            > "$RUNNER_TEMP/cdtm-map.env"
+
+      - name: Test SSH connectivity and runtime prerequisites
+        shell: sh
+        run: |
+          ssh -i "$HOME/.ssh/osgiliath" -p "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+            "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST" \
+            "set -eu; \
+            hostname; \
+            whoami; \
+            docker --version; \
+            docker compose version; \
+            mkdir -p '$OSGILIATH_DEPLOY_PATH'; \
+            ls -ld '$OSGILIATH_DEPLOY_PATH'"
+
+      - name: Upload runtime environment file
+        shell: sh
+        run: |
+          scp -i "$HOME/.ssh/osgiliath" -P "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+            "$RUNNER_TEMP/cdtm-map.env" \
+            "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST:$OSGILIATH_DEPLOY_PATH/.env"
+
+          ssh -i "$HOME/.ssh/osgiliath" -p "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+            "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST" \
+            "chmod 600 '$OSGILIATH_DEPLOY_PATH/.env' && test -f '$OSGILIATH_DEPLOY_PATH/.env'"
+
+      - name: Deploy to Osgiliath
+        shell: sh
+        run: sh cdtm-map/scripts/deploy-osgiliath.sh

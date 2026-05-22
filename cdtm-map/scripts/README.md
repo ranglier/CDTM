@@ -1,8 +1,9 @@
 # scripts
 
-Scripts utilitaires lies aux donnees et a leur maintenance.
+Scripts utilitaires lies aux donnees, a leur maintenance et au deploiement.
 
-- `validate-data.mjs` : futur point d'entree pour verifier les fichiers JSON.
+- `validate-data.mjs` : validation des fichiers `cases*.json` et `cases*.geojson`.
+- `deploy-osgiliath.sh` : synchronisation SSH vers `osgiliath` puis `docker compose up -d --build`.
 
 ## TODO
 
