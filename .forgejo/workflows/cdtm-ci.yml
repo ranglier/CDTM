@@ -57,6 +57,9 @@ jobs:
       POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      ADMIN_SESSION_TTL_HOURS: ${{ secrets.ADMIN_SESSION_TTL_HOURS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -74,7 +77,9 @@ jobs:
             POSTGRES_DB \
             POSTGRES_USER \
             POSTGRES_PASSWORD \
-            DATABASE_URL
+            DATABASE_URL \
+            ADMIN_USERNAME \
+            ADMIN_PASSWORD
           do
             eval "value=\${$name:-}"
             if [ -z "$value" ]; then
@@ -121,6 +126,7 @@ jobs:
       - name: Build runtime environment file
         shell: sh
         run: |
+          admin_session_ttl_hours="${ADMIN_SESSION_TTL_HOURS:-168}"
           printf '%s\n' \
             'APP_ENV=production' \
             'NEXT_PUBLIC_APP_NAME=CDTM Map' \
@@ -129,6 +135,9 @@ jobs:
             "POSTGRES_USER=$POSTGRES_USER" \
             "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
             "DATABASE_URL=$DATABASE_URL" \
+            "ADMIN_USERNAME=$ADMIN_USERNAME" \
+            "ADMIN_PASSWORD=$ADMIN_PASSWORD" \
+            "ADMIN_SESSION_TTL_HOURS=$admin_session_ttl_hours" \
             > "$RUNNER_TEMP/cdtm-map.env"
 
       - name: Test SSH connectivity and runtime prerequisites

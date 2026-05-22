@@ -137,6 +137,12 @@ Le job de déploiement attend au minimum les secrets Forgejo suivants :
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+
+Secret optionnel :
+
+- `ADMIN_SESSION_TTL_HOURS` : `168` par defaut si absent
 
 Le fichier d'environnement runtime est généré par la CI puis déposé sur la VM dans `${OSGILIATH_DEPLOY_PATH}/.env`.
 La valeur de référence de `DATABASE_URL` est :
@@ -161,6 +167,7 @@ Pour la préparation du reverse proxy Caddy, voir :
 - `docs/ROADMAP.md` : trajectoire générale du projet.
 - `docs/SPEC_CARTE_INTERACTIVE_CDTM.md` : spécification fonctionnelle initiale de la carte.
 - `docs/DATA_MODEL.md` : modèle de données cible.
+- `docs/ADMIN.md` : admin V1, bootstrap staff et separation public/staff.
 - `docs/NOMENCLATURES.md` : valeurs contrôlées.
 - `docs/WORKFLOW_QGIS_VECTORISATION_CASES.md` : workflow QGIS.
 - `docs/FORGEJO_CI.md` : pipeline Forgejo CI/CD et contrat de secrets.

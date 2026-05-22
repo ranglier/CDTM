@@ -48,8 +48,8 @@ Le workflow s'exécute aussi sur `push` vers `main` quand des changements touche
 - artefacts runtime : `Dockerfile`, `docker-compose.prod.yml`, `.env.example`
 - script de deploiement : `scripts/deploy-osgiliath.sh`
 - healthcheck : `src/app/api/health/route.ts`
-- variables applicatives actuellement lues : `APP_ENV`, `DATABASE_URL`
-- connexion base actuelle : aucune connexion Postgres active dans l'application a ce stade ; `DATABASE_URL` est seulement exposee au runtime et au healthcheck
+- variables applicatives actuellement lues : `APP_ENV`, `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_HOURS`
+- l'admin V1 depend de ces variables runtime pour bootstrapper le compte staff et ouvrir la console d'edition
 
 ## Ce que le deploy fait
 
@@ -72,6 +72,12 @@ Le workflow s'exécute aussi sur `push` vers `main` quand des changements touche
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+
+Secret optionnel :
+
+- `ADMIN_SESSION_TTL_HOURS` : `168` par defaut si absent
 
 `DATABASE_URL` attendue en reference :
 
@@ -80,6 +86,15 @@ postgresql://cdtm:<password>@postgres:5432/cdtm
 ```
 
 Le service Compose PostgreSQL/PostGIS de production s'appelle `postgres`.
+
+Le fichier runtime `.env` genere par la CI ecrit aussi :
+
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `ADMIN_SESSION_TTL_HOURS`
+
+Pour le fonctionnement de l'admin V1, voir aussi :
+`docs/ADMIN.md`
 
 ## SSH / known_hosts
 
