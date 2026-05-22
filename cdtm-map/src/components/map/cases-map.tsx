@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import Feature from "ol/Feature";
 import GeoJSON from "ol/format/GeoJSON";
@@ -35,6 +35,8 @@ import {
 type CasesMapProps = {
   dataUrl: string;
   selectedCaseId: string | null;
+  focusCaseId: string | null;
+  focusRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
   onCaseSelect: (selectedCase: StableCaseProperties | null) => void;
@@ -56,6 +58,8 @@ const geoJsonFormat = new GeoJSON();
 export function CasesMap({
   dataUrl,
   selectedCaseId,
+  focusCaseId,
+  focusRequest,
   casesVisible,
   panelVisible,
   onCaseSelect,
@@ -90,10 +94,49 @@ export function CasesMap({
     });
   }
 
+  const focusCaseById = useCallback(
+    (idCase: string, duration = 250) => {
+      const source = sourceRef.current;
+      const map = mapRef.current;
+
+      if (!source || !map) {
+        return;
+      }
+
+      const feature = source.getFeatureById(idCase);
+
+      if (!feature) {
+        return;
+      }
+
+      const geometry = feature.getGeometry();
+
+      if (!geometry) {
+        return;
+      }
+
+      onCaseSelect(toStableCaseProperties(feature.getProperties()) ?? null);
+      map.getView().fit(geometry.getExtent(), {
+        duration,
+        padding: [60, 60, 60, 60],
+        maxZoom: MAP_MAX_ZOOM,
+      });
+    },
+    [onCaseSelect],
+  );
+
   useEffect(() => {
     selectedCaseIdRef.current = selectedCaseId;
     layerRef.current?.changed();
   }, [selectedCaseId]);
+
+  useEffect(() => {
+    if (!focusCaseId) {
+      return;
+    }
+
+    focusCaseById(focusCaseId);
+  }, [focusCaseById, focusCaseId, focusRequest]);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -220,10 +263,22 @@ export function CasesMap({
           featureProjection: casesProjection,
         });
 
+        for (const feature of features) {
+          const idCase = feature.get("id_case");
+
+          if (typeof idCase === "string" && idCase.length > 0) {
+            feature.setId(idCase);
+          }
+        }
+
         sourceRef.current.clear(true);
         sourceRef.current.addFeatures(features);
         onFeaturesLoad?.(features.length);
         fitCasesExtent(0);
+
+        if (focusCaseId) {
+          focusCaseById(focusCaseId, 0);
+        }
       } catch (error) {
         if (cancelled) {
           return;
@@ -239,7 +294,7 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, onCaseSelect, onFeaturesLoad]);
+  }, [dataUrl, focusCaseById, focusCaseId, onCaseSelect, onFeaturesLoad]);
 
   return (
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">
