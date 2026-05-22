@@ -9,11 +9,48 @@ SSH_PORT="${OSGILIATH_SSH_PORT:-22}"
 SSH_USER="${OSGILIATH_SSH_USER:?OSGILIATH_SSH_USER is required}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 REMOTE="${SSH_USER}@${SSH_HOST}"
-SSH_STRICT_OPTION="${SSH_STRICT_OPTION:--o StrictHostKeyChecking=yes}"
-SSH_OPTS="-p ${SSH_PORT} -o BatchMode=yes ${SSH_STRICT_OPTION}"
+SSH_KEY_PATH="${DEPLOY_SSH_KEY_PATH:?DEPLOY_SSH_KEY_PATH is required}"
+SSH_KNOWN_HOSTS_PATH="${DEPLOY_SSH_KNOWN_HOSTS_PATH:-${HOME}/.ssh/known_hosts}"
+SSH_STRICT_HOST_KEY_CHECKING="${SSH_STRICT_HOST_KEY_CHECKING:-yes}"
 REMOTE_ENV_FILE="${DEPLOY_PATH}/.env"
-RSYNC_RSH="ssh -p ${SSH_PORT} -o BatchMode=yes ${SSH_STRICT_OPTION}"
 SYNC_EXCLUDES="--exclude=.git --exclude=.forgejo --exclude=node_modules --exclude=.next --exclude=coverage --exclude=dist --exclude=build --exclude=data/exports --exclude=*.log --exclude=.env --exclude=.env.*"
+
+if [ ! -f "${SSH_KEY_PATH}" ]; then
+  echo "SSH key not found: ${SSH_KEY_PATH}" >&2
+  exit 1
+fi
+
+key_permissions="$(stat -c '%a' "${SSH_KEY_PATH}")"
+if [ "${key_permissions}" != "600" ]; then
+  echo "Unexpected SSH key permissions for ${SSH_KEY_PATH}: ${key_permissions}" >&2
+  exit 1
+fi
+
+ssh-keygen -y -f "${SSH_KEY_PATH}" >/dev/null
+
+ssh_cmd() {
+  ssh \
+    -i "${SSH_KEY_PATH}" \
+    -p "${SSH_PORT}" \
+    -o BatchMode=yes \
+    -o IdentitiesOnly=yes \
+    -o UserKnownHostsFile="${SSH_KNOWN_HOSTS_PATH}" \
+    -o StrictHostKeyChecking="${SSH_STRICT_HOST_KEY_CHECKING}" \
+    "$@"
+}
+
+scp_cmd() {
+  scp \
+    -i "${SSH_KEY_PATH}" \
+    -P "${SSH_PORT}" \
+    -o BatchMode=yes \
+    -o IdentitiesOnly=yes \
+    -o UserKnownHostsFile="${SSH_KNOWN_HOSTS_PATH}" \
+    -o StrictHostKeyChecking="${SSH_STRICT_HOST_KEY_CHECKING}" \
+    "$@"
+}
+
+rsync_ssh_cmd="ssh -i ${SSH_KEY_PATH} -p ${SSH_PORT} -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=${SSH_KNOWN_HOSTS_PATH} -o StrictHostKeyChecking=${SSH_STRICT_HOST_KEY_CHECKING}"
 
 if [ ! -d "${APP_DIR}" ]; then
   echo "Deploy directory not found: ${APP_DIR}" >&2
@@ -21,11 +58,11 @@ if [ ! -d "${APP_DIR}" ]; then
 fi
 
 echo "Syncing ${APP_DIR} to ${REMOTE}:${DEPLOY_PATH}"
-ssh ${SSH_OPTS} "${REMOTE}" "mkdir -p '${DEPLOY_PATH}'"
+ssh_cmd "${REMOTE}" "mkdir -p '${DEPLOY_PATH}'"
 
-if command -v rsync >/dev/null 2>&1 && ssh ${SSH_OPTS} "${REMOTE}" "command -v rsync >/dev/null 2>&1"; then
+if command -v rsync >/dev/null 2>&1 && ssh_cmd "${REMOTE}" "command -v rsync >/dev/null 2>&1"; then
   # Prefer rsync for idempotent updates and cleaner exclusions.
-  rsync -az --delete ${SYNC_EXCLUDES} -e "${RSYNC_RSH}" "${APP_DIR}/" "${REMOTE}:${DEPLOY_PATH}/"
+  rsync -az --delete ${SYNC_EXCLUDES} -e "${rsync_ssh_cmd}" "${APP_DIR}/" "${REMOTE}:${DEPLOY_PATH}/"
 else
   echo "rsync not available on one side, falling back to tar over ssh"
   tar \
@@ -42,14 +79,14 @@ else
     --exclude='./.env.*' \
     -C "${APP_DIR}" \
     -czf - \
-    . | ssh ${SSH_OPTS} "${REMOTE}" "tar -xzf - -C '${DEPLOY_PATH}'"
+    . | ssh_cmd "${REMOTE}" "tar -xzf - -C '${DEPLOY_PATH}'"
 fi
 
 echo "Checking remote environment file"
-ssh ${SSH_OPTS} "${REMOTE}" "chmod 600 '${REMOTE_ENV_FILE}' && [ -f '${REMOTE_ENV_FILE}' ]"
+ssh_cmd "${REMOTE}" "chmod 600 '${REMOTE_ENV_FILE}' && [ -f '${REMOTE_ENV_FILE}' ]"
 
 echo "Starting Docker Compose on ${REMOTE}"
-ssh ${SSH_OPTS} "${REMOTE}" \
+ssh_cmd "${REMOTE}" \
   "set -eu; \
   cd '${DEPLOY_PATH}'; \
   docker compose --env-file '${REMOTE_ENV_FILE}' -f '${COMPOSE_FILE}' pull || true; \
@@ -58,7 +95,7 @@ ssh ${SSH_OPTS} "${REMOTE}" \
   docker compose --env-file '${REMOTE_ENV_FILE}' -f '${COMPOSE_FILE}' ps"
 
 echo "Running health check"
-ssh ${SSH_OPTS} "${REMOTE}" "DEPLOY_PATH='${DEPLOY_PATH}' COMPOSE_FILE='${COMPOSE_FILE}' REMOTE_ENV_FILE='${REMOTE_ENV_FILE}' sh -s" <<'EOF'
+ssh_cmd "${REMOTE}" "DEPLOY_PATH='${DEPLOY_PATH}' COMPOSE_FILE='${COMPOSE_FILE}' REMOTE_ENV_FILE='${REMOTE_ENV_FILE}' sh -s" <<'EOF'
 set -eu
 
 APP_PORT="$(awk -F= '/^APP_PORT=/{print $2}' "${REMOTE_ENV_FILE}" | tail -n 1)"

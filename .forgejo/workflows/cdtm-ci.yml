@@ -100,14 +100,23 @@ jobs:
           chmod 700 "$HOME/.ssh"
           printf '%s\n' "$OSGILIATH_SSH_PRIVATE_KEY" > "$HOME/.ssh/osgiliath"
           chmod 600 "$HOME/.ssh/osgiliath"
+          test -f "$HOME/.ssh/osgiliath"
+          perms="$(stat -c '%a' "$HOME/.ssh/osgiliath")"
+          if [ "$perms" != "600" ]; then
+            echo "Unexpected SSH key permissions: $perms" >&2
+            exit 1
+          fi
+          ssh-keygen -y -f "$HOME/.ssh/osgiliath" >/dev/null
           if ssh-keyscan -p "${OSGILIATH_SSH_PORT:-22}" "$OSGILIATH_SSH_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null; then
             echo "Using ssh-keyscan populated known_hosts."
-            printf '%s\n' "SSH_STRICT_OPTION=-o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+            printf '%s\n' "SSH_STRICT_HOST_KEY_CHECKING=yes" >> "$GITHUB_ENV"
           else
             echo "ssh-keyscan unavailable for target, falling back to StrictHostKeyChecking=accept-new."
             : > "$HOME/.ssh/known_hosts"
-            printf '%s\n' "SSH_STRICT_OPTION=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
+            printf '%s\n' "SSH_STRICT_HOST_KEY_CHECKING=accept-new" >> "$GITHUB_ENV"
           fi
+          printf '%s\n' "DEPLOY_SSH_KEY_PATH=$HOME/.ssh/osgiliath" >> "$GITHUB_ENV"
+          printf '%s\n' "DEPLOY_SSH_KNOWN_HOSTS_PATH=$HOME/.ssh/known_hosts" >> "$GITHUB_ENV"
 
       - name: Build runtime environment file
         shell: sh
@@ -125,7 +134,12 @@ jobs:
       - name: Test SSH connectivity and runtime prerequisites
         shell: sh
         run: |
-          ssh -i "$HOME/.ssh/osgiliath" -p "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+          ssh -i "$DEPLOY_SSH_KEY_PATH" \
+            -p "${OSGILIATH_SSH_PORT:-22}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
+            -o StrictHostKeyChecking="$SSH_STRICT_HOST_KEY_CHECKING" \
             "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST" \
             "set -eu; \
             hostname; \
@@ -138,14 +152,28 @@ jobs:
       - name: Upload runtime environment file
         shell: sh
         run: |
-          scp -i "$HOME/.ssh/osgiliath" -P "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+          scp -i "$DEPLOY_SSH_KEY_PATH" \
+            -P "${OSGILIATH_SSH_PORT:-22}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
+            -o StrictHostKeyChecking="$SSH_STRICT_HOST_KEY_CHECKING" \
             "$RUNNER_TEMP/cdtm-map.env" \
             "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST:$OSGILIATH_DEPLOY_PATH/.env"
 
-          ssh -i "$HOME/.ssh/osgiliath" -p "${OSGILIATH_SSH_PORT:-22}" -o BatchMode=yes $SSH_STRICT_OPTION \
+          ssh -i "$DEPLOY_SSH_KEY_PATH" \
+            -p "${OSGILIATH_SSH_PORT:-22}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
+            -o StrictHostKeyChecking="$SSH_STRICT_HOST_KEY_CHECKING" \
             "$OSGILIATH_SSH_USER@$OSGILIATH_SSH_HOST" \
             "chmod 600 '$OSGILIATH_DEPLOY_PATH/.env' && test -f '$OSGILIATH_DEPLOY_PATH/.env'"
 
       - name: Deploy to Osgiliath
         shell: sh
-        run: sh cdtm-map/scripts/deploy-osgiliath.sh
+        run: |
+          DEPLOY_SSH_KEY_PATH="$DEPLOY_SSH_KEY_PATH" \
+          DEPLOY_SSH_KNOWN_HOSTS_PATH="$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
+          SSH_STRICT_HOST_KEY_CHECKING="$SSH_STRICT_HOST_KEY_CHECKING" \
+          sh cdtm-map/scripts/deploy-osgiliath.sh
