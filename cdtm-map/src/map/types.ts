@@ -1,0 +1,103 @@
+export type StableCaseProperties = {
+  id_case: string;
+  region?: string | null;
+  sous_region?: string | null;
+  cote?: boolean | null;
+  lac_majeur?: boolean | null;
+  cours_eau_majeur?: boolean | null;
+};
+
+export type StableCaseGeometry =
+  | {
+      type: "Polygon";
+      coordinates: number[][][];
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: number[][][][];
+    };
+
+export type StableCaseFeature = {
+  type: "Feature";
+  properties: StableCaseProperties;
+  geometry: StableCaseGeometry;
+};
+
+export type StableCaseFeatureCollection = {
+  type: "FeatureCollection";
+  features: StableCaseFeature[];
+};
+
+export const CASES_DATA_URL = "/data/cases.geojson";
+
+function isNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string";
+}
+
+function isNullableBoolean(value: unknown): value is boolean | null | undefined {
+  return value === undefined || value === null || typeof value === "boolean";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function isStableCaseProperties(value: unknown): value is StableCaseProperties {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id_case === "string" &&
+    value.id_case.trim().length > 0 &&
+    isNullableString(value.region) &&
+    isNullableString(value.sous_region) &&
+    isNullableBoolean(value.cote) &&
+    isNullableBoolean(value.lac_majeur) &&
+    isNullableBoolean(value.cours_eau_majeur)
+  );
+}
+
+export function isStableCaseFeatureCollection(
+  value: unknown,
+): value is StableCaseFeatureCollection {
+  if (!isPlainObject(value) || value.type !== "FeatureCollection" || !Array.isArray(value.features)) {
+    return false;
+  }
+
+  return value.features.every((feature) => {
+    if (!isPlainObject(feature) || feature.type !== "Feature") {
+      return false;
+    }
+
+    if (!isStableCaseProperties(feature.properties)) {
+      return false;
+    }
+
+    if (!isPlainObject(feature.geometry)) {
+      return false;
+    }
+
+    return (
+      (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon") &&
+      Array.isArray(feature.geometry.coordinates)
+    );
+  });
+}
+
+export function toStableCaseProperties(
+  value: Record<string, unknown> | undefined,
+): StableCaseProperties | null {
+  if (!value || !isStableCaseProperties(value)) {
+    return null;
+  }
+
+  return {
+    id_case: value.id_case,
+    region: value.region ?? null,
+    sous_region: value.sous_region ?? null,
+    cote: value.cote ?? null,
+    lac_majeur: value.lac_majeur ?? null,
+    cours_eau_majeur: value.cours_eau_majeur ?? null,
+  };
+}

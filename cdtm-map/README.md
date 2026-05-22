@@ -28,6 +28,7 @@ Les informations susceptibles d'évoluer avec les règles ou avec le RP ne sont 
 Les choix techniques de référence sont :
 
 - application web : `Next.js / React / TypeScript` ;
+- fondation UI : `Tailwind CSS v4` + composants `shadcn/ui` versionnés dans le dépôt ;
 - moteur cartographique : `OpenLayers` ;
 - backend : API légère intégrée à l'application ;
 - base de données applicative : `PostgreSQL + PostGIS` ;
@@ -56,10 +57,31 @@ Principes associés :
 - `docs/` : documentation fonctionnelle, technique et organisationnelle.
 - `data/schemas/` : schémas JSON de référence.
 - `data/reference/` : nomenclatures et règles métier de travail.
+- `data/exports/` : exports amont générés hors application, notamment depuis QGIS.
 - `data/examples/` : fichiers d'exemple pour tester la validation.
-- `public/` : futurs exports servis par l'application.
-- `src/` : squelettes TypeScript pour la carte, les données et l'UI.
+- `public/` : données effectivement servies par l'application, dont `public/data/cases.geojson`.
+- `src/` : application web, carte OpenLayers, chargement des données et UI publique.
 - `scripts/` : scripts utilitaires.
+
+## V0 web actuelle
+
+La phase 1.1 expose deja une premiere carte publique plus aboutie dans l'application :
+
+- moteur cartographique `OpenLayers` ;
+- shell sombre de consultation, sans Bootstrap ;
+- base UI `Tailwind CSS v4` et composants `shadcn/ui` locaux ;
+- chargement client de `public/data/cases.geojson` ;
+- fond statique `public/maps/CTM.png` charge via `ImageStatic` ;
+- projection locale applicative `CDTM-LOCAL`, sans fond OSM ;
+- panneau lateral de consultation de la case selectionnee ;
+- bouton pour afficher ou masquer la couche `cases` ;
+- recentrage sur l'emprise complete du fond `[0, -4000, 3200, 0]` ;
+- contours de cases visibles avec interieur transparent par defaut ;
+- affichage strictement limite aux champs stables de `cases`.
+
+L'image `CTM.png` et le GeoJSON sont affiches dans le meme repere local. Aucune
+reprojection vers `EPSG:3857` ou vers des coordonnees longitude/latitude n'est
+effectuee dans l'application.
 
 ## Validation des données
 
@@ -75,6 +97,7 @@ Il est aussi possible de valider explicitement un fichier :
 
 ```bash
 node scripts/validate-data.mjs data/examples/cases.valid.geojson
+node scripts/validate-data.mjs public/data/cases.geojson
 ```
 
 Des exemples invalides sont fournis pour tester les erreurs attendues :
@@ -98,7 +121,7 @@ Les fichiers invalides ne commencent volontairement pas par `cases`, afin de ne 
 
 ## Prochaines étapes
 
-- Produire une première couche QGIS propre avec des géométries exploitables.
-- Garantir l'unicité et la stabilité de `id_case`.
-- Valider les booléens d'eau sur les cases.
-- Préparer ensuite les futures tables métier sans les mélanger à la couche géographique stable.
+- Ajouter ensuite les filtres publics utiles sans elargir la couche stable.
+- Introduire plus tard les tables metier separees pour les terrains, controles et notes.
+- Ajouter si besoin d'autres fonds statiques ou tuiles, sur le meme principe d'alignement local.
+- Raccorder ensuite la publication applicative et le futur environnement PostGIS.
