@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
 const projectRoot = path.resolve(scriptsDir, "..");
 const nomenclaturesPath = path.join(projectRoot, "data/reference/nomenclatures.json");
+const canonicalCaseFiles = [path.join(projectRoot, "public/data/cases.geojson")];
 
 const ignoredDirectories = new Set([".git", "node_modules", "dist", "build", "coverage", ".next"]);
 const ignoredRelativePrefixes = ["data/reference/", "data/schemas/"];
@@ -57,6 +58,15 @@ async function loadJson(jsonPath) {
   return JSON.parse(raw);
 }
 
+async function fileExists(filePath) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function walkFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const results = [];
@@ -89,6 +99,18 @@ function isCasesDataFile(filePath) {
 }
 
 async function discoverCaseFiles() {
+  const existingCanonicalCaseFiles = [];
+
+  for (const filePath of canonicalCaseFiles) {
+    if (await fileExists(filePath)) {
+      existingCanonicalCaseFiles.push(filePath);
+    }
+  }
+
+  if (existingCanonicalCaseFiles.length > 0) {
+    return existingCanonicalCaseFiles;
+  }
+
   const files = await walkFiles(projectRoot);
   return files.filter((filePath) => isCasesDataFile(filePath)).sort((left, right) => left.localeCompare(right));
 }
