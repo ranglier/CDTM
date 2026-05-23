@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getPublicCaseIndex } from "@/server/admin-repository";
+import { getPublicCaseIndex } from "@/server/public-repository";
 
 export const runtime = "nodejs";
 
@@ -14,12 +14,10 @@ export async function GET() {
         "cache-control": "no-store",
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture publique impossible.";
-
+  } catch {
     return NextResponse.json(
       {
-        error: message,
+        error: "Lecture publique impossible.",
       },
       { status: 500 },
     );

@@ -2,27 +2,37 @@
 
 ## Principes
 
-- Les géométries cartographiques et les données RP doivent rester séparées.
-- `id_case` est la clé stable permettant de relier les tables, les exports et les futures données métier.
-- La table de base des cases doit contenir uniquement des informations géographiques stables dans le temps.
-- Les informations dépendantes des règles ou de l'état du RP doivent être stockées dans des tables métier séparées.
-- Les valeurs techniques sont écrites en minuscules, sans accents et sans espaces.
-- Les champs de notes doivent distinguer clairement ce qui est public de ce qui est réservé au staff.
+- Les geometries cartographiques et les donnees RP doivent rester separees.
+- `id_case` est la cle stable permettant de relier les tables, les exports et les donnees metier.
+- La couche stable des cases contient uniquement des informations geographiques stables dans le temps.
+- Les informations dependantes des regles ou de l'etat du RP sont stockees dans des tables metier separees.
+- Toutes les donnees de case exposees par l'application sont publiques en lecture.
+- Les modifications de donnees de case sont reservees au staff authentifie.
+- Les valeurs techniques sont ecrites en minuscules, sans accents et sans espaces.
+- Les champs de notes ne font plus partie du contrat applicatif courant.
 
-## Table `cases`
+## Lecture publique et ecriture staff
 
-La table `cases` décrit la couche géographique stable des cases territoriales.
+Le modele cible est :
 
-Elle contient :
+- lecture publique : carte, identifiants publics, region, sous-region, eau majeure, terrain, controle ;
+- ecriture staff : toute modification de ces donnees passe par les routes admin authentifiees ;
+- pas de champ note dans les endpoints publics ni dans l'interface de case.
+
+Les anciennes colonnes ou tables de notes peuvent rester presentes en base pendant la transition, mais elles ne doivent plus etre utilisees par l'interface courante. Leur suppression definitive devra passer par une migration explicite apres sauvegarde.
+
+## Couche stable `cases.geojson`
+
+La couche stable de cases decrit :
 
 - l'identifiant stable de chaque case ;
-- son rattachement géographique général ;
-- ses liens stables à l'eau ;
-- sa géométrie.
+- son rattachement geographique general ;
+- ses liens stables a l'eau ;
+- sa geometrie.
 
-Elle ne contient pas les règles de terrain, les emplacements, le contrôle politique, les peuples, les notes RP ou les données staff. Ces informations seront gérées par des tables métier séparées.
+Elle ne contient pas les regles de terrain, les emplacements, le controle politique, les peuples ou les notes. Ces informations sont gerees par des tables metier separees.
 
-### Champs prévus
+### Champs stables prevus
 
 - `id_case`
 - `region`
@@ -30,9 +40,9 @@ Elle ne contient pas les règles de terrain, les emplacements, le contrôle poli
 - `cote`
 - `lac_majeur`
 - `cours_eau_majeur`
-- géométrie de la case
+- geometrie de la case
 
-Ne pas ajouter dans `cases` :
+Ne pas ajouter dans `cases.geojson` :
 
 - `terrain_cat`
 - `terrain_type`
@@ -48,136 +58,66 @@ Ne pas ajouter dans `cases` :
 - `note_publique`
 - `note_staff`
 
-Ces champs ne sont pas supprimés du projet. Ils sont simplement sortis de la couche stable et seront replacés dans des tables métier dédiées.
+Ces champs ne sont pas supprimes du projet quand ils sont encore utiles. Ils sont simplement sortis de la couche stable et places dans des tables metier dediees.
 
-### Champs obligatoires
+## Donnees publiques de case
 
-Une case doit toujours avoir :
+L'endpoint public principal est `GET /api/cases/public-index`.
 
-- `id_case`
+Il expose l'index public des cases, compose depuis :
 
-Les autres champs peuvent rester vides si l'information n'est pas encore connue ou non applicable.
+- la couche stable `cases.geojson` ;
+- les surcharges publiques de `case_public_current` ;
+- les donnees de terrain de `case_terrain_current` ;
+- les donnees de controle de `case_control_current`.
 
-### `id_case`
+Les routes publiques ne doivent pas exposer de notes.
 
-Identifiant unique et stable de la case.
+## Donnees staff
 
-Exemple :
+Les routes admin servent a modifier les donnees publiques de case et les donnees metier associees. Elles restent reservees a une session staff.
 
-```txt
-case_0001
-```
+Les routes admin gerent notamment :
 
-Cet identifiant sert de clé de liaison avec les autres tables, notamment les futures tables métier de terrain, contrôle, emplacements, localités, notes et historique.
+- les surcharges publiques de case ;
+- le terrain ;
+- le controle ;
+- les tables dynamiques ;
+- les referentiels techniques.
 
-### `region`
+## Tables metier actuelles
 
-Grande région géographique dans laquelle se trouve la case.
+### `case_public_current`
 
-Exemples :
+Stocke les surcharges publiques par case :
 
-```txt
-calenardhon
-anorien
-ithilien
-rhovanion
-```
+- `public_id_case`
+- `region`
+- `sous_region`
+- `cote`
+- `lac_majeur`
+- `cours_eau_majeur`
 
-Ce champ doit rester géographique. Il ne doit pas servir à stocker une possession politique ou un état de contrôle.
+### `case_terrain_current`
 
-Bon exemple :
+Stocke le terrain courant :
 
-```txt
-region = anorien
-```
-
-Mauvais exemple :
-
-```txt
-region = territoire_de_deorl
-```
-
-La nomenclature exacte des régions reste à stabiliser.
-
-### `sous_region`
-
-Subdivision géographique plus précise de `region`.
-
-Exemples :
-
-```txt
-eastfold
-wold
-cair_andros
-terres_brunes
-```
-
-Ce champ peut rester vide si aucune sous-région pertinente n'est définie.
-
-### `cote`, `lac_majeur`, `cours_eau_majeur`
-
-Booléens indiquant si la case touche une eau importante :
-
-- `cote` : côte maritime ;
-- `lac_majeur` : lac important ;
-- `cours_eau_majeur` : fleuve ou rivière majeure.
-
-Valeurs attendues :
-
-```txt
-true
-false
-null
-```
-
-La condition métier `eau_majeure` n'est pas stockée dans `cases`. Elle peut être dérivée plus tard par les tables métier :
-
-```txt
-eau_majeure = cote || lac_majeur || cours_eau_majeur
-```
-
-### Géométrie
-
-La géométrie décrit le contour exact de la case sur la carte.
-
-Dans un GeoJSON, elle se trouve dans `feature.geometry`.
-
-Dans PostGIS, elle sera portée par une colonne géométrique.
-
-La géométrie n'est pas un champ métier à saisir manuellement. Elle est produite par QGIS et sert à afficher la case sur la carte.
-
-## Futures tables métier
-
-Les champs retirés de `cases` doivent être déplacés vers des tables métier spécialisées.
-
-### Future table `case_terrain`
-
-Usage :
-
-- stocker les informations de terrain ;
-- permettre l'évolution des règles sans modifier la couche géographique stable.
-
-Champs possibles :
-
-- `id_case`
 - `terrain_cat`
 - `terrain_type`
 - `relief`
-- `regle_version`
-- `statut_validation`
-- `note`
 
-### Future table `case_emplacements`
+### `case_control_current`
 
-Usage :
+Stocke le controle courant :
 
-- stocker les calculs ou validations d'emplacements ;
-- conserver la version des règles utilisée ;
-- permettre de recalculer les valeurs si les règles changent.
+- `faction`
+- `controleur`
+- `controle_type`
 
-Champs possibles :
+### `case_emplacements_current`
 
-- `id_case`
+Prepare les futurs calculs ou validations d'emplacements :
+
 - `peuple_majoritaire`
 - `bonus_speciaux`
 - `empl_base`
@@ -186,79 +126,21 @@ Champs possibles :
 - `calcule_le`
 - `valide_par`
 
-### Future table `case_controle`
+## Notes
 
-Usage :
+Les champs de notes sont retires du contrat applicatif courant.
 
-- stocker le contrôle politique ou militaire d'une case ;
-- historiser les changements de contrôle.
+Decision actuelle :
 
-Champs possibles :
-
-- `id_case`
-- `faction`
-- `controleur`
-- `controle_type`
-- `date_debut`
-- `date_fin`
-- `source`
-- `note`
-
-### Future table `case_notes`
-
-Usage :
-
-- stocker les notes publiques, staff, secrètes ou temporaires ;
-- éviter d'exposer accidentellement une note staff dans la couche publique.
-
-Champs possibles :
-
-- `id_case`
-- `visibilite`
-- `statut_note`
-- `contenu`
-- `auteur`
-- `date_creation`
-- `date_mise_a_jour`
-
-### Future table `localites`
-
-Usage :
-
-- référencer des villes, forts, ports, domaines, ruines ou autres points d'intérêt ;
-- relier chaque localité à une case via `id_case` ;
-- permettre plusieurs localités ou structures dans une même case sans alourdir la table `cases`.
-
-Champs possibles :
-
-- `id_localite`
-- `id_case`
-- `nom`
-- `niveau`
-- `type`
-- `empl`
-- `visibilite`
-- `note_publique`
-- `note_staff`
-
-### Future table `historique_controle`
-
-Usage :
-
-- tracer les changements de contrôle dans le temps ;
-- conserver une lecture historique du RP.
-
-Champs possibles :
-
-- `id_evenement`
-- `id_case`
-- `date_label`
-- `ancien_controleur`
-- `nouveau_controleur`
-- `note`
+- ne plus afficher de notes dans le panneau de case ;
+- ne plus maintenir d'endpoint public de note ;
+- ne pas supprimer brutalement les colonnes existantes sans migration ;
+- prevoir une migration ulterieure pour retirer ou archiver proprement les anciennes donnees de notes.
 
 ## TODO
 
-- Valider la nomenclature exacte des régions et sous-régions.
-- Définir si les booléens d'eau sont calculés automatiquement depuis QGIS ou saisis manuellement.
-- Définir la première table métier à implémenter après stabilisation de la carte QGIS.
+- Valider la nomenclature exacte des regions et sous-regions.
+- Definir si les booleens d'eau sont calcules automatiquement depuis QGIS ou saisis manuellement.
+- Ajouter des migrations schema avant toute suppression de table ou colonne.
+- Ajouter des tests sur le contrat public `GET /api/cases/public-index`.
+- Brancher les styles cartographiques sur les donnees publiques terrain/controle.
