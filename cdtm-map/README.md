@@ -9,6 +9,20 @@ Le projet se concentre sur deux usages :
 - une carte publique de consultation ;
 - une brique admin V1 pour enrichir les cases sans melanger les donnees staff au GeoJSON public.
 
+## Etat actuel
+
+L'application contient aujourd'hui :
+
+- une carte publique OpenLayers basee sur un fond statique et `public/data/cases.geojson` ;
+- un index public des cases capable de fusionner la couche stable avec les surcharges publiques stockees en base ;
+- une authentification staff simple par cookie de session ;
+- une interface admin integree pour consulter et modifier les donnees de case ;
+- une edition de masse pour les champs publics, notes, terrain et controle ;
+- un espace admin technique pour gerer les referentiels globaux et creer des tables metier dynamiques ;
+- un deploiement Docker Compose vers `osgiliath` via Forgejo CI/CD.
+
+Les limites et priorites issues de l'audit sont suivies dans `docs/AUDIT_ROADMAP.md`.
+
 ## Architecture
 
 - frontend : `Next.js`, `React`, `TypeScript`
@@ -52,5 +66,6 @@ Le deploiement standard ne requiert pas de secrets `ADMIN_*`.
 
 - `docs/ADMIN.md` : fonctionnement et limites de l'admin V1
 - `docs/FORGEJO_CI.md` : CI/CD et deploiement
+- `docs/AUDIT_ROADMAP.md` : etat d'audit, risques et priorites d'evolution
 
 Les autres fichiers de `docs/` restent des notes de travail secondaires.
