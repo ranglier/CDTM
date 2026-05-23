@@ -8,12 +8,14 @@ type SiteHeaderProps = {
   adminAuthenticated: boolean;
   adminModeEnabled: boolean;
   onAdminAction: () => void;
+  onAdminLogout: () => void;
 };
 
 export function SiteHeader({
   adminAuthenticated,
   adminModeEnabled,
   onAdminAction,
+  onAdminLogout,
 }: SiteHeaderProps) {
   return (
     <header
@@ -48,6 +50,12 @@ export function SiteHeader({
             {adminAuthenticated ? <Shield /> : <Lock />}
             Admin
           </Button>
+
+          {adminAuthenticated ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onAdminLogout}>
+              Deconnexion
+            </Button>
+          ) : null}
         </div>
       </div>
     </header>

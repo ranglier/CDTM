@@ -27,9 +27,7 @@ type CaseInfoPanelProps = {
   casesVisible: boolean;
   publicSupplement: PublicCaseSupplement | null;
   publicSupplementPending: boolean;
-  adminAuthenticated: boolean;
   adminModeEnabled: boolean;
-  adminUsername: string | null;
   adminPanelMode: AdminPanelMode;
   activeAdminRecord: AdminCaseRecord | null;
   selectedAdminRecords: AdminCaseRecord[];
@@ -57,9 +55,6 @@ type CaseInfoPanelProps = {
   onEnterEditMode: () => void;
   onCancelEdit: () => void;
   onSave: () => void;
-  onAdminLogout: () => void;
-  onOpenAdminLogin: () => void;
-  onToggleAdminMode: () => void;
 };
 
 type ValueSummary = {
@@ -372,18 +367,9 @@ function AdminSearchBox({
 }) {
   return (
     <div className="rounded-[22px] border border-primary/20 bg-primary/8 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Recherche admin</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Recherche par <span className="font-medium text-foreground">id_case</span> et
-            recentrage sur la carte.
-          </p>
-        </div>
-        <p className="text-xs text-muted-foreground">Shift, Ctrl ou Cmd pour multiselection</p>
-      </div>
+      <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Recherche</p>
       <form
-        className="mt-4 flex flex-col gap-3 sm:flex-row"
+        className="mt-3 flex flex-col gap-3 sm:flex-row"
         onSubmit={(event) => {
           event.preventDefault();
           onSearchSubmit();
@@ -514,9 +500,7 @@ export function CaseInfoPanel({
   casesVisible,
   publicSupplement,
   publicSupplementPending,
-  adminAuthenticated,
   adminModeEnabled,
-  adminUsername,
   adminPanelMode,
   activeAdminRecord,
   selectedAdminRecords,
@@ -536,9 +520,6 @@ export function CaseInfoPanel({
   onEnterEditMode,
   onCancelEdit,
   onSave,
-  onAdminLogout,
-  onOpenAdminLogin,
-  onToggleAdminMode,
 }: CaseInfoPanelProps) {
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
@@ -563,65 +544,9 @@ export function CaseInfoPanel({
           <header className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Carte</p>
-                <h2 className="mt-2 font-chronicle text-3xl tracking-[0.04em] text-foreground">
+                <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
                   Informations de case
                 </h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {adminAuthenticated ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant={adminModeEnabled ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={onToggleAdminMode}
-                    >
-                      {adminModeEnabled ? "Admin actif" : "Admin"}
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={onAdminLogout}>
-                      Deconnexion
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={onOpenAdminLogin}>
-                    Admin
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-border/70 bg-background/40 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Selection
-                </p>
-                <p className="mt-2 text-sm font-medium text-foreground">
-                  {hasSelection
-                    ? `${selectedCaseIds.length} case${selectedCaseIds.length > 1 ? "s" : ""} selectionnee${selectedCaseIds.length > 1 ? "s" : ""}`
-                    : "Aucune case selectionnee"}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {casesVisible
-                    ? "Shift, Ctrl ou Cmd permet d'ajouter ou retirer des cases."
-                    : "Reactive d'abord les cases sur la carte pour selectionner."}
-                </p>
-              </div>
-              <div className="rounded-[20px] border border-border/70 bg-background/40 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Session
-                </p>
-                <p className="mt-2 text-sm font-medium text-foreground">
-                  {adminAuthenticated
-                    ? `Connecte en tant que ${adminUsername ?? "staff"}`
-                    : "Aucune session staff ouverte"}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {adminModeEnabled
-                    ? adminPanelMode === "edit"
-                      ? "Edition en cours."
-                      : "Lecture admin active."
-                    : "La vue publique reste isolee des donnees staff."}
-                </p>
               </div>
             </div>
             {adminModeEnabled ? (

@@ -858,6 +858,7 @@ export default function HomePage() {
         adminAuthenticated={adminSession.authenticated}
         adminModeEnabled={adminModeEnabled}
         onAdminAction={handleAdminModeAction}
+        onAdminLogout={handleLogout}
       />
       <section
         id="carte"
@@ -890,9 +891,7 @@ export default function HomePage() {
             casesVisible={casesVisible}
             publicSupplement={publicSupplement}
             publicSupplementPending={publicSupplementPending}
-            adminAuthenticated={adminSession.authenticated}
             adminModeEnabled={adminModeEnabled}
-            adminUsername={adminSession.username}
             adminPanelMode={adminPanelMode}
             activeAdminRecord={activeAdminRecord}
             selectedAdminRecords={selectedAdminRecords}
@@ -915,12 +914,6 @@ export default function HomePage() {
             onEnterEditMode={handleEnterEditMode}
             onCancelEdit={handleCancelEdit}
             onSave={handleAdminSave}
-            onAdminLogout={handleLogout}
-            onOpenAdminLogin={() => {
-              setLoginError(null);
-              setLoginOpen(true);
-            }}
-            onToggleAdminMode={handleAdminModeAction}
           />
         ) : null}
       </section>
