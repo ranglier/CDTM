@@ -152,6 +152,21 @@ async function initializeDatabase(): Promise<boolean> {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS case_emplacements_current (
+        id_case TEXT PRIMARY KEY REFERENCES case_registry(id_case) ON DELETE CASCADE,
+        peuple_majoritaire TEXT,
+        bonus_speciaux TEXT,
+        empl_base INTEGER,
+        empl_max INTEGER,
+        regle_version TEXT,
+        calcule_le TIMESTAMPTZ,
+        valide_par TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS case_public_current (
         id_case TEXT PRIMARY KEY REFERENCES case_registry(id_case) ON DELETE CASCADE,
         public_id_case TEXT UNIQUE,
@@ -166,12 +181,49 @@ async function initializeDatabase(): Promise<boolean> {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS localites (
+        id_localite TEXT PRIMARY KEY,
+        id_case TEXT NOT NULL REFERENCES case_registry(id_case) ON DELETE CASCADE,
+        nom TEXT,
+        niveau TEXT,
+        type TEXT,
+        empl INTEGER,
+        visibilite TEXT,
+        note_publique TEXT,
+        note_staff TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS historique_controle (
+        id_evenement BIGSERIAL PRIMARY KEY,
+        id_case TEXT NOT NULL REFERENCES case_registry(id_case) ON DELETE CASCADE,
+        date_label TEXT,
+        ancien_controleur TEXT,
+        nouveau_controleur TEXT,
+        note TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
       CREATE INDEX IF NOT EXISTS staff_sessions_user_id_idx
       ON staff_sessions(user_id)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS staff_sessions_expires_at_idx
       ON staff_sessions(expires_at)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS localites_id_case_idx
+      ON localites(id_case)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS historique_controle_id_case_idx
+      ON historique_controle(id_case)
     `);
     await client.query("COMMIT");
   } catch (error) {

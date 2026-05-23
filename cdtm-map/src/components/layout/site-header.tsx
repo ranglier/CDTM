@@ -9,6 +9,12 @@ type SiteHeaderProps = {
   adminModeEnabled: boolean;
   onAdminAction: () => void;
   onAdminLogout: () => void;
+  navigationItems?: Array<{
+    href: string;
+    label: string;
+    current?: boolean;
+  }>;
+  showAdminAction?: boolean;
 };
 
 export function SiteHeader({
@@ -16,6 +22,8 @@ export function SiteHeader({
   adminModeEnabled,
   onAdminAction,
   onAdminLogout,
+  navigationItems = [{ href: "#carte", label: "Carte", current: true }],
+  showAdminAction = true,
 }: SiteHeaderProps) {
   return (
     <header
@@ -33,23 +41,27 @@ export function SiteHeader({
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
           <nav aria-label="Navigation principale" className="flex items-center gap-2">
-            <Button asChild type="button" variant="ghost" size="sm">
-              <a href="#carte" aria-current="page">
-                Carte
-              </a>
-            </Button>
+            {navigationItems.map((item) => (
+              <Button key={item.href} asChild type="button" variant="ghost" size="sm">
+                <a href={item.href} aria-current={item.current ? "page" : undefined}>
+                  {item.label}
+                </a>
+              </Button>
+            ))}
           </nav>
 
-          <Button
-            type="button"
-            variant={adminModeEnabled ? "secondary" : "outline"}
-            size="sm"
-            onClick={onAdminAction}
-            aria-pressed={adminModeEnabled}
-          >
-            {adminAuthenticated ? <Shield /> : <Lock />}
-            Admin
-          </Button>
+          {showAdminAction ? (
+            <Button
+              type="button"
+              variant={adminModeEnabled ? "secondary" : "outline"}
+              size="sm"
+              onClick={onAdminAction}
+              aria-pressed={adminModeEnabled}
+            >
+              {adminAuthenticated ? <Shield /> : <Lock />}
+              Admin
+            </Button>
+          ) : null}
 
           {adminAuthenticated ? (
             <Button type="button" variant="ghost" size="sm" onClick={onAdminLogout}>

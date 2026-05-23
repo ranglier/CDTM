@@ -1002,6 +1002,12 @@ export default function HomePage() {
       <SiteHeader
         adminAuthenticated={adminSession.authenticated}
         adminModeEnabled={adminModeEnabled}
+        navigationItems={[
+          { href: "#carte", label: "Carte", current: true },
+          ...(adminSession.authenticated
+            ? [{ href: "/admin/tech", label: "Technique" }]
+            : []),
+        ]}
         onAdminAction={handleAdminModeAction}
         onAdminLogout={handleLogout}
       />

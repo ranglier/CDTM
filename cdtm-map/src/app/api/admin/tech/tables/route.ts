@@ -1,0 +1,53 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import { getCurrentStaffUser } from "@/server/auth";
+import { listBusinessTableStatuses } from "@/server/admin-tech-repository";
+import { isDatabaseConfigured } from "@/server/db";
+
+export const runtime = "nodejs";
+
+function createUnauthorizedResponse() {
+  return NextResponse.json(
+    {
+      error: "Acces admin non autorise.",
+    },
+    { status: 401 },
+  );
+}
+
+export async function GET(request: NextRequest) {
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_URL manquante. L'admin n'est pas disponible.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const user = await getCurrentStaffUser(request);
+
+  if (!user) {
+    return createUnauthorizedResponse();
+  }
+
+  try {
+    const tables = await listBusinessTableStatuses();
+
+    return NextResponse.json(tables, {
+      status: 200,
+      headers: {
+        "cache-control": "no-store",
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Lecture des tables impossible.";
+
+    return NextResponse.json(
+      {
+        error: message,
+      },
+      { status: 500 },
+    );
+  }
+}
