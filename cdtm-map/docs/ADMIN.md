@@ -83,6 +83,26 @@ Une section `Comptes staff` permet aussi de :
 
 Un compte `staff` connecte ne voit pas le lien `Technique` et ne peut pas ouvrir `/admin/tech`.
 
+## Consultation puis edition
+
+L'admin technique privilegie maintenant la consultation :
+
+- les onglets affichent d'abord des listes compactes ;
+- les details techniques restent replies dans des blocs dedies ;
+- les formulaires apparaissent seulement apres une action explicite.
+
+Concretement :
+
+- `Listes de valeurs` : selectionne une liste, consulte ses lignes, puis clique sur `Modifier` ou `Ajouter une valeur` ;
+- `Champs personnalises` : consulte les categories et leurs champs, puis ouvre `Modifier la presentation` ou `Ajouter une information` si besoin ;
+- `Comptes staff` : consulte les comptes, ouvre `Creer un compte` pour en ajouter un, puis `Modifier ce compte` pour changer son role ou son statut.
+
+Dans le panneau de case :
+
+- les champs vides ne sont plus affiches en lecture ;
+- les informations sont regroupees par sections ;
+- le formulaire complet n'apparait qu'apres clic sur `Modifier`.
+
 Les noms internes sont proposes automatiquement a partir des titres et libelles saisis. En usage normal, il vaut mieux les laisser tels quels et ne les modifier que si tu sais exactement pourquoi.
 
 Exemples :

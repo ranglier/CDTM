@@ -79,6 +79,11 @@ function summarizeBooleans(values: Array<boolean | null | undefined>): string {
   return uniqueValues.length === 1 ? uniqueValues[0] : "Etat mixte";
 }
 
+function isDisplayValueEmpty(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.length === 0 || normalized === "non renseigne";
+}
+
 function formatMeta(meta: AdminBlockMeta | null | undefined): string {
   if (!meta?.updated_at) {
     return "Aucune sauvegarde";
@@ -126,6 +131,28 @@ function CompactInfoRow({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="text-right text-sm font-medium text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function CompactInfoList({
+  rows,
+  emptyMessage,
+}: {
+  rows: Array<{ label: string; value: string }>;
+  emptyMessage: string;
+}) {
+  const visibleRows = rows.filter((row) => !isDisplayValueEmpty(row.value));
+
+  if (visibleRows.length === 0) {
+    return <p className="text-sm leading-6 text-muted-foreground">{emptyMessage}</p>;
+  }
+
+  return (
+    <div>
+      {visibleRows.map((row) => (
+        <CompactInfoRow key={row.label} label={row.label} value={row.value} />
+      ))}
     </div>
   );
 }
@@ -277,8 +304,59 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const controlMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta)) : formatMeta(activeAdminRecord?.control.meta);
   const dynamicSections = !isMultiSelection ? activeAdminRecord?.dynamic_sections ?? [] : [];
 
-  const readTerrainValue = (field: "terrain_cat" | "terrain_type" | "relief") => hasEveryAdminRecord ? summarizeStrings(selectedAdminRecords.map((record) => record.terrain[field])) : summarizeStrings([activeAdminRecord?.terrain[field]]);
-  const readControlValue = (field: "faction" | "controleur" | "controle_type") => hasEveryAdminRecord ? summarizeStrings(selectedAdminRecords.map((record) => record.control[field])) : summarizeStrings([activeAdminRecord?.control[field]]);
+  const identityRows = [
+    {
+      label: "Cases selectionnees",
+      value: String(selectedCaseIds.length),
+    },
+    {
+      label: "Case active",
+      value: activeCase?.id_case ?? "Aucune",
+    },
+  ];
+  const localizationRows = [
+    { label: "Region", value: summarizeStrings(selectedCases.map((item) => item.region)) },
+    { label: "Sous-region", value: summarizeStrings(selectedCases.map((item) => item.sous_region)) },
+    { label: "Cote", value: summarizeBooleans(selectedCases.map((item) => item.cote)) },
+    { label: "Lac majeur", value: summarizeBooleans(selectedCases.map((item) => item.lac_majeur)) },
+    {
+      label: "Cours d'eau majeur",
+      value: summarizeBooleans(selectedCases.map((item) => item.cours_eau_majeur)),
+    },
+  ];
+  const terrainRows = [
+    { label: "Categorie", value: summarizeStrings(selectedCases.map((item) => item.terrain_cat)) },
+    { label: "Type", value: summarizeStrings(selectedCases.map((item) => item.terrain_type)) },
+    { label: "Relief", value: summarizeStrings(selectedCases.map((item) => item.relief)) },
+  ];
+  const controlRows = [
+    { label: "Faction", value: summarizeStrings(selectedCases.map((item) => item.faction)) },
+    { label: "Controleur", value: summarizeStrings(selectedCases.map((item) => item.controleur)) },
+    { label: "Type de controle", value: summarizeStrings(selectedCases.map((item) => item.controle_type)) },
+  ];
+  const visibleDynamicSections = dynamicSections
+    .map((section) => ({
+      ...section,
+      rows: section.fields
+        .map((field) => {
+          const rawValue = section.values[field.field_key];
+          const value =
+            rawValue === null || rawValue === undefined
+              ? "Non renseigne"
+              : typeof rawValue === "boolean"
+                ? rawValue
+                  ? "Oui"
+                  : "Non"
+                : String(rawValue);
+
+          return {
+            label: field.label,
+            value,
+          };
+        })
+        .filter((row) => !isDisplayValueEmpty(row.value)),
+    }))
+    .filter((section) => section.rows.length > 0);
 
   return (
     <aside aria-live="polite">
@@ -389,35 +467,73 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
           ) : (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Selection" />
+                <SectionTitle title="Identite" />
                 <div className="mt-4">
-                  <CompactInfoRow label="Cases selectionnees" value={String(selectedCaseIds.length)} />
-                  <CompactInfoRow label="Case active" value={activeCase?.id_case ?? "Aucune"} />
-                  <CompactInfoRow label="Region" value={summarizeStrings(selectedCases.map((item) => item.region))} />
-                  <CompactInfoRow label="Sous-region" value={summarizeStrings(selectedCases.map((item) => item.sous_region))} />
-                  <CompactInfoRow label="Cote" value={summarizeBooleans(selectedCases.map((item) => item.cote))} />
-                  <CompactInfoRow label="Lac majeur" value={summarizeBooleans(selectedCases.map((item) => item.lac_majeur))} />
-                  <CompactInfoRow label="Cours d'eau majeur" value={summarizeBooleans(selectedCases.map((item) => item.cours_eau_majeur))} />
-                  <CompactInfoRow label="Categorie terrain" value={summarizeStrings(selectedCases.map((item) => item.terrain_cat))} />
-                  <CompactInfoRow label="Type terrain" value={summarizeStrings(selectedCases.map((item) => item.terrain_type))} />
-                  <CompactInfoRow label="Relief" value={summarizeStrings(selectedCases.map((item) => item.relief))} />
-                  <CompactInfoRow label="Faction" value={summarizeStrings(selectedCases.map((item) => item.faction))} />
-                  <CompactInfoRow label="Controleur" value={summarizeStrings(selectedCases.map((item) => item.controleur))} />
-                  <CompactInfoRow label="Type controle" value={summarizeStrings(selectedCases.map((item) => item.controle_type))} />
+                  <CompactInfoList rows={identityRows} emptyMessage="Aucune case selectionnee." />
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <SectionTitle title="Localisation" />
+                <div className="mt-4">
+                  <CompactInfoList rows={localizationRows} emptyMessage="Aucune donnee de localisation renseignee." />
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <SectionTitle title="Terrain" />
+                <div className="mt-4">
+                  <CompactInfoList rows={terrainRows} emptyMessage="Aucune donnee de terrain renseignee." />
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <SectionTitle title="Controle" />
+                <div className="mt-4">
+                  <CompactInfoList rows={controlRows} emptyMessage="Aucune donnee de controle renseignee." />
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <SectionTitle title="Donnees personnalisees" />
+                <div className="mt-4 space-y-4">
+                  {visibleDynamicSections.length === 0 ? (
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      Aucune donnee complementaire renseignee.
+                    </p>
+                  ) : (
+                    visibleDynamicSections.map((section) => (
+                      <div key={section.table_key} className="rounded-[18px] border border-border/60 bg-background/30 p-4">
+                        <p className="text-sm font-semibold text-foreground">{section.title}</p>
+                        {section.description ? (
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{section.description}</p>
+                        ) : null}
+                        <div className="mt-3">
+                          <CompactInfoList rows={section.rows} emptyMessage="Aucune donnee complementaire renseignee." />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </section>
 
               {adminModeEnabled ? (
                 <section className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-                  <SectionTitle title="Donnees staff" />
+                  <SectionTitle title="Administration" />
                   <div className="mt-4">
-                    <CompactInfoRow label="Chargement" value={adminLoading ? "En cours" : hasEveryAdminRecord || activeAdminRecord ? "Pret" : "Non charge"} />
-                    <CompactInfoRow label="Terrain" value={readTerrainValue("terrain_cat")} />
-                    <CompactInfoRow label="Type terrain" value={readTerrainValue("terrain_type")} />
-                    <CompactInfoRow label="Relief" value={readTerrainValue("relief")} />
-                    <CompactInfoRow label="Faction" value={readControlValue("faction")} />
-                    <CompactInfoRow label="Controleur" value={readControlValue("controleur")} />
-                    <CompactInfoRow label="Type controle" value={readControlValue("controle_type")} />
+                    <CompactInfoList
+                      rows={[
+                        {
+                          label: "Chargement",
+                          value: adminLoading
+                            ? "En cours"
+                            : hasEveryAdminRecord || activeAdminRecord
+                              ? "Pret"
+                              : "Non charge",
+                        },
+                      ]}
+                      emptyMessage="Aucune information d'administration."
+                    />
                   </div>
                   {adminError ? <p className="mt-4 text-sm text-destructive">{adminError}</p> : null}
                   <div className="mt-4 flex justify-end">
