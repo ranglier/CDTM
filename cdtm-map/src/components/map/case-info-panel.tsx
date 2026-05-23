@@ -286,6 +286,58 @@ function buildSelectionSummary(selectedCases: StableCaseProperties[], activeCase
   };
 }
 
+function buildAdminReadSummary(
+  selectedCaseIds: string[],
+  activeAdminRecord: AdminCaseRecord | null,
+  selectedAdminRecords: AdminCaseRecord[],
+) {
+  const hasEveryAdminRecord =
+    selectedAdminRecords.length > 0 && selectedAdminRecords.length === selectedCaseIds.length;
+
+  const notePublique = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.notes.note_publique)).value
+    : summarizeStrings([activeAdminRecord?.notes.note_publique]).value;
+
+  const noteStaff = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.notes.note_staff)).value
+    : summarizeStrings([activeAdminRecord?.notes.note_staff]).value;
+
+  const terrainCat = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.terrain.terrain_cat)).value
+    : summarizeStrings([activeAdminRecord?.terrain.terrain_cat]).value;
+
+  const terrainType = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.terrain.terrain_type)).value
+    : summarizeStrings([activeAdminRecord?.terrain.terrain_type]).value;
+
+  const relief = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.terrain.relief)).value
+    : summarizeStrings([activeAdminRecord?.terrain.relief]).value;
+
+  const faction = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.control.faction)).value
+    : summarizeStrings([activeAdminRecord?.control.faction]).value;
+
+  const controleur = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.control.controleur)).value
+    : summarizeStrings([activeAdminRecord?.control.controleur]).value;
+
+  const controleType = hasEveryAdminRecord
+    ? summarizeStrings(selectedAdminRecords.map((record) => record.control.controle_type)).value
+    : summarizeStrings([activeAdminRecord?.control.controle_type]).value;
+
+  return {
+    notePublique,
+    noteStaff,
+    terrainCat,
+    terrainType,
+    relief,
+    faction,
+    controleur,
+    controleType,
+  };
+}
+
 function renderBulkHelper(field: BulkFieldState): string | undefined {
   if (field.touched) {
     return "Cette valeur sera appliquee a toute la selection.";
@@ -328,6 +380,11 @@ export function CaseInfoPanel({
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
   const selectionSummary = buildSelectionSummary(selectedCases, activeCase);
+  const adminReadSummary = buildAdminReadSummary(
+    selectedCaseIds,
+    activeAdminRecord,
+    selectedAdminRecords,
+  );
   const singleTerrainTypeOptions = getTerrainTypesForCategory(singleDraft.terrain.terrain_cat);
   const bulkTerrainCategory =
     bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched
@@ -689,7 +746,7 @@ export function CaseInfoPanel({
           ) : (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Resume de selection" />
+                <SectionTitle title="Public" />
                 <div className="mt-4">
                   <CompactInfoRow label="Cases selectionnees" value={selectionSummary.count} />
                   <CompactInfoRow label="Case active" value={selectionSummary.activeCaseId} />
@@ -698,8 +755,30 @@ export function CaseInfoPanel({
                   <CompactInfoRow label="Cote" value={selectionSummary.cote} />
                   <CompactInfoRow label="Lac majeur" value={selectionSummary.lac} />
                   <CompactInfoRow label="Cours d'eau majeur" value={selectionSummary.coursEau} />
+                  {adminModeEnabled ? (
+                    <CompactInfoRow label="Note publique" value={adminReadSummary.notePublique} />
+                  ) : null}
                 </div>
               </section>
+
+              {adminModeEnabled ? (
+                <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                  <SectionTitle title="Admin" />
+                  <div className="mt-4">
+                    <CompactInfoRow label="Note staff" value={adminReadSummary.noteStaff} />
+                    <CompactInfoRow label="Categorie" value={adminReadSummary.terrainCat} />
+                    <CompactInfoRow label="Type" value={adminReadSummary.terrainType} />
+                    <CompactInfoRow label="Relief" value={adminReadSummary.relief} />
+                    <CompactInfoRow label="Faction" value={adminReadSummary.faction} />
+                    <CompactInfoRow label="Controleur" value={adminReadSummary.controleur} />
+                    <CompactInfoRow label="Type de controle" value={adminReadSummary.controleType} />
+                    <CompactInfoRow label="Case" value={publicMeta} />
+                    <CompactInfoRow label="Notes" value={notesMeta} />
+                    <CompactInfoRow label="Terrain" value={terrainMeta} />
+                    <CompactInfoRow label="Controle" value={controlMeta} />
+                  </div>
+                </section>
+              ) : null}
 
               {adminError ? (
                 <div className="rounded-[22px] border border-destructive/60 bg-destructive/15 px-4 py-3 text-sm text-foreground">

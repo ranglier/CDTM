@@ -130,48 +130,31 @@ function mergeStableCases(
   });
 }
 
-function applySingleDraftToStableCase(
+function applyPersistedRecordToStableCase(
   stableCase: StableCaseProperties,
-  draft: AdminCaseDraft,
+  record: AdminCaseRecord,
 ): StableCaseProperties {
   return {
     registry_id_case: getRegistryCaseId(stableCase),
-    id_case: draft.public.id_case.trim() || getRegistryCaseId(stableCase),
-    region: draft.public.region.trim() || null,
-    sous_region: draft.public.sous_region.trim() || null,
-    cote: parseDraftBooleanValue(draft.public.cote),
-    lac_majeur: parseDraftBooleanValue(draft.public.lac_majeur),
-    cours_eau_majeur: parseDraftBooleanValue(draft.public.cours_eau_majeur),
+    id_case: record.public.id_case,
+    region: record.public.region,
+    sous_region: record.public.sous_region,
+    cote: record.public.cote,
+    lac_majeur: record.public.lac_majeur,
+    cours_eau_majeur: record.public.cours_eau_majeur,
   };
 }
 
-function applyBulkPatchToStableCase(
-  stableCase: StableCaseProperties,
-  patch: AdminBulkPatch,
-): StableCaseProperties {
-  return {
-    ...stableCase,
-    region:
-      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "region")
-        ? patch.public.region ?? null
-        : stableCase.region ?? null,
-    sous_region:
-      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "sous_region")
-        ? patch.public.sous_region ?? null
-        : stableCase.sous_region ?? null,
-    cote:
-      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "cote")
-        ? patch.public.cote ?? null
-        : stableCase.cote ?? null,
-    lac_majeur:
-      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "lac_majeur")
-        ? patch.public.lac_majeur ?? null
-        : stableCase.lac_majeur ?? null,
-    cours_eau_majeur:
-      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "cours_eau_majeur")
-        ? patch.public.cours_eau_majeur ?? null
-        : stableCase.cours_eau_majeur ?? null,
-  };
+function mergePersistedRecordsIntoStableCases(
+  stableCases: StableCaseProperties[],
+  records: AdminCaseRecord[],
+): StableCaseProperties[] {
+  const recordsByRegistryId = new Map(records.map((record) => [record.id_case, record]));
+
+  return stableCases.map((stableCase) => {
+    const record = recordsByRegistryId.get(getRegistryCaseId(stableCase));
+    return record ? applyPersistedRecordToStableCase(stableCase, record) : stableCase;
+  });
 }
 
 function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
@@ -845,13 +828,7 @@ export default function HomePage() {
         });
 
         const refreshedRecords = await refreshAdminRecords(selectedCaseIds);
-        setStableCases((current) =>
-          current.map((stableCase) =>
-            selectedCaseIds.includes(getRegistryCaseId(stableCase))
-              ? applyBulkPatchToStableCase(stableCase, patch)
-              : stableCase,
-          ),
-        );
+        setStableCases((current) => mergePersistedRecordsIntoStableCases(current, refreshedRecords));
 
         resetBulkAdminEditor(refreshedRecords);
       } else {
@@ -870,17 +847,11 @@ export default function HomePage() {
           ...current,
           [record.id_case]: record,
         }));
-        setStableCases((current) =>
-          current.map((stableCase) =>
-            getRegistryCaseId(stableCase) === currentCaseId
-              ? applySingleDraftToStableCase(stableCase, singleDraft)
-              : stableCase,
-          ),
-        );
-        setSearchValue(singleDraft.public.id_case.trim() || currentCaseId);
+        setStableCases((current) => mergePersistedRecordsIntoStableCases(current, [record]));
+        setSearchValue(record.public.id_case);
         resetSingleAdminEditor(
           record,
-          activeCase ? applySingleDraftToStableCase(activeCase, singleDraft) : record.public,
+          activeCase ? applyPersistedRecordToStableCase(activeCase, record) : record.public,
         );
       }
 
