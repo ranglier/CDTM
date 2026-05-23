@@ -8,22 +8,10 @@ import { fileURLToPath } from "node:url";
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
 const projectRoot = path.resolve(scriptsDir, "..");
-
 const nomenclaturesPath = path.join(projectRoot, "data/reference/nomenclatures.json");
 
-const ignoredDirectories = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-]);
-
-const ignoredRelativePrefixes = [
-  "data/reference/",
-  "data/schemas/",
-];
+const ignoredDirectories = new Set([".git", "node_modules", "dist", "build", "coverage", ".next"]);
+const ignoredRelativePrefixes = ["data/reference/", "data/schemas/"];
 
 const fallbackReservedBusinessFields = [
   "terrain_cat",
@@ -41,20 +29,8 @@ const fallbackReservedBusinessFields = [
   "note_staff",
 ];
 
-const coreFields = [
-  "id_case",
-  "region",
-  "sous_region",
-  "cote",
-  "lac_majeur",
-  "cours_eau_majeur",
-];
-
-const waterBooleanFields = [
-  "cote",
-  "lac_majeur",
-  "cours_eau_majeur",
-];
+const coreFields = ["id_case", "region", "sous_region", "cote", "lac_majeur", "cours_eau_majeur"];
+const waterBooleanFields = ["cote", "lac_majeur", "cours_eau_majeur"];
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -87,11 +63,9 @@ async function walkFiles(directory) {
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
-      if (ignoredDirectories.has(entry.name)) {
-        continue;
+      if (!ignoredDirectories.has(entry.name)) {
+        results.push(...(await walkFiles(path.join(directory, entry.name))));
       }
-
-      results.push(...(await walkFiles(path.join(directory, entry.name))));
       continue;
     }
 
@@ -116,10 +90,7 @@ function isCasesDataFile(filePath) {
 
 async function discoverCaseFiles() {
   const files = await walkFiles(projectRoot);
-
-  return files
-    .filter((filePath) => isCasesDataFile(filePath))
-    .sort((left, right) => left.localeCompare(right));
+  return files.filter((filePath) => isCasesDataFile(filePath)).sort((left, right) => left.localeCompare(right));
 }
 
 function extractCases(data, filePath) {
@@ -140,41 +111,24 @@ function extractCases(data, filePath) {
   }
 
   if (!isPlainObject(data)) {
-    pushIssue(
-      issues,
-      `[file ${relativePath}]`,
-      "root",
-      "Unsupported JSON root. Expected an array, a GeoJSON FeatureCollection, a GeoJSON Feature, or an object with a cases array."
-    );
-
+    pushIssue(issues, `[file ${relativePath}]`, "root", "Unsupported JSON root. Expected an array, a GeoJSON FeatureCollection, a GeoJSON Feature, or an object with a cases array.");
     return { cases: [], issues };
   }
 
   if (data.type === "FeatureCollection") {
     if (!Array.isArray(data.features)) {
-      pushIssue(
-        issues,
-        `[file ${relativePath}]`,
-        "features",
-        "Invalid GeoJSON FeatureCollection. Expected a features array."
-      );
-
+      pushIssue(issues, `[file ${relativePath}]`, "features", "Invalid GeoJSON FeatureCollection. Expected a features array.");
       return { cases: [], issues };
     }
 
     return {
-      cases: data.features.map((feature, index) => {
-        const properties = isPlainObject(feature) ? feature.properties : undefined;
-        const geometry = isPlainObject(feature) ? feature.geometry : undefined;
-
-        return {
-          record: properties,
-          geometry,
-          scope: `[feature #${index + 1}]`,
-          sourcePath: `${relativePath}.features[${index}].properties`,
-          requiresGeometry: true,
-        };
-      }),
+      cases: data.features.map((feature, index) => ({
+        record: isPlainObject(feature) ? feature.properties : undefined,
+        geometry: isPlainObject(feature) ? feature.geometry : undefined,
+        scope: `[feature #${index + 1}]`,
+        sourcePath: `${relativePath}.features[${index}].properties`,
+        requiresGeometry: true,
+      })),
       issues,
     };
   }
@@ -207,183 +161,86 @@ function extractCases(data, filePath) {
     };
   }
 
-  pushIssue(
-    issues,
-    `[file ${relativePath}]`,
-    "root",
-    "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of case records."
-  );
-
+  pushIssue(issues, `[file ${relativePath}]`, "root", "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of case records.");
   return { cases: [], issues };
 }
 
 function validateReferenceData(nomenclatures) {
   const issues = [];
 
-  if (!Array.isArray(nomenclatures.case_core_fields)) {
-    pushIssue(
-      issues,
-      "[reference data/reference/nomenclatures.json]",
-      "case_core_fields",
-      "Expected an array of stable case fields."
-    );
-  }
-
-  if (!Array.isArray(nomenclatures.water_boolean_fields)) {
-    pushIssue(
-      issues,
-      "[reference data/reference/nomenclatures.json]",
-      "water_boolean_fields",
-      "Expected an array of water boolean fields."
-    );
-  }
-
-  if (!Array.isArray(nomenclatures.reserved_business_fields)) {
-    pushIssue(
-      issues,
-      "[reference data/reference/nomenclatures.json]",
-      "reserved_business_fields",
-      "Expected an array of reserved business fields."
-    );
+  for (const key of ["case_core_fields", "water_boolean_fields", "reserved_business_fields"]) {
+    if (!Array.isArray(nomenclatures[key])) {
+      pushIssue(issues, "[reference data/reference/nomenclatures.json]", key, `Expected an array for ${key}.`);
+    }
   }
 
   return issues;
 }
 
 function validateGeometry(geometry, context) {
-  const { scope } = context;
   const issues = [];
 
   if (!isPlainObject(geometry)) {
-    pushIssue(
-      issues,
-      scope,
-      "geometry",
-      "Missing or invalid geometry. Expected a GeoJSON Polygon or MultiPolygon."
-    );
+    pushIssue(issues, context.scope, "geometry", "Missing or invalid geometry. Expected a GeoJSON Polygon or MultiPolygon.");
     return issues;
   }
 
   if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
-    pushIssue(
-      issues,
-      scope,
-      "geometry.type",
-      `Invalid geometry type "${geometry.type}". Expected Polygon or MultiPolygon.`
-    );
+    pushIssue(issues, context.scope, "geometry.type", `Invalid geometry type "${geometry.type}". Expected Polygon or MultiPolygon.`);
   }
 
   if (!Array.isArray(geometry.coordinates)) {
-    pushIssue(
-      issues,
-      scope,
-      "geometry.coordinates",
-      "Missing or invalid geometry coordinates."
-    );
+    pushIssue(issues, context.scope, "geometry.coordinates", "Missing or invalid geometry coordinates.");
   }
 
   return issues;
 }
 
 function validateCaseRecord(caseRecord, context) {
-  const {
-    scope,
-    seenIds,
-    reservedBusinessFields,
-    relativePath,
-    geometry,
-    requiresGeometry,
-  } = context;
+  const { scope, seenIds, reservedBusinessFields, relativePath, geometry, requiresGeometry } = context;
   const issues = [];
 
   if (!isPlainObject(caseRecord)) {
-    pushIssue(
-      issues,
-      scope,
-      "properties",
-      `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`
-    );
+    pushIssue(issues, scope, "properties", `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`);
     return issues;
   }
 
   const rawId = caseRecord.id_case;
   const hasValidId = typeof rawId === "string" && rawId.trim().length > 0;
-  const effectiveScope = hasValidId ? `[case ${rawId.trim()}]` : scope;
+  const normalizedId = hasValidId ? rawId.trim() : "";
+  const effectiveScope = hasValidId ? `[case ${normalizedId}]` : scope;
 
   if (!hasValidId) {
-    pushIssue(
-      issues,
-      effectiveScope,
-      "properties.id_case",
-      "Missing or empty id_case."
-    );
-  } else if (seenIds.has(rawId.trim())) {
-    pushIssue(
-      issues,
-      effectiveScope,
-      "properties.id_case",
-      `Duplicate id_case "${rawId.trim()}" across validated files.`
-    );
+    pushIssue(issues, effectiveScope, "properties.id_case", "Missing or empty id_case.");
+  } else if (seenIds.has(normalizedId)) {
+    pushIssue(issues, effectiveScope, "properties.id_case", `Duplicate id_case "${normalizedId}" across validated files.`);
   } else {
-    seenIds.add(rawId.trim());
+    seenIds.add(normalizedId);
   }
 
   for (const field of ["region", "sous_region"]) {
     const value = caseRecord[field];
-    if (value === undefined || value === null) {
-      continue;
-    }
-
-    if (typeof value !== "string" || value.trim().length === 0) {
-      pushIssue(
-        issues,
-        effectiveScope,
-        `properties.${field}`,
-        `Invalid ${field}. Expected a non-empty string or null.`
-      );
+    if (value !== undefined && value !== null && (typeof value !== "string" || value.trim().length === 0)) {
+      pushIssue(issues, effectiveScope, `properties.${field}`, `Invalid ${field}. Expected a non-empty string or null.`);
     }
   }
 
   for (const field of waterBooleanFields) {
     const value = caseRecord[field];
-
-    if (
-      value !== undefined &&
-      value !== null &&
-      value !== true &&
-      value !== false
-    ) {
-      pushIssue(
-        issues,
-        effectiveScope,
-        `properties.${field}`,
-        [
-          `Invalid value ${JSON.stringify(value)}.`,
-          "Expected boolean true, boolean false, or null.",
-        ]
-      );
+    if (value !== undefined && value !== null && value !== true && value !== false) {
+      pushIssue(issues, effectiveScope, `properties.${field}`, [`Invalid value ${JSON.stringify(value)}.`, "Expected boolean true, boolean false, or null."]);
     }
   }
 
   for (const field of reservedBusinessFields) {
     if (!isNilOrEmpty(caseRecord[field])) {
-      pushIssue(
-        issues,
-        effectiveScope,
-        `properties.${field}`,
-        `${field} is a business field and must not be stored in the stable cases layer. Move it to a future business table.`
-      );
+      pushIssue(issues, effectiveScope, `properties.${field}`, `${field} is a business field and must not be stored in the stable cases layer.`);
     }
   }
 
   for (const field of Object.keys(caseRecord)) {
     if (!coreFields.includes(field) && !reservedBusinessFields.includes(field)) {
-      pushIssue(
-        issues,
-        effectiveScope,
-        `properties.${field}`,
-        `Unknown field "${field}" in stable cases layer. Expected one of: ${coreFields.join(", ")}.`
-      );
+      pushIssue(issues, effectiveScope, `properties.${field}`, `Unknown field "${field}" in stable cases layer. Expected one of: ${coreFields.join(", ")}.`);
     }
   }
 
@@ -428,29 +285,22 @@ async function loadNomenclatures() {
 
 async function main() {
   const nomenclatures = await loadNomenclatures();
-
   const issues = validateReferenceData(nomenclatures);
   const reservedBusinessFields = Array.isArray(nomenclatures.reserved_business_fields)
     ? nomenclatures.reserved_business_fields
     : fallbackReservedBusinessFields;
-
   const candidateFiles = await resolveCandidateFiles(process.argv.slice(2));
+  const seenIds = new Set();
   let checkedCases = 0;
 
   for (const filePath of candidateFiles) {
     const relativePath = toRelativePath(filePath);
-    const seenIds = new Set();
     let data;
 
     try {
       data = await loadJson(filePath);
     } catch (error) {
-      pushIssue(
-        issues,
-        `[file ${relativePath}]`,
-        "root",
-        `Unable to read or parse JSON: ${error.message}`
-      );
+      pushIssue(issues, `[file ${relativePath}]`, "root", `Unable to read or parse JSON: ${error.message}`);
       continue;
     }
 
@@ -467,7 +317,7 @@ async function main() {
           relativePath,
           geometry: item.geometry,
           requiresGeometry: item.requiresGeometry,
-        })
+        }),
       );
     }
   }
