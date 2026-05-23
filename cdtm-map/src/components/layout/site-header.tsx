@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Lock, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -43,9 +44,15 @@ export function SiteHeader({
           <nav aria-label="Navigation principale" className="flex items-center gap-2">
             {navigationItems.map((item) => (
               <Button key={item.href} asChild type="button" variant="ghost" size="sm">
-                <a href={item.href} aria-current={item.current ? "page" : undefined}>
-                  {item.label}
-                </a>
+                {item.href.startsWith("/") ? (
+                  <Link href={item.href} aria-current={item.current ? "page" : undefined}>
+                    {item.label}
+                  </Link>
+                ) : (
+                  <a href={item.href} aria-current={item.current ? "page" : undefined}>
+                    {item.label}
+                  </a>
+                )}
               </Button>
             ))}
           </nav>

@@ -34,6 +34,7 @@ type LoginPayload = {
 };
 
 type AdminPanelMode = "read" | "edit";
+type StaticAdminDraftSection = Exclude<keyof AdminCaseDraft, "dynamic">;
 
 function resolveCaseSearchMatch(
   stableCases: StableCaseProperties[],
@@ -688,7 +689,7 @@ export default function HomePage() {
   }, [focusOnCase, searchValue]);
 
   const handleSingleAdminFieldChange = useCallback(
-    (section: keyof AdminCaseDraft, field: string, value: string) => {
+    (section: StaticAdminDraftSection, field: string, value: string) => {
       setSingleDraft((current) => {
         const nextDraft = {
           ...current,
@@ -707,6 +708,22 @@ export default function HomePage() {
 
         return nextDraft;
       });
+    },
+    [],
+  );
+
+  const handleDynamicAdminFieldChange = useCallback(
+    (tableKey: string, field: string, value: string) => {
+      setSingleDraft((current) => ({
+        ...current,
+        dynamic: {
+          ...current.dynamic,
+          [tableKey]: {
+            ...(current.dynamic[tableKey] ?? {}),
+            [field]: value,
+          },
+        },
+      }));
     },
     [],
   );
@@ -1060,6 +1077,7 @@ export default function HomePage() {
             }}
             onSearchSubmit={handleSearchSubmit}
             onSingleFieldChange={handleSingleAdminFieldChange}
+            onDynamicFieldChange={handleDynamicAdminFieldChange}
             onBulkFieldChange={handleBulkAdminFieldChange}
             onEnterEditMode={handleEnterEditMode}
             onCancelEdit={handleCancelEdit}

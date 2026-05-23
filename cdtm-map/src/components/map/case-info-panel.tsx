@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 
-import {
-  controlTypeOptions,
-  factionOptions,
-  getTerrainTypesForCategory,
-  reliefOptions,
-  terrainCategories,
-} from "@/admin/options";
-import type { AdminBlockMeta, AdminBulkEditDraft, AdminCaseDraft, AdminCaseRecord } from "@/admin/types";
+import type {
+  AdminBlockMeta,
+  AdminBulkEditDraft,
+  AdminCaseDraft,
+  AdminCaseRecord,
+  AdminDynamicSectionRecord,
+} from "@/admin/types";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { StableCaseProperties } from "@/map/types";
 
 type AdminPanelMode = "read" | "edit";
+type StaticAdminDraftSection = "public" | "notes" | "terrain" | "control";
 
 type CaseInfoPanelProps = {
   activeCase: StableCaseProperties | null;
@@ -36,7 +36,8 @@ type CaseInfoPanelProps = {
   availableCaseIds: string[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
-  onSingleFieldChange: (section: keyof AdminCaseDraft, field: string, value: string) => void;
+  onSingleFieldChange: (section: StaticAdminDraftSection, field: string, value: string) => void;
+  onDynamicFieldChange: (tableKey: string, field: string, value: string) => void;
   onBulkFieldChange: (section: keyof AdminBulkEditDraft, field: string, value: string) => void;
   onEnterEditMode: () => void;
   onCancelEdit: () => void;
@@ -112,6 +113,19 @@ function summarizeMeta(metas: AdminBlockMeta[]): string {
   }
 
   return "Sauvegardes variables";
+}
+
+function getTerrainTypeOptions(
+  record: AdminCaseRecord | null,
+  category: string | null | undefined,
+): string[] {
+  if (!record || !category) {
+    return [];
+  }
+
+  return (record.reference_data.terrain_types_by_category[category] ?? []).map(
+    (option) => option.value,
+  );
 }
 
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
@@ -227,6 +241,77 @@ function BooleanField({
         </option>
       ))}
     </select>
+  );
+}
+
+function DynamicFieldInput({
+  section,
+  fieldKey,
+  disabled,
+  draft,
+  onDynamicFieldChange,
+}: {
+  section: AdminDynamicSectionRecord;
+  fieldKey: string;
+  disabled: boolean;
+  draft: AdminCaseDraft;
+  onDynamicFieldChange: (tableKey: string, field: string, value: string) => void;
+}) {
+  const field = section.fields.find((item) => item.field_key === fieldKey);
+
+  if (!field) {
+    return null;
+  }
+
+  const value = draft.dynamic[section.table_key]?.[field.field_key] ?? "";
+
+  if (field.field_type === "boolean") {
+    return (
+      <BooleanField
+        value={value}
+        onChange={(nextValue) => onDynamicFieldChange(section.table_key, field.field_key, nextValue)}
+        disabled={disabled}
+      />
+    );
+  }
+
+  if (field.field_type === "reference") {
+    return (
+      <select
+        className={fieldClassName}
+        value={value}
+        onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)}
+        disabled={disabled}
+      >
+        <option value="">Non renseigne</option>
+        {field.reference_options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.field_type === "textarea") {
+    return (
+      <textarea
+        className={`${fieldClassName} min-h-24 resize-y`}
+        value={value}
+        onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)}
+        disabled={disabled}
+      />
+    );
+  }
+
+  return (
+    <input
+      className={fieldClassName}
+      type={field.field_type === "integer" ? "number" : "text"}
+      value={value}
+      onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)}
+      disabled={disabled}
+    />
   );
 }
 
@@ -372,6 +457,7 @@ export function CaseInfoPanel({
   onSearchValueChange,
   onSearchSubmit,
   onSingleFieldChange,
+  onDynamicFieldChange,
   onBulkFieldChange,
   onEnterEditMode,
   onCancelEdit,
@@ -385,12 +471,22 @@ export function CaseInfoPanel({
     activeAdminRecord,
     selectedAdminRecords,
   );
-  const singleTerrainTypeOptions = getTerrainTypesForCategory(singleDraft.terrain.terrain_cat);
+  const singleTerrainTypeOptions = getTerrainTypeOptions(
+    activeAdminRecord,
+    singleDraft.terrain.terrain_cat,
+  );
+  const terrainCategoryOptions = activeAdminRecord?.reference_data.terrain_categories.map(
+    (option) => option.value,
+  ) ?? [];
   const bulkTerrainCategory =
     bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched
       ? ""
       : bulkDraft.terrain.terrain_cat.value;
-  const bulkTerrainTypeOptions = getTerrainTypesForCategory(bulkTerrainCategory);
+  const bulkTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, bulkTerrainCategory);
+  const reliefOptions = activeAdminRecord?.reference_data.relief_options.map((option) => option.value) ?? [];
+  const factionOptions = activeAdminRecord?.reference_data.faction_options.map((option) => option.value) ?? [];
+  const controlTypeOptions =
+    activeAdminRecord?.reference_data.control_type_options.map((option) => option.value) ?? [];
   const notesMeta = isMultiSelection
     ? summarizeMeta(selectedAdminRecords.map((record) => record.notes.meta))
     : formatMeta(activeAdminRecord?.notes.meta ?? { updated_at: null, updated_by: null });
@@ -403,6 +499,7 @@ export function CaseInfoPanel({
   const controlMeta = isMultiSelection
     ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta))
     : formatMeta(activeAdminRecord?.control.meta ?? { updated_at: null, updated_by: null });
+  const dynamicSections = !isMultiSelection ? activeAdminRecord?.dynamic_sections ?? [] : [];
 
   return (
     <aside aria-live="polite">
@@ -619,8 +716,12 @@ export function CaseInfoPanel({
                     }
                   >
                     <SelectField
-                      value={isMultiSelection ? bulkDraft.terrain.terrain_cat.value : singleDraft.terrain.terrain_cat}
-                      options={terrainCategories}
+                      value={
+                        isMultiSelection
+                          ? bulkDraft.terrain.terrain_cat.value
+                          : singleDraft.terrain.terrain_cat
+                      }
+                      options={terrainCategoryOptions}
                       onChange={(value) =>
                         isMultiSelection
                           ? onBulkFieldChange("terrain", "terrain_cat", value)
@@ -728,6 +829,28 @@ export function CaseInfoPanel({
                 </div>
               </section>
 
+              {dynamicSections.map((section) => (
+                <section
+                  key={section.table_key}
+                  className="rounded-[24px] border border-border/70 bg-background/40 p-4"
+                >
+                  <SectionTitle title={section.title} meta={formatMeta(section.meta)} />
+                  <div className="mt-4">
+                    {section.fields.map((field) => (
+                      <FormRow key={`${section.table_key}:${field.field_key}`} label={field.label}>
+                        <DynamicFieldInput
+                          section={section}
+                          fieldKey={field.field_key}
+                          disabled={adminLoading || adminSaving}
+                          draft={singleDraft}
+                          onDynamicFieldChange={onDynamicFieldChange}
+                        />
+                      </FormRow>
+                    ))}
+                  </div>
+                </section>
+              ))}
+
               {adminError ? (
                 <div className="rounded-[22px] border border-destructive/60 bg-destructive/15 px-4 py-3 text-sm text-foreground">
                   {adminError}
@@ -779,6 +902,35 @@ export function CaseInfoPanel({
                   </div>
                 </section>
               ) : null}
+
+              {adminModeEnabled && !isMultiSelection
+                ? dynamicSections.map((section) => (
+                    <section
+                      key={section.table_key}
+                      className="rounded-[24px] border border-border/70 bg-background/40 p-4"
+                    >
+                      <SectionTitle title={section.title} meta={formatMeta(section.meta)} />
+                      <div className="mt-4">
+                        {section.fields.map((field) => (
+                          <CompactInfoRow
+                            key={`${section.table_key}:${field.field_key}`}
+                            label={field.label}
+                            value={summarizeStrings([
+                              typeof section.values[field.field_key] === "boolean"
+                                ? section.values[field.field_key]
+                                  ? "Oui"
+                                  : "Non"
+                                : section.values[field.field_key] !== null &&
+                                    section.values[field.field_key] !== undefined
+                                  ? String(section.values[field.field_key])
+                                  : null,
+                            ]).value}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))
+                : null}
 
               {adminError ? (
                 <div className="rounded-[22px] border border-destructive/60 bg-destructive/15 px-4 py-3 text-sm text-foreground">

@@ -1,3 +1,8 @@
+import type {
+  DynamicCaseTableFieldDefinition,
+  ReferenceOption,
+} from "@/admin/tech-types";
+
 export type PublicCaseSupplement = {
   id_case: string;
   note_publique: string | null;
@@ -16,6 +21,14 @@ export type PublicCaseProperties = {
 export type AdminBlockMeta = {
   updated_at: string | null;
   updated_by: string | null;
+};
+
+export type AdminReferenceData = {
+  terrain_categories: ReferenceOption[];
+  terrain_types_by_category: Record<string, ReferenceOption[]>;
+  relief_options: ReferenceOption[];
+  faction_options: ReferenceOption[];
+  control_type_options: ReferenceOption[];
 };
 
 export type AdminPublicCaseRecord = PublicCaseProperties & {
@@ -42,12 +55,29 @@ export type AdminControlRecord = {
   meta: AdminBlockMeta;
 };
 
+export type AdminDynamicFieldValue = string | number | boolean | null;
+
+export type AdminDynamicFieldDefinition = DynamicCaseTableFieldDefinition & {
+  reference_options: ReferenceOption[];
+};
+
+export type AdminDynamicSectionRecord = {
+  table_key: string;
+  title: string;
+  description: string | null;
+  fields: AdminDynamicFieldDefinition[];
+  values: Record<string, AdminDynamicFieldValue>;
+  meta: AdminBlockMeta;
+};
+
 export type AdminCaseRecord = {
   id_case: string;
   public: AdminPublicCaseRecord;
   notes: AdminNotesRecord;
   terrain: AdminTerrainRecord;
   control: AdminControlRecord;
+  dynamic_sections: AdminDynamicSectionRecord[];
+  reference_data: AdminReferenceData;
 };
 
 export type AdminCaseDraft = {
@@ -73,6 +103,7 @@ export type AdminCaseDraft = {
     controleur: string;
     controle_type: string;
   };
+  dynamic: Record<string, Record<string, string>>;
 };
 
 export type AdminBulkEditFieldState = {
@@ -159,6 +190,18 @@ function booleanToDraftValue(value: boolean | null | undefined): string {
   return "";
 }
 
+function dynamicValueToDraftValue(value: AdminDynamicFieldValue): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  return String(value);
+}
+
 export function createEmptyAdminCaseDraft(): AdminCaseDraft {
   return {
     public: {
@@ -183,6 +226,7 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
       controleur: "",
       controle_type: "",
     },
+    dynamic: {},
   };
 }
 
@@ -240,5 +284,16 @@ export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft
       controleur: record.control.controleur ?? "",
       controle_type: record.control.controle_type ?? "",
     },
+    dynamic: Object.fromEntries(
+      record.dynamic_sections.map((section) => [
+        section.table_key,
+        Object.fromEntries(
+          section.fields.map((field) => [
+            field.field_key,
+            dynamicValueToDraftValue(section.values[field.field_key] ?? null),
+          ]),
+        ),
+      ]),
+    ),
   };
 }

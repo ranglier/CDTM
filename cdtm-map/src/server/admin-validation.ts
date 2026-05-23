@@ -1,11 +1,4 @@
 import {
-  controlTypeOptions,
-  factionOptions,
-  getTerrainTypesForCategory,
-  reliefOptions,
-  terrainCategories,
-} from "@/admin/options";
-import {
   createEmptyAdminCaseDraft,
   type AdminBulkPatch,
   type AdminCaseDraft,
@@ -27,7 +20,6 @@ function normalizeText(value: unknown): string {
 
 function normalizeNullableText(value: unknown): string | null {
   const normalized = normalizeText(value);
-
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -53,16 +45,6 @@ function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
-function assertAllowedOption(
-  fieldLabel: string,
-  value: string | null,
-  allowedValues: readonly string[],
-): void {
-  if (value && !allowedValues.includes(value)) {
-    throw new Error(`La valeur du champ ${fieldLabel} est invalide.`);
-  }
-}
-
 export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const payload = ensurePlainObject(value);
   const emptyDraft = createEmptyAdminCaseDraft();
@@ -70,8 +52,9 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const notes = ensurePlainObject(payload.notes ?? emptyDraft.notes);
   const terrain = ensurePlainObject(payload.terrain ?? emptyDraft.terrain);
   const control = ensurePlainObject(payload.control ?? emptyDraft.control);
+  const dynamicSections = payload.dynamic ? ensurePlainObject(payload.dynamic) : {};
 
-  const draft: AdminCaseDraft = {
+  return {
     public: {
       id_case: normalizeText(publicFields.id_case),
       region: normalizeText(publicFields.region),
@@ -94,29 +77,29 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
       controleur: normalizeText(control.controleur),
       controle_type: normalizeText(control.controle_type),
     },
+    dynamic: Object.fromEntries(
+      Object.entries(dynamicSections)
+        .filter((entry): entry is [string, Record<string, unknown>] => {
+          const [tableKey, section] = entry;
+          return (
+            typeof tableKey === "string" &&
+            tableKey.trim().length > 0 &&
+            typeof section === "object" &&
+            section !== null &&
+            !Array.isArray(section)
+          );
+        })
+        .map(([tableKey, section]) => [
+          tableKey,
+          Object.fromEntries(
+            Object.entries(section).map(([fieldKey, fieldValue]) => [
+              fieldKey,
+              typeof fieldValue === "string" ? fieldValue : "",
+            ]),
+          ),
+        ]),
+    ),
   };
-
-  const terrainCategory = normalizeNullableText(draft.terrain.terrain_cat);
-  const terrainType = normalizeNullableText(draft.terrain.terrain_type);
-  const relief = normalizeNullableText(draft.terrain.relief);
-  const faction = normalizeNullableText(draft.control.faction);
-  const controleType = normalizeNullableText(draft.control.controle_type);
-
-  assertAllowedOption("terrain_cat", terrainCategory, terrainCategories);
-  assertAllowedOption("relief", relief, reliefOptions);
-  assertAllowedOption("faction", faction, factionOptions);
-  assertAllowedOption("controle_type", controleType, controlTypeOptions);
-
-  if (terrainType && !terrainCategory) {
-    throw new Error("terrain_type requiert un terrain_cat.");
-  }
-
-  if (terrainType && terrainCategory) {
-    const allowedTerrainTypes = getTerrainTypesForCategory(terrainCategory);
-    assertAllowedOption("terrain_type", terrainType, allowedTerrainTypes);
-  }
-
-  return draft;
 }
 
 export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
@@ -194,23 +177,6 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     }
 
     if (Object.keys(terrainPatch).length > 0) {
-      const hasTerrainCategory = hasOwnProperty(terrainPatch, "terrain_cat");
-      const hasTerrainType = hasOwnProperty(terrainPatch, "terrain_type");
-
-      if (hasTerrainCategory !== hasTerrainType) {
-        throw new Error(
-          "terrain_cat et terrain_type doivent etre modifies ensemble en edition de masse.",
-        );
-      }
-
-      assertAllowedOption("terrain_cat", terrainPatch.terrain_cat ?? null, terrainCategories);
-      assertAllowedOption("relief", terrainPatch.relief ?? null, reliefOptions);
-
-      if (terrainPatch.terrain_type && terrainPatch.terrain_cat) {
-        const allowedTerrainTypes = getTerrainTypesForCategory(terrainPatch.terrain_cat);
-        assertAllowedOption("terrain_type", terrainPatch.terrain_type, allowedTerrainTypes);
-      }
-
       result.terrain = terrainPatch;
     }
   }
@@ -231,12 +197,6 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     }
 
     if (Object.keys(controlPatch).length > 0) {
-      assertAllowedOption("faction", controlPatch.faction ?? null, factionOptions);
-      assertAllowedOption(
-        "controle_type",
-        controlPatch.controle_type ?? null,
-        controlTypeOptions,
-      );
       result.control = controlPatch;
     }
   }

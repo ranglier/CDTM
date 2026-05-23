@@ -10,7 +10,17 @@ import {
   type PublicCaseSupplement,
 } from "@/admin/types";
 import type { StableCaseProperties } from "@/map/types";
-import { ensureDatabaseReady, getPool } from "@/server/db";
+import {
+  ensureDatabaseReady,
+  getPool,
+} from "@/server/db";
+import {
+  getDynamicCaseSectionsForCase,
+  getStaticAdminReferenceData,
+  saveDynamicSectionsForCase,
+  validateStaticAdminDraftSelections,
+  validateStaticBulkPatchSelections,
+} from "@/server/admin-tech-repository";
 import { loadStableCaseIndex } from "@/server/stable-case-source";
 
 type CaseLookupRow = {
@@ -138,11 +148,16 @@ function mergePublicCaseProperties(
   };
 }
 
-function createEmptyAdminRecord(
+async function createEmptyAdminRecord(
+  client: PoolClient,
   idCase: string,
   sourceCase: StableCaseProperties,
-): AdminCaseRecord {
+): Promise<AdminCaseRecord> {
   const draft = createEmptyAdminCaseDraft();
+  const [dynamicSections, referenceData] = await Promise.all([
+    getDynamicCaseSectionsForCase(client, idCase),
+    getStaticAdminReferenceData(client),
+  ]);
 
   return {
     id_case: idCase,
@@ -175,10 +190,21 @@ function createEmptyAdminRecord(
       controle_type: draft.control.controle_type || null,
       meta: createEmptyPublicMeta(),
     },
+    dynamic_sections: dynamicSections,
+    reference_data: referenceData,
   };
 }
 
-function mapCaseLookupRow(row: CaseLookupRow, sourceCase: StableCaseProperties): AdminCaseRecord {
+async function mapCaseLookupRow(
+  client: PoolClient,
+  row: CaseLookupRow,
+  sourceCase: StableCaseProperties,
+): Promise<AdminCaseRecord> {
+  const [dynamicSections, referenceData] = await Promise.all([
+    getDynamicCaseSectionsForCase(client, row.id_case),
+    getStaticAdminReferenceData(client),
+  ]);
+
   return {
     id_case: row.id_case,
     public: {
@@ -214,6 +240,8 @@ function mapCaseLookupRow(row: CaseLookupRow, sourceCase: StableCaseProperties):
         updated_by: row.control_updated_by,
       },
     },
+    dynamic_sections: dynamicSections,
+    reference_data: referenceData,
   };
 }
 
@@ -366,8 +394,8 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
   );
 
   return result.rows[0]
-    ? mapCaseLookupRow(result.rows[0], sourceCase)
-    : createEmptyAdminRecord(idCase, sourceCase);
+    ? await mapCaseLookupRow(client, result.rows[0], sourceCase)
+    : await createEmptyAdminRecord(client, idCase, sourceCase);
 }
 
 export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
@@ -475,6 +503,7 @@ export async function saveAdminCaseRecord(
   try {
     await client.query("BEGIN");
     await ensureCaseExists(client, idCase);
+    await validateStaticAdminDraftSelections(client, draft);
 
     await applyCurrentSectionPatch(
       client,
@@ -484,8 +513,7 @@ export async function saveAdminCaseRecord(
         public_id_case: normalizePublicId(draft.public.id_case, idCase),
         region: normalizeNullableField(draft.public.region),
         sous_region: normalizeNullableField(draft.public.sous_region),
-        cote:
-          draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
+        cote: draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
         lac_majeur:
           draft.public.lac_majeur.length > 0 ? draft.public.lac_majeur === "true" : null,
         cours_eau_majeur:
@@ -531,6 +559,8 @@ export async function saveAdminCaseRecord(
       userId,
     );
 
+    await saveDynamicSectionsForCase(client, idCase, draft.dynamic, userId);
+
     const record = await selectAdminCaseRecord(client, idCase);
     await client.query("COMMIT");
 
@@ -575,6 +605,7 @@ export async function saveAdminCaseBulkPatch(
   try {
     await client.query("BEGIN");
     await ensureCasesExist(client, uniqueIds);
+    await validateStaticBulkPatchSelections(client, patch);
 
     for (const idCase of uniqueIds) {
       if (patch.public) {

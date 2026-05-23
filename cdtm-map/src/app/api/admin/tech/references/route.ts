@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentStaffUser } from "@/server/auth";
-import { listBusinessTableStatuses } from "@/server/admin-tech-repository";
+import { listReferenceTableStatuses } from "@/server/admin-tech-repository";
 import { isDatabaseConfigured } from "@/server/db";
 
 export const runtime = "nodejs";
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tables = await listBusinessTableStatuses();
+    const tables = await listReferenceTableStatuses();
 
     return NextResponse.json(tables, {
       status: 200,
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture des tables impossible.";
+    const message = error instanceof Error ? error.message : "Lecture des referentiels impossible.";
 
     return NextResponse.json(
       {

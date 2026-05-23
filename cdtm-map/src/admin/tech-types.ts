@@ -1,4 +1,11 @@
-export type TechFieldType = "text" | "textarea" | "boolean" | "integer" | "datetime";
+export type TechFieldType =
+  | "text"
+  | "textarea"
+  | "boolean"
+  | "integer"
+  | "number"
+  | "datetime"
+  | "reference";
 
 export type TechFieldDefinition = {
   name: string;
@@ -7,153 +14,192 @@ export type TechFieldDefinition = {
   required?: boolean;
   readOnly?: boolean;
   searchable?: boolean;
+  reference_table_key?: ReferenceTableKey;
+  reference_group_key?: string | null;
 };
 
-export type TechTableKey =
-  | "case_notes_current"
-  | "case_terrain_current"
-  | "case_control_current"
-  | "case_emplacements_current"
-  | "localites"
-  | "historique_controle";
+export type ReferenceOption = {
+  value: string;
+  label: string;
+};
 
-export type TechTableDefinition = {
-  key: TechTableKey;
-  logical_name: string;
-  physical_name: string;
+export type ReferenceTableKey =
+  | "nomenclatures"
+  | "factions"
+  | "controleurs"
+  | "styles"
+  | "emplacements_rules";
+
+export type ReferenceTableDefinition = {
+  key: ReferenceTableKey;
   title: string;
   description: string;
+  physical_name: string;
   primary_key: string;
-  auto_primary_key?: boolean;
   fields: TechFieldDefinition[];
 };
 
-export type TechTableStatus = {
-  definition: TechTableDefinition;
+export type ReferenceTableRowValue = string | number | boolean | null;
+export type ReferenceTableRow = Record<string, ReferenceTableRowValue>;
+
+export type ReferenceTableStatus = {
+  definition: ReferenceTableDefinition;
   row_count: number;
 };
 
-export type TechTableRowValue = string | number | boolean | null;
-
-export type TechTableRow = Record<string, TechTableRowValue>;
-
-export type TechTableRowsResponse = {
-  definition: TechTableDefinition;
-  rows: TechTableRow[];
+export type ReferenceTableRowsResponse = {
+  definition: ReferenceTableDefinition;
+  rows: ReferenceTableRow[];
   total_count: number;
   returned_count: number;
   search: string;
 };
 
-export const techTableDefinitions: TechTableDefinition[] = [
+export type DynamicCaseTableFieldType =
+  | "text"
+  | "textarea"
+  | "boolean"
+  | "integer"
+  | "datetime"
+  | "reference";
+
+export type DynamicCaseTableFieldDefinition = {
+  field_key: string;
+  label: string;
+  field_type: DynamicCaseTableFieldType;
+  reference_table_key: ReferenceTableKey | null;
+  reference_group_key: string | null;
+  sort_order: number;
+};
+
+export type DynamicCaseTableDefinition = {
+  table_key: string;
+  physical_name: string;
+  title: string;
+  description: string | null;
+  is_active: boolean;
+  fields: DynamicCaseTableFieldDefinition[];
+};
+
+export type DynamicCaseTableSummary = {
+  table_key: string;
+  physical_name: string;
+  title: string;
+  description: string | null;
+  is_active: boolean;
+  field_count: number;
+};
+
+export type DynamicCaseTableCreateInput = {
+  table_key: string;
+  title: string;
+  description: string;
+};
+
+export type DynamicCaseTableUpdateInput = {
+  title?: string;
+  description?: string | null;
+  is_active?: boolean;
+};
+
+export type DynamicCaseTableFieldCreateInput = {
+  field_key: string;
+  label: string;
+  field_type: DynamicCaseTableFieldType;
+  reference_table_key?: ReferenceTableKey | null;
+  reference_group_key?: string | null;
+};
+
+export type DynamicCaseTableCreateResult = {
+  definition: DynamicCaseTableDefinition;
+  provisioned_case_rows: number;
+};
+
+export type DynamicCaseTableFieldCreateResult = {
+  definition: DynamicCaseTableDefinition;
+  added_field: DynamicCaseTableFieldDefinition;
+};
+
+export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
-    key: "case_notes_current",
-    logical_name: "case_notes",
-    physical_name: "case_notes_current",
-    title: "Notes de case",
-    description: "Etat courant des notes publiques et staff par case.",
-    primary_key: "id_case",
+    key: "nomenclatures",
+    title: "Nomenclatures",
+    description: "Valeurs controlees globales, y compris les listes hierarchiques.",
+    physical_name: "reference_nomenclature_values",
+    primary_key: "id_entry",
     fields: [
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
-      { name: "note_publique", label: "note_publique", type: "textarea", searchable: true },
-      { name: "note_staff", label: "note_staff", type: "textarea", searchable: true },
+      { name: "id_entry", label: "id_entry", type: "text", required: true, searchable: true },
+      { name: "group_key", label: "group_key", type: "text", required: true, searchable: true },
+      { name: "entry_key", label: "entry_key", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", searchable: true },
+      { name: "parent_entry_key", label: "parent_entry_key", type: "text", searchable: true },
+      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
     ],
   },
   {
-    key: "case_terrain_current",
-    logical_name: "case_terrain",
-    physical_name: "case_terrain_current",
-    title: "Terrain de case",
-    description: "Etat courant des champs de terrain relies aux cases.",
-    primary_key: "id_case",
+    key: "factions",
+    title: "Factions",
+    description: "Factions globales disponibles pour les champs de controle et les tables futures.",
+    physical_name: "reference_factions",
+    primary_key: "id_faction",
     fields: [
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
-      { name: "terrain_cat", label: "terrain_cat", type: "text", searchable: true },
-      { name: "terrain_type", label: "terrain_type", type: "text", searchable: true },
-      { name: "relief", label: "relief", type: "text", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
-    ],
-  },
-  {
-    key: "case_control_current",
-    logical_name: "case_controle",
-    physical_name: "case_control_current",
-    title: "Controle de case",
-    description: "Etat courant du controle politique ou militaire des cases.",
-    primary_key: "id_case",
-    fields: [
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
-      { name: "faction", label: "faction", type: "text", searchable: true },
-      { name: "controleur", label: "controleur", type: "text", searchable: true },
-      { name: "controle_type", label: "controle_type", type: "text", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
-    ],
-  },
-  {
-    key: "case_emplacements_current",
-    logical_name: "case_emplacements",
-    physical_name: "case_emplacements_current",
-    title: "Emplacements de case",
-    description: "Calculs et validations d'emplacements associes aux cases.",
-    primary_key: "id_case",
-    fields: [
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
-      { name: "peuple_majoritaire", label: "peuple_majoritaire", type: "text", searchable: true },
-      { name: "bonus_speciaux", label: "bonus_speciaux", type: "textarea", searchable: true },
-      { name: "empl_base", label: "empl_base", type: "integer" },
-      { name: "empl_max", label: "empl_max", type: "integer" },
-      { name: "regle_version", label: "regle_version", type: "text", searchable: true },
-      { name: "calcule_le", label: "calcule_le", type: "datetime" },
-      { name: "valide_par", label: "valide_par", type: "text", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
-    ],
-  },
-  {
-    key: "localites",
-    logical_name: "localites",
-    physical_name: "localites",
-    title: "Localites",
-    description: "Villes, forts, ports, domaines, ruines et autres points d'interet.",
-    primary_key: "id_localite",
-    fields: [
-      { name: "id_localite", label: "id_localite", type: "text", required: true, searchable: true },
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
+      { name: "id_faction", label: "id_faction", type: "text", required: true, searchable: true },
       { name: "nom", label: "nom", type: "text", searchable: true },
-      { name: "niveau", label: "niveau", type: "text", searchable: true },
-      { name: "type", label: "type", type: "text", searchable: true },
-      { name: "empl", label: "empl", type: "integer" },
-      { name: "visibilite", label: "visibilite", type: "text", searchable: true },
-      { name: "note_publique", label: "note_publique", type: "textarea", searchable: true },
-      { name: "note_staff", label: "note_staff", type: "textarea", searchable: true },
+      { name: "description_courte", label: "description_courte", type: "textarea", searchable: true },
+      { name: "statut", label: "statut", type: "text", searchable: true },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
     ],
   },
   {
-    key: "historique_controle",
-    logical_name: "historique_controle",
-    physical_name: "historique_controle",
-    title: "Historique du controle",
-    description: "Evenements de changement de controle des cases.",
-    primary_key: "id_evenement",
-    auto_primary_key: true,
+    key: "controleurs",
+    title: "Controleurs",
+    description: "Entites nommees pouvant controler une case ou une table dynamique.",
+    physical_name: "reference_controleurs",
+    primary_key: "id_controleur",
     fields: [
-      { name: "id_evenement", label: "id_evenement", type: "integer", readOnly: true, searchable: true },
-      { name: "id_case", label: "id_case", type: "text", required: true, searchable: true },
-      { name: "date_label", label: "date_label", type: "text", searchable: true },
-      { name: "ancien_controleur", label: "ancien_controleur", type: "text", searchable: true },
-      { name: "nouveau_controleur", label: "nouveau_controleur", type: "text", searchable: true },
-      { name: "note", label: "note", type: "textarea", searchable: true },
+      { name: "id_controleur", label: "id_controleur", type: "text", required: true, searchable: true },
+      { name: "nom", label: "nom", type: "text", searchable: true },
+      { name: "pnj", label: "pnj", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "styles",
+    title: "Styles",
+    description: "Definitions globales de styles cartographiques metier.",
+    physical_name: "reference_styles",
+    primary_key: "id_style",
+    fields: [
+      { name: "id_style", label: "id_style", type: "text", required: true, searchable: true },
+      { name: "cible_type", label: "cible_type", type: "text", searchable: true },
+      { name: "cible_id", label: "cible_id", type: "text", searchable: true },
+      { name: "fill", label: "fill", type: "text", searchable: true },
+      { name: "stroke", label: "stroke", type: "text", searchable: true },
+      { name: "opacity", label: "opacity", type: "number" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "emplacements_rules",
+    title: "Regles d'emplacements",
+    description: "Regles globales utilisees pour les calculs et validations d'emplacements.",
+    physical_name: "reference_emplacements_rules",
+    primary_key: "rule_key",
+    fields: [
+      { name: "rule_key", label: "rule_key", type: "text", required: true, searchable: true },
+      { name: "rule_label", label: "rule_label", type: "text", searchable: true },
+      { name: "value_text", label: "value_text", type: "textarea", searchable: true },
+      { name: "value_integer", label: "value_integer", type: "integer" },
+      { name: "description", label: "description", type: "textarea", searchable: true },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
@@ -161,6 +207,6 @@ export const techTableDefinitions: TechTableDefinition[] = [
   },
 ];
 
-export function getTechTableDefinition(key: string): TechTableDefinition | null {
-  return techTableDefinitions.find((definition) => definition.key === key) ?? null;
+export function getReferenceTableDefinition(key: string): ReferenceTableDefinition | null {
+  return referenceTableDefinitions.find((definition) => definition.key === key) ?? null;
 }

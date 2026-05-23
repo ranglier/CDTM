@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getTechTableDefinition, type TechTableKey } from "@/admin/tech-types";
+import {
+  getReferenceTableDefinition,
+  type ReferenceTableKey,
+} from "@/admin/tech-types";
 import { getCurrentStaffUser } from "@/server/auth";
 import {
-  deleteBusinessTableRow,
-  listBusinessTableRows,
-  saveBusinessTableRow,
+  deleteReferenceTableRow,
+  listReferenceTableRows,
+  saveReferenceTableRow,
 } from "@/server/admin-tech-repository";
 import { isDatabaseConfigured } from "@/server/db";
 
@@ -20,11 +23,11 @@ function createUnauthorizedResponse() {
   );
 }
 
-function parseTableKey(rawTable: string): TechTableKey {
-  const definition = getTechTableDefinition(rawTable);
+function parseReferenceTableKey(rawTable: string): ReferenceTableKey {
+  const definition = getReferenceTableDefinition(rawTable);
 
   if (!definition) {
-    throw new Error(`Table technique inconnue: ${rawTable}`);
+    throw new Error(`Table de reference inconnue: ${rawTable}`);
   }
 
   return definition.key;
@@ -51,9 +54,9 @@ export async function GET(
 
   try {
     const params = await context.params;
-    const tableKey = parseTableKey(params.table);
+    const tableKey = parseReferenceTableKey(params.table);
     const limitValue = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "100", 10);
-    const rows = await listBusinessTableRows(tableKey, {
+    const rows = await listReferenceTableRows(tableKey, {
       search: request.nextUrl.searchParams.get("search") ?? "",
       limit: Number.isNaN(limitValue) ? 100 : limitValue,
     });
@@ -65,7 +68,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture de table impossible.";
+    const message = error instanceof Error ? error.message : "Lecture du referentiel impossible.";
     const status = message.includes("inconnue") ? 404 : 500;
 
     return NextResponse.json(
@@ -98,11 +101,9 @@ export async function POST(
 
   try {
     const params = await context.params;
-    const tableKey = parseTableKey(params.table);
-    const body = (await request.json()) as {
-      row?: unknown;
-    };
-    const row = await saveBusinessTableRow(tableKey, body.row ?? {}, user.userId);
+    const tableKey = parseReferenceTableKey(params.table);
+    const body = (await request.json()) as { row?: unknown };
+    const row = await saveReferenceTableRow(tableKey, body.row ?? {}, user.userId);
 
     return NextResponse.json(row, {
       status: 200,
@@ -111,11 +112,11 @@ export async function POST(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Enregistrement de table impossible.";
+    const message =
+      error instanceof Error ? error.message : "Enregistrement du referentiel impossible.";
     const status =
       message.includes("invalide") ||
       message.includes("obligatoire") ||
-      message.includes("introuvable") ||
       message.includes("utilisee")
         ? 400
         : message.includes("inconnue")
@@ -163,8 +164,8 @@ export async function DELETE(
 
   try {
     const params = await context.params;
-    const tableKey = parseTableKey(params.table);
-    await deleteBusinessTableRow(tableKey, primaryKeyValue);
+    const tableKey = parseReferenceTableKey(params.table);
+    await deleteReferenceTableRow(tableKey, primaryKeyValue);
 
     return NextResponse.json(
       {
