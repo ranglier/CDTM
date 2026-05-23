@@ -5,6 +5,7 @@ import type {
 
 export type PublicCaseSupplement = {
   id_case: string;
+  note_publique: string | null;
 };
 
 export type PublicCaseProperties = {
