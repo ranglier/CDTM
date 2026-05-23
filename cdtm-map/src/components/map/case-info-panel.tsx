@@ -398,6 +398,12 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   <CompactInfoRow label="Cote" value={summarizeBooleans(selectedCases.map((item) => item.cote))} />
                   <CompactInfoRow label="Lac majeur" value={summarizeBooleans(selectedCases.map((item) => item.lac_majeur))} />
                   <CompactInfoRow label="Cours d'eau majeur" value={summarizeBooleans(selectedCases.map((item) => item.cours_eau_majeur))} />
+                  <CompactInfoRow label="Categorie terrain" value={summarizeStrings(selectedCases.map((item) => item.terrain_cat))} />
+                  <CompactInfoRow label="Type terrain" value={summarizeStrings(selectedCases.map((item) => item.terrain_type))} />
+                  <CompactInfoRow label="Relief" value={summarizeStrings(selectedCases.map((item) => item.relief))} />
+                  <CompactInfoRow label="Faction" value={summarizeStrings(selectedCases.map((item) => item.faction))} />
+                  <CompactInfoRow label="Controleur" value={summarizeStrings(selectedCases.map((item) => item.controleur))} />
+                  <CompactInfoRow label="Type controle" value={summarizeStrings(selectedCases.map((item) => item.controle_type))} />
                 </div>
               </section>
 

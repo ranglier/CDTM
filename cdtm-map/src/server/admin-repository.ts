@@ -6,8 +6,6 @@ import {
   createEmptyAdminCaseDraft,
   type AdminCaseDraft,
   type AdminCaseRecord,
-  type PublicCaseProperties,
-  type PublicCaseSupplement,
 } from "@/admin/types";
 import type { StableCaseProperties } from "@/map/types";
 import {
@@ -47,16 +45,6 @@ type CaseLookupRow = {
   controle_type: string | null;
   control_updated_at: string | null;
   control_updated_by: string | null;
-};
-
-type PublicLookupRow = {
-  id_case: string;
-  public_id_case: string | null;
-  region: string | null;
-  sous_region: string | null;
-  cote: boolean | null;
-  lac_majeur: boolean | null;
-  cours_eau_majeur: boolean | null;
 };
 
 type EditableSectionPatch = Record<string, string | boolean | null | undefined>;
@@ -122,32 +110,6 @@ function getPresentEntries<T extends EditableSectionPatch>(
   );
 }
 
-function mergePublicCaseProperties(
-  sourceCase: StableCaseProperties,
-  row: Pick<
-    PublicLookupRow,
-    | "id_case"
-    | "public_id_case"
-    | "region"
-    | "sous_region"
-    | "cote"
-    | "lac_majeur"
-    | "cours_eau_majeur"
-  >,
-): PublicCaseProperties {
-  const registryId = row.id_case;
-
-  return {
-    registry_id_case: registryId,
-    id_case: row.public_id_case ?? sourceCase.id_case,
-    region: row.region ?? sourceCase.region ?? null,
-    sous_region: row.sous_region ?? sourceCase.sous_region ?? null,
-    cote: row.cote ?? sourceCase.cote ?? null,
-    lac_majeur: row.lac_majeur ?? sourceCase.lac_majeur ?? null,
-    cours_eau_majeur: row.cours_eau_majeur ?? sourceCase.cours_eau_majeur ?? null,
-  };
-}
-
 async function createEmptyAdminRecord(
   client: PoolClient,
   idCase: string,
@@ -162,15 +124,19 @@ async function createEmptyAdminRecord(
   return {
     id_case: idCase,
     public: {
-      ...mergePublicCaseProperties(sourceCase, {
-        id_case: idCase,
-        public_id_case: null,
-        region: null,
-        sous_region: null,
-        cote: null,
-        lac_majeur: null,
-        cours_eau_majeur: null,
-      }),
+      registry_id_case: idCase,
+      id_case: sourceCase.id_case,
+      region: sourceCase.region ?? null,
+      sous_region: sourceCase.sous_region ?? null,
+      cote: sourceCase.cote ?? null,
+      lac_majeur: sourceCase.lac_majeur ?? null,
+      cours_eau_majeur: sourceCase.cours_eau_majeur ?? null,
+      terrain_cat: null,
+      terrain_type: null,
+      relief: null,
+      faction: null,
+      controleur: null,
+      controle_type: null,
       meta: createEmptyPublicMeta(),
     },
     notes: {
@@ -208,7 +174,19 @@ async function mapCaseLookupRow(
   return {
     id_case: row.id_case,
     public: {
-      ...mergePublicCaseProperties(sourceCase, row),
+      registry_id_case: row.id_case,
+      id_case: row.public_id_case ?? sourceCase.id_case,
+      region: row.region ?? sourceCase.region ?? null,
+      sous_region: row.sous_region ?? sourceCase.sous_region ?? null,
+      cote: row.cote ?? sourceCase.cote ?? null,
+      lac_majeur: row.lac_majeur ?? sourceCase.lac_majeur ?? null,
+      cours_eau_majeur: row.cours_eau_majeur ?? sourceCase.cours_eau_majeur ?? null,
+      terrain_cat: row.terrain_cat,
+      terrain_type: row.terrain_type,
+      relief: row.relief,
+      faction: row.faction,
+      controleur: row.controleur,
+      controle_type: row.controle_type,
       meta: {
         updated_at: toIsoStringOrNull(row.public_updated_at),
         updated_by: row.public_updated_by,
@@ -277,36 +255,6 @@ async function ensureCasesExist(client: PoolClient, idCases: string[]): Promise<
 
     throw new AdminCaseNotFoundError(missingId ?? uniqueIds[0] ?? "inconnue");
   }
-}
-
-async function resolveRegistryCaseId(client: PoolClient, idCase: string): Promise<string> {
-  const directResult = await client.query<{ id_case: string }>(
-    `
-      SELECT id_case
-      FROM case_registry
-      WHERE id_case = $1
-    `,
-    [idCase],
-  );
-
-  if (directResult.rows[0]?.id_case) {
-    return directResult.rows[0].id_case;
-  }
-
-  const publicResult = await client.query<{ id_case: string }>(
-    `
-      SELECT id_case
-      FROM case_public_current
-      WHERE public_id_case = $1
-    `,
-    [idCase],
-  );
-
-  if (publicResult.rows[0]?.id_case) {
-    return publicResult.rows[0].id_case;
-  }
-
-  throw new AdminCaseNotFoundError(idCase);
 }
 
 async function applyCurrentSectionPatch(
@@ -396,79 +344,6 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
   return result.rows[0]
     ? await mapCaseLookupRow(client, result.rows[0], sourceCase)
     : await createEmptyAdminRecord(client, idCase, sourceCase);
-}
-
-export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
-  const stableCaseIndex = await loadStableCaseIndex();
-  const baseCases = Array.from(stableCaseIndex.values());
-  const hasDatabase = await ensureDatabaseReady();
-
-  if (!hasDatabase) {
-    return baseCases.map((stableCase) => ({
-      registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
-      id_case: stableCase.id_case,
-      region: stableCase.region ?? null,
-      sous_region: stableCase.sous_region ?? null,
-      cote: stableCase.cote ?? null,
-      lac_majeur: stableCase.lac_majeur ?? null,
-      cours_eau_majeur: stableCase.cours_eau_majeur ?? null,
-    }));
-  }
-
-  const result = await getPool().query<PublicLookupRow>(
-    `
-      SELECT
-        registry.id_case,
-        public_current.public_id_case,
-        public_current.region,
-        public_current.sous_region,
-        public_current.cote,
-        public_current.lac_majeur,
-        public_current.cours_eau_majeur
-      FROM case_registry AS registry
-      LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
-      ORDER BY registry.id_case
-    `,
-  );
-
-  return result.rows.map((row) =>
-    mergePublicCaseProperties(
-      stableCaseIndex.get(row.id_case) ?? createSourceFallback(row.id_case),
-      row,
-    ),
-  );
-}
-
-export async function getPublicCaseSupplement(idCase: string): Promise<PublicCaseSupplement> {
-  const hasDatabase = await ensureDatabaseReady();
-
-  if (!hasDatabase) {
-    return {
-      id_case: idCase,
-      note_publique: null,
-    };
-  }
-
-  const client = await getPool().connect();
-
-  try {
-    const registryId = await resolveRegistryCaseId(client, idCase);
-    const result = await client.query<{ note_publique: string | null }>(
-      `
-        SELECT note_publique
-        FROM case_notes_current
-        WHERE id_case = $1
-      `,
-      [registryId],
-    );
-
-    return {
-      id_case: idCase,
-      note_publique: result.rows[0]?.note_publique ?? null,
-    };
-  } finally {
-    client.release();
-  }
 }
 
 export async function getAdminCaseRecord(idCase: string): Promise<AdminCaseRecord> {

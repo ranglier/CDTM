@@ -127,6 +127,12 @@ function mergeStableCases(
       cote: publicCase.cote,
       lac_majeur: publicCase.lac_majeur,
       cours_eau_majeur: publicCase.cours_eau_majeur,
+      terrain_cat: publicCase.terrain_cat,
+      terrain_type: publicCase.terrain_type,
+      relief: publicCase.relief,
+      faction: publicCase.faction,
+      controleur: publicCase.controleur,
+      controle_type: publicCase.controle_type,
     };
   });
 }
@@ -143,6 +149,12 @@ function applyPersistedRecordToStableCase(
     cote: record.public.cote,
     lac_majeur: record.public.lac_majeur,
     cours_eau_majeur: record.public.cours_eau_majeur,
+    terrain_cat: record.public.terrain_cat,
+    terrain_type: record.public.terrain_type,
+    relief: record.public.relief,
+    faction: record.public.faction,
+    controleur: record.public.controleur,
+    controle_type: record.public.controle_type,
   };
 }
 

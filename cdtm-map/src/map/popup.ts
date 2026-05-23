@@ -15,13 +15,7 @@ export type CaseProperties = {
   empl_max?: number | null;
   controleur?: string | null;
   controle_type?: string | null;
-  note_publique?: string | null;
-  note_staff?: string | null;
   [key: string]: unknown;
-};
-
-export type PopupOptions = {
-  includeStaff?: boolean;
 };
 
 function escapeHtml(value: unknown): string {
@@ -56,10 +50,7 @@ function renderRow(label: string, value: unknown): string {
   return `<dt>${escapeHtml(label)}</dt><dd>${formatValue(value)}</dd>`;
 }
 
-export function buildCasePopup(
-  properties: CaseProperties = {},
-  options: PopupOptions = {}
-): string {
+export function buildCasePopup(properties: CaseProperties = {}): string {
   const rows = [
     renderRow("Case", properties.id_case ?? "case_inconnue"),
     renderRow("Région", properties.region),
@@ -76,12 +67,7 @@ export function buildCasePopup(
     renderRow("Emplacements", formatEmplacements(properties)),
     renderRow("Contrôleur", properties.controleur),
     renderRow("Type de contrôle", properties.controle_type),
-    renderRow("Note publique", properties.note_publique),
   ];
-
-  if (options.includeStaff) {
-    rows.push(renderRow("Note staff", properties.note_staff));
-  }
 
   return `<section class="case-popup"><dl>${rows.join("")}</dl></section>`;
 }

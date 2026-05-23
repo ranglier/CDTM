@@ -3,11 +3,6 @@ import type {
   ReferenceOption,
 } from "@/admin/tech-types";
 
-export type PublicCaseSupplement = {
-  id_case: string;
-  note_publique: string | null;
-};
-
 export type PublicCaseProperties = {
   registry_id_case: string;
   id_case: string;
@@ -16,12 +11,12 @@ export type PublicCaseProperties = {
   cote: boolean | null;
   lac_majeur: boolean | null;
   cours_eau_majeur: boolean | null;
-  terrain_cat?: string | null;
-  terrain_type?: string | null;
-  relief?: string | null;
-  faction?: string | null;
-  controleur?: string | null;
-  controle_type?: string | null;
+  terrain_cat: string | null;
+  terrain_type: string | null;
+  relief: string | null;
+  faction: string | null;
+  controleur: string | null;
+  controle_type: string | null;
 };
 
 export type AdminBlockMeta = {
