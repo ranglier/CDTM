@@ -107,7 +107,12 @@ export async function PUT(
     }
 
     const message = error instanceof Error ? error.message : "Enregistrement admin impossible.";
-    const status = message.includes("invalide") || message.includes("requiert") ? 400 : 500;
+    const status =
+      message.includes("invalide") ||
+      message.includes("requiert") ||
+      message.includes("utilisee")
+        ? 400
+        : 500;
 
     return NextResponse.json(
       {

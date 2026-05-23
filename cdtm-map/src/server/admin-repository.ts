@@ -6,12 +6,23 @@ import {
   createEmptyAdminCaseDraft,
   type AdminCaseDraft,
   type AdminCaseRecord,
+  type PublicCaseProperties,
   type PublicCaseSupplement,
 } from "@/admin/types";
+import type { StableCaseProperties } from "@/map/types";
 import { ensureDatabaseReady, getPool } from "@/server/db";
+import { loadStableCaseIndex } from "@/server/stable-case-source";
 
 type CaseLookupRow = {
   id_case: string;
+  public_id_case: string | null;
+  region: string | null;
+  sous_region: string | null;
+  cote: boolean | null;
+  lac_majeur: boolean | null;
+  cours_eau_majeur: boolean | null;
+  public_updated_at: string | null;
+  public_updated_by: string | null;
   note_publique: string | null;
   note_staff: string | null;
   notes_updated_at: string | null;
@@ -28,43 +39,40 @@ type CaseLookupRow = {
   control_updated_by: string | null;
 };
 
+type PublicLookupRow = {
+  id_case: string;
+  public_id_case: string | null;
+  region: string | null;
+  sous_region: string | null;
+  cote: boolean | null;
+  lac_majeur: boolean | null;
+  cours_eau_majeur: boolean | null;
+};
+
+type EditableSectionPatch = Record<string, string | boolean | null | undefined>;
+
 export class AdminCaseNotFoundError extends Error {
   constructor(idCase: string) {
     super(`La case ${idCase} est introuvable.`);
   }
 }
 
-function createEmptyAdminRecord(idCase: string): AdminCaseRecord {
-  const draft = createEmptyAdminCaseDraft();
-
+function createSourceFallback(idCase: string): StableCaseProperties {
   return {
+    registry_id_case: idCase,
     id_case: idCase,
-    notes: {
-      note_publique: draft.notes.note_publique || null,
-      note_staff: draft.notes.note_staff || null,
-      meta: {
-        updated_at: null,
-        updated_by: null,
-      },
-    },
-    terrain: {
-      terrain_cat: draft.terrain.terrain_cat || null,
-      terrain_type: draft.terrain.terrain_type || null,
-      relief: draft.terrain.relief || null,
-      meta: {
-        updated_at: null,
-        updated_by: null,
-      },
-    },
-    control: {
-      faction: draft.control.faction || null,
-      controleur: draft.control.controleur || null,
-      controle_type: draft.control.controle_type || null,
-      meta: {
-        updated_at: null,
-        updated_by: null,
-      },
-    },
+    region: null,
+    sous_region: null,
+    cote: null,
+    lac_majeur: null,
+    cours_eau_majeur: null,
+  };
+}
+
+function createEmptyPublicMeta() {
+  return {
+    updated_at: null,
+    updated_by: null,
   };
 }
 
@@ -76,9 +84,110 @@ function toIsoStringOrNull(value: string | Date | null): string | null {
   return new Date(value).toISOString();
 }
 
-function mapCaseLookupRow(row: CaseLookupRow): AdminCaseRecord {
+function normalizeNullableField(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizePublicId(value: string, registryId: string): string | null {
+  const normalized = normalizeNullableField(value);
+
+  if (!normalized || normalized === registryId) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function getPresentEntries<T extends EditableSectionPatch>(
+  value: T,
+): Array<[keyof T & string, string | boolean | null]> {
+  return Object.entries(value).filter(
+    (entry): entry is [keyof T & string, string | boolean | null] => {
+      const [key, currentValue] = entry;
+
+      return Object.prototype.hasOwnProperty.call(value, key) && currentValue !== undefined;
+    },
+  );
+}
+
+function mergePublicCaseProperties(
+  sourceCase: StableCaseProperties,
+  row: Pick<
+    PublicLookupRow,
+    | "id_case"
+    | "public_id_case"
+    | "region"
+    | "sous_region"
+    | "cote"
+    | "lac_majeur"
+    | "cours_eau_majeur"
+  >,
+): PublicCaseProperties {
+  const registryId = row.id_case;
+
+  return {
+    registry_id_case: registryId,
+    id_case: row.public_id_case ?? sourceCase.id_case,
+    region: row.region ?? sourceCase.region ?? null,
+    sous_region: row.sous_region ?? sourceCase.sous_region ?? null,
+    cote: row.cote ?? sourceCase.cote ?? null,
+    lac_majeur: row.lac_majeur ?? sourceCase.lac_majeur ?? null,
+    cours_eau_majeur: row.cours_eau_majeur ?? sourceCase.cours_eau_majeur ?? null,
+  };
+}
+
+function createEmptyAdminRecord(
+  idCase: string,
+  sourceCase: StableCaseProperties,
+): AdminCaseRecord {
+  const draft = createEmptyAdminCaseDraft();
+
+  return {
+    id_case: idCase,
+    public: {
+      ...mergePublicCaseProperties(sourceCase, {
+        id_case: idCase,
+        public_id_case: null,
+        region: null,
+        sous_region: null,
+        cote: null,
+        lac_majeur: null,
+        cours_eau_majeur: null,
+      }),
+      meta: createEmptyPublicMeta(),
+    },
+    notes: {
+      note_publique: draft.notes.note_publique || null,
+      note_staff: draft.notes.note_staff || null,
+      meta: createEmptyPublicMeta(),
+    },
+    terrain: {
+      terrain_cat: draft.terrain.terrain_cat || null,
+      terrain_type: draft.terrain.terrain_type || null,
+      relief: draft.terrain.relief || null,
+      meta: createEmptyPublicMeta(),
+    },
+    control: {
+      faction: draft.control.faction || null,
+      controleur: draft.control.controleur || null,
+      controle_type: draft.control.controle_type || null,
+      meta: createEmptyPublicMeta(),
+    },
+  };
+}
+
+function mapCaseLookupRow(row: CaseLookupRow, sourceCase: StableCaseProperties): AdminCaseRecord {
   return {
     id_case: row.id_case,
+    public: {
+      ...mergePublicCaseProperties(sourceCase, row),
+      meta: {
+        updated_at: toIsoStringOrNull(row.public_updated_at),
+        updated_by: row.public_updated_by,
+      },
+    },
     notes: {
       note_publique: row.note_publique,
       note_staff: row.note_staff,
@@ -106,22 +215,6 @@ function mapCaseLookupRow(row: CaseLookupRow): AdminCaseRecord {
       },
     },
   };
-}
-
-function normalizeNullableField(value: string): string | null {
-  const trimmed = value.trim();
-
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function getPresentEntries<T extends Record<string, string | null | undefined>>(
-  value: T,
-): Array<[keyof T & string, string | null]> {
-  return Object.entries(value).filter((entry): entry is [keyof T & string, string | null] => {
-    const [key, currentValue] = entry;
-
-    return Object.prototype.hasOwnProperty.call(value, key) && currentValue !== undefined;
-  });
 }
 
 async function ensureCaseExists(client: PoolClient, idCase: string): Promise<void> {
@@ -158,11 +251,45 @@ async function ensureCasesExist(client: PoolClient, idCases: string[]): Promise<
   }
 }
 
+async function resolveRegistryCaseId(client: PoolClient, idCase: string): Promise<string> {
+  const directResult = await client.query<{ id_case: string }>(
+    `
+      SELECT id_case
+      FROM case_registry
+      WHERE id_case = $1
+    `,
+    [idCase],
+  );
+
+  if (directResult.rows[0]?.id_case) {
+    return directResult.rows[0].id_case;
+  }
+
+  const publicResult = await client.query<{ id_case: string }>(
+    `
+      SELECT id_case
+      FROM case_public_current
+      WHERE public_id_case = $1
+    `,
+    [idCase],
+  );
+
+  if (publicResult.rows[0]?.id_case) {
+    return publicResult.rows[0].id_case;
+  }
+
+  throw new AdminCaseNotFoundError(idCase);
+}
+
 async function applyCurrentSectionPatch(
   client: PoolClient,
-  tableName: "case_notes_current" | "case_terrain_current" | "case_control_current",
+  tableName:
+    | "case_public_current"
+    | "case_notes_current"
+    | "case_terrain_current"
+    | "case_control_current",
   idCase: string,
-  patch: Record<string, string | null | undefined>,
+  patch: EditableSectionPatch,
   userId: number,
 ): Promise<void> {
   const entries = getPresentEntries(patch);
@@ -195,10 +322,21 @@ async function applyCurrentSectionPatch(
 async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promise<AdminCaseRecord> {
   await ensureCaseExists(client, idCase);
 
+  const stableCaseIndex = await loadStableCaseIndex();
+  const sourceCase = stableCaseIndex.get(idCase) ?? createSourceFallback(idCase);
+
   const result = await client.query<CaseLookupRow>(
     `
       SELECT
         registry.id_case,
+        public_current.public_id_case,
+        public_current.region,
+        public_current.sous_region,
+        public_current.cote,
+        public_current.lac_majeur,
+        public_current.cours_eau_majeur,
+        public_current.updated_at AS public_updated_at,
+        public_user.username AS public_updated_by,
         notes.note_publique,
         notes.note_staff,
         notes.updated_at AS notes_updated_at,
@@ -214,6 +352,8 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
         control_current.updated_at AS control_updated_at,
         control_user.username AS control_updated_by
       FROM case_registry AS registry
+      LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
+      LEFT JOIN staff_users AS public_user ON public_user.id = public_current.updated_by_user_id
       LEFT JOIN case_notes_current AS notes ON notes.id_case = registry.id_case
       LEFT JOIN staff_users AS notes_user ON notes_user.id = notes.updated_by_user_id
       LEFT JOIN case_terrain_current AS terrain ON terrain.id_case = registry.id_case
@@ -225,7 +365,50 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
     [idCase],
   );
 
-  return result.rows[0] ? mapCaseLookupRow(result.rows[0]) : createEmptyAdminRecord(idCase);
+  return result.rows[0]
+    ? mapCaseLookupRow(result.rows[0], sourceCase)
+    : createEmptyAdminRecord(idCase, sourceCase);
+}
+
+export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
+  const stableCaseIndex = await loadStableCaseIndex();
+  const baseCases = Array.from(stableCaseIndex.values());
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return baseCases.map((stableCase) => ({
+      registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
+      id_case: stableCase.id_case,
+      region: stableCase.region ?? null,
+      sous_region: stableCase.sous_region ?? null,
+      cote: stableCase.cote ?? null,
+      lac_majeur: stableCase.lac_majeur ?? null,
+      cours_eau_majeur: stableCase.cours_eau_majeur ?? null,
+    }));
+  }
+
+  const result = await getPool().query<PublicLookupRow>(
+    `
+      SELECT
+        registry.id_case,
+        public_current.public_id_case,
+        public_current.region,
+        public_current.sous_region,
+        public_current.cote,
+        public_current.lac_majeur,
+        public_current.cours_eau_majeur
+      FROM case_registry AS registry
+      LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
+      ORDER BY registry.id_case
+    `,
+  );
+
+  return result.rows.map((row) =>
+    mergePublicCaseProperties(
+      stableCaseIndex.get(row.id_case) ?? createSourceFallback(row.id_case),
+      row,
+    ),
+  );
 }
 
 export async function getPublicCaseSupplement(idCase: string): Promise<PublicCaseSupplement> {
@@ -238,19 +421,26 @@ export async function getPublicCaseSupplement(idCase: string): Promise<PublicCas
     };
   }
 
-  const result = await getPool().query<{ note_publique: string | null }>(
-    `
-      SELECT note_publique
-      FROM case_notes_current
-      WHERE id_case = $1
-    `,
-    [idCase],
-  );
+  const client = await getPool().connect();
 
-  return {
-    id_case: idCase,
-    note_publique: result.rows[0]?.note_publique ?? null,
-  };
+  try {
+    const registryId = await resolveRegistryCaseId(client, idCase);
+    const result = await client.query<{ note_publique: string | null }>(
+      `
+        SELECT note_publique
+        FROM case_notes_current
+        WHERE id_case = $1
+      `,
+      [registryId],
+    );
+
+    return {
+      id_case: idCase,
+      note_publique: result.rows[0]?.note_publique ?? null,
+    };
+  } finally {
+    client.release();
+  }
 }
 
 export async function getAdminCaseRecord(idCase: string): Promise<AdminCaseRecord> {
@@ -286,82 +476,59 @@ export async function saveAdminCaseRecord(
     await client.query("BEGIN");
     await ensureCaseExists(client, idCase);
 
-    await client.query(
-      `
-        INSERT INTO case_notes_current (
-          id_case,
-          note_publique,
-          note_staff,
-          updated_by_user_id
-        )
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id_case) DO UPDATE
-        SET
-          note_publique = EXCLUDED.note_publique,
-          note_staff = EXCLUDED.note_staff,
-          updated_by_user_id = EXCLUDED.updated_by_user_id,
-          updated_at = NOW()
-      `,
-      [
-        idCase,
-        normalizeNullableField(draft.notes.note_publique),
-        normalizeNullableField(draft.notes.note_staff),
-        userId,
-      ],
+    await applyCurrentSectionPatch(
+      client,
+      "case_public_current",
+      idCase,
+      {
+        public_id_case: normalizePublicId(draft.public.id_case, idCase),
+        region: normalizeNullableField(draft.public.region),
+        sous_region: normalizeNullableField(draft.public.sous_region),
+        cote:
+          draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
+        lac_majeur:
+          draft.public.lac_majeur.length > 0 ? draft.public.lac_majeur === "true" : null,
+        cours_eau_majeur:
+          draft.public.cours_eau_majeur.length > 0
+            ? draft.public.cours_eau_majeur === "true"
+            : null,
+      },
+      userId,
     );
 
-    await client.query(
-      `
-        INSERT INTO case_terrain_current (
-          id_case,
-          terrain_cat,
-          terrain_type,
-          relief,
-          updated_by_user_id
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id_case) DO UPDATE
-        SET
-          terrain_cat = EXCLUDED.terrain_cat,
-          terrain_type = EXCLUDED.terrain_type,
-          relief = EXCLUDED.relief,
-          updated_by_user_id = EXCLUDED.updated_by_user_id,
-          updated_at = NOW()
-      `,
-      [
-        idCase,
-        normalizeNullableField(draft.terrain.terrain_cat),
-        normalizeNullableField(draft.terrain.terrain_type),
-        normalizeNullableField(draft.terrain.relief),
-        userId,
-      ],
+    await applyCurrentSectionPatch(
+      client,
+      "case_notes_current",
+      idCase,
+      {
+        note_publique: normalizeNullableField(draft.notes.note_publique),
+        note_staff: normalizeNullableField(draft.notes.note_staff),
+      },
+      userId,
     );
 
-    await client.query(
-      `
-        INSERT INTO case_control_current (
-          id_case,
-          faction,
-          controleur,
-          controle_type,
-          updated_by_user_id
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id_case) DO UPDATE
-        SET
-          faction = EXCLUDED.faction,
-          controleur = EXCLUDED.controleur,
-          controle_type = EXCLUDED.controle_type,
-          updated_by_user_id = EXCLUDED.updated_by_user_id,
-          updated_at = NOW()
-      `,
-      [
-        idCase,
-        normalizeNullableField(draft.control.faction),
-        normalizeNullableField(draft.control.controleur),
-        normalizeNullableField(draft.control.controle_type),
-        userId,
-      ],
+    await applyCurrentSectionPatch(
+      client,
+      "case_terrain_current",
+      idCase,
+      {
+        terrain_cat: normalizeNullableField(draft.terrain.terrain_cat),
+        terrain_type: normalizeNullableField(draft.terrain.terrain_type),
+        relief: normalizeNullableField(draft.terrain.relief),
+      },
+      userId,
+    );
+
+    await applyCurrentSectionPatch(
+      client,
+      "case_control_current",
+      idCase,
+      {
+        faction: normalizeNullableField(draft.control.faction),
+        controleur: normalizeNullableField(draft.control.controleur),
+        controle_type: normalizeNullableField(draft.control.controle_type),
+      },
+      userId,
     );
 
     const record = await selectAdminCaseRecord(client, idCase);
@@ -370,6 +537,16 @@ export async function saveAdminCaseRecord(
     return record;
   } catch (error) {
     await client.query("ROLLBACK");
+
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new Error("La valeur du champ id_case est deja utilisee.");
+    }
+
     throw error;
   } finally {
     client.release();
@@ -400,6 +577,10 @@ export async function saveAdminCaseBulkPatch(
     await ensureCasesExist(client, uniqueIds);
 
     for (const idCase of uniqueIds) {
+      if (patch.public) {
+        await applyCurrentSectionPatch(client, "case_public_current", idCase, patch.public, userId);
+      }
+
       if (patch.notes) {
         await applyCurrentSectionPatch(client, "case_notes_current", idCase, patch.notes, userId);
       }

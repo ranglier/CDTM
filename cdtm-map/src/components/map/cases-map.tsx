@@ -37,6 +37,7 @@ type CasesMapProps = {
   dataUrl: string;
   activeCaseId: string | null;
   selectedCaseIds: string[];
+  casePropertiesById: Record<string, StableCaseProperties>;
   focusCaseId: string | null;
   focusRequest: number;
   casesVisible: boolean;
@@ -64,6 +65,7 @@ export function CasesMap({
   dataUrl,
   activeCaseId,
   selectedCaseIds,
+  casePropertiesById,
   focusCaseId,
   focusRequest,
   casesVisible,
@@ -80,6 +82,7 @@ export function CasesMap({
   const casesVisibleRef = useRef(casesVisible);
   const activeCaseIdRef = useRef<string | null>(activeCaseId);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
+  const casePropertiesByIdRef = useRef(casePropertiesById);
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
 
   const view = useMemo(
@@ -135,6 +138,10 @@ export function CasesMap({
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
   }, [onCaseSelectionChange]);
+
+  useEffect(() => {
+    casePropertiesByIdRef.current = casePropertiesById;
+  }, [casePropertiesById]);
 
   useEffect(() => {
     activeCaseIdRef.current = activeCaseId;
@@ -247,10 +254,15 @@ export function CasesMap({
         return;
       }
 
-      onCaseSelectionChangeRef.current(
-        toStableCaseProperties(feature.getProperties()) ?? null,
-        isToggleSelection ? "toggle" : "replace",
-      );
+      const featureProperties = toStableCaseProperties(feature.getProperties());
+      const registryId =
+        typeof feature.getId() === "string"
+          ? feature.getId()
+          : featureProperties?.registry_id_case ?? featureProperties?.id_case ?? null;
+      const resolvedCase =
+        (registryId ? casePropertiesByIdRef.current[registryId] : null) ?? featureProperties ?? null;
+
+      onCaseSelectionChangeRef.current(resolvedCase, isToggleSelection ? "toggle" : "replace");
     });
 
     sourceRef.current = source;

@@ -11,6 +11,8 @@ import {
   type AdminCaseDraft,
 } from "@/admin/types";
 
+const booleanDraftOptions = ["", "true", "false"] as const;
+
 function ensurePlainObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Le corps de requete admin est invalide.");
@@ -27,6 +29,24 @@ function normalizeNullableText(value: unknown): string | null {
   const normalized = normalizeText(value);
 
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeBooleanDraftValue(value: unknown): string {
+  const normalized = normalizeText(value);
+
+  if ((booleanDraftOptions as readonly string[]).includes(normalized)) {
+    return normalized;
+  }
+
+  throw new Error("La valeur d'un champ booleen est invalide.");
+}
+
+function parseNullableBooleanFromDraft(value: string | null): boolean | null {
+  if (value === null || value.length === 0) {
+    return null;
+  }
+
+  return value === "true";
 }
 
 function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
@@ -46,11 +66,20 @@ function assertAllowedOption(
 export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const payload = ensurePlainObject(value);
   const emptyDraft = createEmptyAdminCaseDraft();
+  const publicFields = ensurePlainObject(payload.public ?? emptyDraft.public);
   const notes = ensurePlainObject(payload.notes ?? emptyDraft.notes);
   const terrain = ensurePlainObject(payload.terrain ?? emptyDraft.terrain);
   const control = ensurePlainObject(payload.control ?? emptyDraft.control);
 
   const draft: AdminCaseDraft = {
+    public: {
+      id_case: normalizeText(publicFields.id_case),
+      region: normalizeText(publicFields.region),
+      sous_region: normalizeText(publicFields.sous_region),
+      cote: normalizeBooleanDraftValue(publicFields.cote),
+      lac_majeur: normalizeBooleanDraftValue(publicFields.lac_majeur),
+      cours_eau_majeur: normalizeBooleanDraftValue(publicFields.cours_eau_majeur),
+    },
     notes: {
       note_publique: normalizeText(notes.note_publique),
       note_staff: normalizeText(notes.note_staff),
@@ -93,10 +122,45 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
 export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
   const payload = ensurePlainObject(value);
   const patch = ensurePlainObject(payload.patch ?? payload);
+  const publicFields = patch.public ? ensurePlainObject(patch.public) : null;
   const notes = patch.notes ? ensurePlainObject(patch.notes) : null;
   const terrain = patch.terrain ? ensurePlainObject(patch.terrain) : null;
   const control = patch.control ? ensurePlainObject(patch.control) : null;
   const result: AdminBulkPatch = {};
+
+  if (publicFields) {
+    const publicPatch: NonNullable<AdminBulkPatch["public"]> = {};
+
+    if (hasOwnProperty(publicFields, "region")) {
+      publicPatch.region = normalizeNullableText(publicFields.region);
+    }
+
+    if (hasOwnProperty(publicFields, "sous_region")) {
+      publicPatch.sous_region = normalizeNullableText(publicFields.sous_region);
+    }
+
+    if (hasOwnProperty(publicFields, "cote")) {
+      publicPatch.cote = parseNullableBooleanFromDraft(
+        normalizeBooleanDraftValue(publicFields.cote),
+      );
+    }
+
+    if (hasOwnProperty(publicFields, "lac_majeur")) {
+      publicPatch.lac_majeur = parseNullableBooleanFromDraft(
+        normalizeBooleanDraftValue(publicFields.lac_majeur),
+      );
+    }
+
+    if (hasOwnProperty(publicFields, "cours_eau_majeur")) {
+      publicPatch.cours_eau_majeur = parseNullableBooleanFromDraft(
+        normalizeBooleanDraftValue(publicFields.cours_eau_majeur),
+      );
+    }
+
+    if (Object.keys(publicPatch).length > 0) {
+      result.public = publicPatch;
+    }
+  }
 
   if (notes) {
     const notesPatch: NonNullable<AdminBulkPatch["notes"]> = {};

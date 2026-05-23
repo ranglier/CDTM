@@ -17,6 +17,7 @@ import {
   type AdminCaseDraft,
   type AdminCaseRecord,
   type AdminSession,
+  type PublicCaseProperties,
 } from "@/admin/types";
 import { loadJsonData } from "@/data/loaders";
 import { getBaseLayers } from "@/map/layers";
@@ -73,8 +74,113 @@ function normalizeDraftValue(value: string | null | undefined): string {
   return typeof value === "string" ? value : "";
 }
 
+function normalizeDraftBooleanValue(value: boolean | null | undefined): string {
+  if (value === true) {
+    return "true";
+  }
+
+  if (value === false) {
+    return "false";
+  }
+
+  return "";
+}
+
+function parseDraftBooleanValue(value: string): boolean | null {
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return null;
+}
+
+function getRegistryCaseId(stableCase: StableCaseProperties): string {
+  return stableCase.registry_id_case ?? stableCase.id_case;
+}
+
+function mergeStableCases(
+  baseCases: StableCaseProperties[],
+  publicCases: PublicCaseProperties[],
+): StableCaseProperties[] {
+  const publicCasesByRegistryId = new Map(
+    publicCases.map((publicCase) => [publicCase.registry_id_case, publicCase]),
+  );
+
+  return baseCases.map((stableCase) => {
+    const registryId = getRegistryCaseId(stableCase);
+    const publicCase = publicCasesByRegistryId.get(registryId);
+
+    if (!publicCase) {
+      return stableCase;
+    }
+
+    return {
+      registry_id_case: registryId,
+      id_case: publicCase.id_case,
+      region: publicCase.region,
+      sous_region: publicCase.sous_region,
+      cote: publicCase.cote,
+      lac_majeur: publicCase.lac_majeur,
+      cours_eau_majeur: publicCase.cours_eau_majeur,
+    };
+  });
+}
+
+function applySingleDraftToStableCase(
+  stableCase: StableCaseProperties,
+  draft: AdminCaseDraft,
+): StableCaseProperties {
+  return {
+    registry_id_case: getRegistryCaseId(stableCase),
+    id_case: draft.public.id_case.trim() || getRegistryCaseId(stableCase),
+    region: draft.public.region.trim() || null,
+    sous_region: draft.public.sous_region.trim() || null,
+    cote: parseDraftBooleanValue(draft.public.cote),
+    lac_majeur: parseDraftBooleanValue(draft.public.lac_majeur),
+    cours_eau_majeur: parseDraftBooleanValue(draft.public.cours_eau_majeur),
+  };
+}
+
+function applyBulkPatchToStableCase(
+  stableCase: StableCaseProperties,
+  patch: AdminBulkPatch,
+): StableCaseProperties {
+  return {
+    ...stableCase,
+    region:
+      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "region")
+        ? patch.public.region ?? null
+        : stableCase.region ?? null,
+    sous_region:
+      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "sous_region")
+        ? patch.public.sous_region ?? null
+        : stableCase.sous_region ?? null,
+    cote:
+      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "cote")
+        ? patch.public.cote ?? null
+        : stableCase.cote ?? null,
+    lac_majeur:
+      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "lac_majeur")
+        ? patch.public.lac_majeur ?? null
+        : stableCase.lac_majeur ?? null,
+    cours_eau_majeur:
+      patch.public && Object.prototype.hasOwnProperty.call(patch.public, "cours_eau_majeur")
+        ? patch.public.cours_eau_majeur ?? null
+        : stableCase.cours_eau_majeur ?? null,
+  };
+}
+
 function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
   return [
+    draft.public.region,
+    draft.public.sous_region,
+    draft.public.cote,
+    draft.public.lac_majeur,
+    draft.public.cours_eau_majeur,
     draft.notes.note_publique,
     draft.notes.note_staff,
     draft.terrain.terrain_cat,
@@ -103,6 +209,17 @@ function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
   }
 
   return {
+    public: {
+      region: buildBulkFieldState(records.map((record) => record.public.region)),
+      sous_region: buildBulkFieldState(records.map((record) => record.public.sous_region)),
+      cote: buildBulkFieldState(records.map((record) => normalizeDraftBooleanValue(record.public.cote))),
+      lac_majeur: buildBulkFieldState(
+        records.map((record) => normalizeDraftBooleanValue(record.public.lac_majeur)),
+      ),
+      cours_eau_majeur: buildBulkFieldState(
+        records.map((record) => normalizeDraftBooleanValue(record.public.cours_eau_majeur)),
+      ),
+    },
     notes: {
       note_publique: buildBulkFieldState(records.map((record) => record.notes.note_publique)),
       note_staff: buildBulkFieldState(records.map((record) => record.notes.note_staff)),
@@ -122,6 +239,42 @@ function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
 
 function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
   const patch: AdminBulkPatch = {};
+
+  if (
+    draft.public.region.touched ||
+    draft.public.sous_region.touched ||
+    draft.public.cote.touched ||
+    draft.public.lac_majeur.touched ||
+    draft.public.cours_eau_majeur.touched
+  ) {
+    patch.public = {};
+
+    if (draft.public.region.touched) {
+      patch.public.region =
+        draft.public.region.value.trim().length > 0 ? draft.public.region.value.trim() : null;
+    }
+
+    if (draft.public.sous_region.touched) {
+      patch.public.sous_region =
+        draft.public.sous_region.value.trim().length > 0
+          ? draft.public.sous_region.value.trim()
+          : null;
+    }
+
+    if (draft.public.cote.touched) {
+      patch.public.cote = parseDraftBooleanValue(draft.public.cote.value);
+    }
+
+    if (draft.public.lac_majeur.touched) {
+      patch.public.lac_majeur = parseDraftBooleanValue(draft.public.lac_majeur.value);
+    }
+
+    if (draft.public.cours_eau_majeur.touched) {
+      patch.public.cours_eau_majeur = parseDraftBooleanValue(
+        draft.public.cours_eau_majeur.value,
+      );
+    }
+  }
 
   if (draft.notes.note_publique.touched || draft.notes.note_staff.touched) {
     patch.notes = {};
@@ -253,7 +406,14 @@ export default function HomePage() {
   const [adminError, setAdminError] = useState<string | null>(null);
 
   const stableCasesById = useMemo(
-    () => new Map(stableCases.map((item) => [item.id_case, item])),
+    () => new Map(stableCases.map((item) => [getRegistryCaseId(item), item])),
+    [stableCases],
+  );
+  const stableCasesByRegistryId = useMemo(
+    () =>
+      Object.fromEntries(
+        stableCases.map((item) => [getRegistryCaseId(item), item]),
+      ) as Record<string, StableCaseProperties>,
     [stableCases],
   );
   const availableCaseIds = useMemo(() => stableCases.map((item) => item.id_case), [stableCases]);
@@ -287,11 +447,26 @@ export default function HomePage() {
         : getDraftSnapshot(singleDraft) !== singleSnapshot
       : false;
 
-  const resetSingleAdminEditor = useCallback((record: AdminCaseRecord | null) => {
-    const nextDraft = toAdminCaseDraft(record);
+  const resetSingleAdminEditor = useCallback(
+    (record: AdminCaseRecord | null, stableCase: StableCaseProperties | null) => {
+      const nextDraft = toAdminCaseDraft(record);
+
+      if (stableCase) {
+        nextDraft.public = {
+          id_case: stableCase.id_case,
+          region: stableCase.region ?? "",
+          sous_region: stableCase.sous_region ?? "",
+          cote: normalizeDraftBooleanValue(stableCase.cote),
+          lac_majeur: normalizeDraftBooleanValue(stableCase.lac_majeur),
+          cours_eau_majeur: normalizeDraftBooleanValue(stableCase.cours_eau_majeur),
+        };
+      }
+
     setSingleDraft(nextDraft);
     setSingleSnapshot(getDraftSnapshot(nextDraft));
-  }, []);
+    },
+    [],
+  );
 
   const resetBulkAdminEditor = useCallback((records: AdminCaseRecord[]) => {
     setBulkDraft(buildBulkEditDraft(records));
@@ -359,7 +534,7 @@ export default function HomePage() {
 
       if (!visible) {
         applySelectionState(null, []);
-        resetSingleAdminEditor(null);
+        resetSingleAdminEditor(null, null);
         resetBulkAdminEditor([]);
       }
     },
@@ -371,7 +546,7 @@ export default function HomePage() {
       selectedCase: StableCaseProperties | null,
       intent: CaseSelectionIntent,
     ) => {
-      const nextCaseId = selectedCase?.id_case ?? null;
+      const nextCaseId = selectedCase ? getRegistryCaseId(selectedCase) : null;
 
       if (
         intent === "replace" &&
@@ -449,9 +624,9 @@ export default function HomePage() {
       setCasesVisible(true);
       setPanelVisible(true);
       setSearchValue(stableCase.id_case);
-      setFocusCaseId(stableCase.id_case);
+      setFocusCaseId(getRegistryCaseId(stableCase));
       setFocusRequest((value) => value + 1);
-      applySelectionState(stableCase.id_case, [stableCase.id_case]);
+      applySelectionState(getRegistryCaseId(stableCase), [getRegistryCaseId(stableCase)]);
     },
     [applySelectionState, confirmDiscardChanges, stableCases],
   );
@@ -500,7 +675,7 @@ export default function HomePage() {
       setAdminModeEnabled(false);
       setAdminPanelMode("read");
       setAdminError(null);
-      resetSingleAdminEditor(null);
+      resetSingleAdminEditor(null, null);
       resetBulkAdminEditor([]);
     }
   }, [confirmDiscardChanges, resetBulkAdminEditor, resetSingleAdminEditor]);
@@ -614,12 +789,13 @@ export default function HomePage() {
     if (isMultiSelection) {
       resetBulkAdminEditor(selectedAdminRecords);
     } else {
-      resetSingleAdminEditor(activeAdminRecord);
+      resetSingleAdminEditor(activeAdminRecord, activeCase);
     }
 
     setAdminError(null);
     setAdminPanelMode("edit");
   }, [
+    activeCase,
     activeAdminRecord,
     adminModeEnabled,
     adminSession.authenticated,
@@ -634,12 +810,19 @@ export default function HomePage() {
     if (isMultiSelection) {
       resetBulkAdminEditor(selectedAdminRecords);
     } else {
-      resetSingleAdminEditor(activeAdminRecord);
+      resetSingleAdminEditor(activeAdminRecord, activeCase);
     }
 
     setAdminError(null);
     setAdminPanelMode("read");
-  }, [activeAdminRecord, isMultiSelection, resetBulkAdminEditor, resetSingleAdminEditor, selectedAdminRecords]);
+  }, [
+    activeAdminRecord,
+    activeCase,
+    isMultiSelection,
+    resetBulkAdminEditor,
+    resetSingleAdminEditor,
+    selectedAdminRecords,
+  ]);
 
   const handleAdminSave = useCallback(async () => {
     if (!adminSession.authenticated || selectedCaseIds.length === 0) {
@@ -662,6 +845,13 @@ export default function HomePage() {
         });
 
         const refreshedRecords = await refreshAdminRecords(selectedCaseIds);
+        setStableCases((current) =>
+          current.map((stableCase) =>
+            selectedCaseIds.includes(getRegistryCaseId(stableCase))
+              ? applyBulkPatchToStableCase(stableCase, patch)
+              : stableCase,
+          ),
+        );
 
         resetBulkAdminEditor(refreshedRecords);
       } else {
@@ -680,7 +870,18 @@ export default function HomePage() {
           ...current,
           [record.id_case]: record,
         }));
-        resetSingleAdminEditor(record);
+        setStableCases((current) =>
+          current.map((stableCase) =>
+            getRegistryCaseId(stableCase) === currentCaseId
+              ? applySingleDraftToStableCase(stableCase, singleDraft)
+              : stableCase,
+          ),
+        );
+        setSearchValue(singleDraft.public.id_case.trim() || currentCaseId);
+        resetSingleAdminEditor(
+          record,
+          activeCase ? applySingleDraftToStableCase(activeCase, singleDraft) : record.public,
+        );
       }
 
       setAdminPanelMode("read");
@@ -690,6 +891,7 @@ export default function HomePage() {
       setAdminSaving(false);
     }
   }, [
+    activeCase,
     activeCaseId,
     adminSession.authenticated,
     bulkDraft,
@@ -706,14 +908,22 @@ export default function HomePage() {
 
     async function loadStableCases() {
       try {
-        const collection = await loadJsonData<StableCaseFeatureCollection>(casesLayer.sourcePath);
+        const [collection, publicCases] = await Promise.all([
+          loadJsonData<StableCaseFeatureCollection>(casesLayer.sourcePath),
+          fetchJson<PublicCaseProperties[]>("/api/cases/public-index").catch(() => []),
+        ]);
 
         if (!isStableCaseFeatureCollection(collection)) {
           throw new Error("Le GeoJSON des cases ne respecte pas le contrat attendu.");
         }
 
         if (!cancelled) {
-          setStableCases(collection.features.map((feature) => feature.properties));
+          const baseCases = collection.features.map((feature) => ({
+            ...feature.properties,
+            registry_id_case: feature.properties.id_case,
+          }));
+
+          setStableCases(mergeStableCases(baseCases, publicCases));
         }
       } catch (error) {
         if (!cancelled) {
@@ -837,6 +1047,7 @@ export default function HomePage() {
           dataUrl={casesLayer.sourcePath}
           activeCaseId={activeCaseId}
           selectedCaseIds={selectedCaseIds}
+          casePropertiesById={stableCasesByRegistryId}
           focusCaseId={focusCaseId}
           focusRequest={focusRequest}
           casesVisible={casesVisible}

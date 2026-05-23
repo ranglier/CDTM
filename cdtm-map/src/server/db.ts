@@ -1,14 +1,8 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 import { Pool } from "pg";
 
 import { getServerEnv } from "@/server/env";
 import { hashSecret } from "@/server/security";
-import {
-  type StableCaseFeatureCollection,
-  isStableCaseFeatureCollection,
-} from "@/map/types";
+import { loadStableCaseIndex } from "@/server/stable-case-source";
 
 type GlobalDatabaseState = typeof globalThis & {
   __cdtmPool?: Pool;
@@ -41,15 +35,7 @@ export function getPool(): Pool {
 }
 
 async function loadStableCaseIds(): Promise<string[]> {
-  const filePath = path.join(process.cwd(), "public/data/cases.geojson");
-  const fileContents = await readFile(filePath, "utf8");
-  const parsed = JSON.parse(fileContents) as StableCaseFeatureCollection;
-
-  if (!isStableCaseFeatureCollection(parsed)) {
-    throw new Error("public/data/cases.geojson does not match the stable case schema.");
-  }
-
-  return parsed.features.map((feature) => feature.properties.id_case).sort();
+  return Array.from((await loadStableCaseIndex()).keys()).sort();
 }
 
 async function syncCaseRegistry(pool: Pool): Promise<void> {
@@ -160,6 +146,20 @@ async function initializeDatabase(): Promise<boolean> {
         faction TEXT,
         controleur TEXT,
         controle_type TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS case_public_current (
+        id_case TEXT PRIMARY KEY REFERENCES case_registry(id_case) ON DELETE CASCADE,
+        public_id_case TEXT UNIQUE,
+        region TEXT,
+        sous_region TEXT,
+        cote BOOLEAN,
+        lac_majeur BOOLEAN,
+        cours_eau_majeur BOOLEAN,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

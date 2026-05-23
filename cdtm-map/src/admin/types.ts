@@ -3,9 +3,23 @@ export type PublicCaseSupplement = {
   note_publique: string | null;
 };
 
+export type PublicCaseProperties = {
+  registry_id_case: string;
+  id_case: string;
+  region: string | null;
+  sous_region: string | null;
+  cote: boolean | null;
+  lac_majeur: boolean | null;
+  cours_eau_majeur: boolean | null;
+};
+
 export type AdminBlockMeta = {
   updated_at: string | null;
   updated_by: string | null;
+};
+
+export type AdminPublicCaseRecord = PublicCaseProperties & {
+  meta: AdminBlockMeta;
 };
 
 export type AdminNotesRecord = {
@@ -30,12 +44,21 @@ export type AdminControlRecord = {
 
 export type AdminCaseRecord = {
   id_case: string;
+  public: AdminPublicCaseRecord;
   notes: AdminNotesRecord;
   terrain: AdminTerrainRecord;
   control: AdminControlRecord;
 };
 
 export type AdminCaseDraft = {
+  public: {
+    id_case: string;
+    region: string;
+    sous_region: string;
+    cote: string;
+    lac_majeur: string;
+    cours_eau_majeur: string;
+  };
   notes: {
     note_publique: string;
     note_staff: string;
@@ -59,6 +82,13 @@ export type AdminBulkEditFieldState = {
 };
 
 export type AdminBulkEditDraft = {
+  public: {
+    region: AdminBulkEditFieldState;
+    sous_region: AdminBulkEditFieldState;
+    cote: AdminBulkEditFieldState;
+    lac_majeur: AdminBulkEditFieldState;
+    cours_eau_majeur: AdminBulkEditFieldState;
+  };
   notes: {
     note_publique: AdminBulkEditFieldState;
     note_staff: AdminBulkEditFieldState;
@@ -76,6 +106,13 @@ export type AdminBulkEditDraft = {
 };
 
 export type AdminBulkPatch = {
+  public?: {
+    region?: string | null;
+    sous_region?: string | null;
+    cote?: boolean | null;
+    lac_majeur?: boolean | null;
+    cours_eau_majeur?: boolean | null;
+  };
   notes?: {
     note_publique?: string | null;
     note_staff?: string | null;
@@ -110,8 +147,28 @@ function createEmptyBulkFieldState(): AdminBulkEditFieldState {
   };
 }
 
+function booleanToDraftValue(value: boolean | null | undefined): string {
+  if (value === true) {
+    return "true";
+  }
+
+  if (value === false) {
+    return "false";
+  }
+
+  return "";
+}
+
 export function createEmptyAdminCaseDraft(): AdminCaseDraft {
   return {
+    public: {
+      id_case: "",
+      region: "",
+      sous_region: "",
+      cote: "",
+      lac_majeur: "",
+      cours_eau_majeur: "",
+    },
     notes: {
       note_publique: "",
       note_staff: "",
@@ -131,6 +188,13 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
 
 export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
   return {
+    public: {
+      region: createEmptyBulkFieldState(),
+      sous_region: createEmptyBulkFieldState(),
+      cote: createEmptyBulkFieldState(),
+      lac_majeur: createEmptyBulkFieldState(),
+      cours_eau_majeur: createEmptyBulkFieldState(),
+    },
     notes: {
       note_publique: createEmptyBulkFieldState(),
       note_staff: createEmptyBulkFieldState(),
@@ -154,6 +218,14 @@ export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft
   }
 
   return {
+    public: {
+      id_case: record.public.id_case,
+      region: record.public.region ?? "",
+      sous_region: record.public.sous_region ?? "",
+      cote: booleanToDraftValue(record.public.cote),
+      lac_majeur: booleanToDraftValue(record.public.lac_majeur),
+      cours_eau_majeur: booleanToDraftValue(record.public.cours_eau_majeur),
+    },
     notes: {
       note_publique: record.notes.note_publique ?? "",
       note_staff: record.notes.note_staff ?? "",

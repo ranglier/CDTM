@@ -1,4 +1,5 @@
 export type StableCaseProperties = {
+  registry_id_case?: string | null;
   id_case: string;
   region?: string | null;
   sous_region?: string | null;
@@ -50,6 +51,7 @@ export function isStableCaseProperties(value: unknown): value is StableCasePrope
   }
 
   return (
+    isNullableString(value.registry_id_case) &&
     typeof value.id_case === "string" &&
     value.id_case.trim().length > 0 &&
     isNullableString(value.region) &&
@@ -95,6 +97,10 @@ export function toStableCaseProperties(
   }
 
   return {
+    registry_id_case:
+      typeof value.registry_id_case === "string" && value.registry_id_case.trim().length > 0
+        ? value.registry_id_case
+        : value.id_case,
     id_case: value.id_case,
     region: value.region ?? null,
     sous_region: value.sous_region ?? null,
