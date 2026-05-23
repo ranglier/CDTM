@@ -6,6 +6,12 @@ export type StableCaseProperties = {
   cote?: boolean | null;
   lac_majeur?: boolean | null;
   cours_eau_majeur?: boolean | null;
+  terrain_cat?: string | null;
+  terrain_type?: string | null;
+  relief?: string | null;
+  faction?: string | null;
+  controleur?: string | null;
+  controle_type?: string | null;
 };
 
 export type StableCaseGeometry =
@@ -58,7 +64,13 @@ export function isStableCaseProperties(value: unknown): value is StableCasePrope
     isNullableString(value.sous_region) &&
     isNullableBoolean(value.cote) &&
     isNullableBoolean(value.lac_majeur) &&
-    isNullableBoolean(value.cours_eau_majeur)
+    isNullableBoolean(value.cours_eau_majeur) &&
+    isNullableString(value.terrain_cat) &&
+    isNullableString(value.terrain_type) &&
+    isNullableString(value.relief) &&
+    isNullableString(value.faction) &&
+    isNullableString(value.controleur) &&
+    isNullableString(value.controle_type)
   );
 }
 
@@ -107,5 +119,11 @@ export function toStableCaseProperties(
     cote: value.cote ?? null,
     lac_majeur: value.lac_majeur ?? null,
     cours_eau_majeur: value.cours_eau_majeur ?? null,
+    terrain_cat: value.terrain_cat ?? null,
+    terrain_type: value.terrain_type ?? null,
+    relief: value.relief ?? null,
+    faction: value.faction ?? null,
+    controleur: value.controleur ?? null,
+    controle_type: value.controle_type ?? null,
   };
 }
