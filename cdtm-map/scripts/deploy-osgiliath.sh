@@ -79,7 +79,13 @@ else
     --exclude='./.env.*' \
     -C "${APP_DIR}" \
     -czf - \
-    . | ssh_cmd "${REMOTE}" "tar -xzf - -C '${DEPLOY_PATH}'"
+    . | ssh_cmd "${REMOTE}" "set -eu; \
+      tmp_dir=\$(mktemp -d); \
+      trap 'rm -rf \"\$tmp_dir\"' EXIT HUP INT TERM; \
+      tar -xzf - -C \"\$tmp_dir\"; \
+      find '${DEPLOY_PATH}' -mindepth 1 -maxdepth 1 ! -name '.env' -exec rm -rf {} +; \
+      cp -a \"\$tmp_dir\"/. '${DEPLOY_PATH}'/; \
+      rm -rf \"\$tmp_dir\""
 fi
 
 echo "Checking remote environment file"
