@@ -17,7 +17,6 @@ import {
   type AdminCaseDraft,
   type AdminCaseRecord,
   type AdminSession,
-  type PublicCaseSupplement,
 } from "@/admin/types";
 import { loadJsonData } from "@/data/loaders";
 import { getBaseLayers } from "@/map/layers";
@@ -34,6 +33,30 @@ type LoginPayload = {
 };
 
 type AdminPanelMode = "read" | "edit";
+
+function resolveCaseSearchMatch(
+  stableCases: StableCaseProperties[],
+  rawQuery: string,
+): StableCaseProperties | null {
+  const query = rawQuery.trim().toLowerCase();
+
+  if (query.length === 0) {
+    return null;
+  }
+
+  const exactMatch =
+    stableCases.find((stableCase) => stableCase.id_case.toLowerCase() === query) ?? null;
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const prefixMatches = stableCases.filter((stableCase) =>
+    stableCase.id_case.toLowerCase().startsWith(query),
+  );
+
+  return prefixMatches.length === 1 ? prefixMatches[0] : null;
+}
 
 function createLoggedOutSession(): AdminSession {
   return {
@@ -211,8 +234,6 @@ export default function HomePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [focusCaseId, setFocusCaseId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [publicSupplement, setPublicSupplement] = useState<PublicCaseSupplement | null>(null);
-  const [publicSupplementPending, setPublicSupplementPending] = useState(false);
   const [adminSession, setAdminSession] = useState<AdminSession>(createLoggedOutSession());
   const [adminModeEnabled, setAdminModeEnabled] = useState(false);
   const [adminPanelMode, setAdminPanelMode] = useState<AdminPanelMode>("read");
@@ -280,10 +301,7 @@ export default function HomePage() {
     (nextActiveCaseId: string | null, nextSelectedCaseIds: string[]) => {
       setActiveCaseId(nextActiveCaseId);
       setSelectedCaseIds(nextSelectedCaseIds);
-      setSearchValue(nextActiveCaseId ?? "");
       setSearchError(null);
-      setPublicSupplement(null);
-      setPublicSupplementPending(Boolean(nextActiveCaseId));
       setAdminError(null);
       setAdminPanelMode("read");
     },
@@ -341,7 +359,6 @@ export default function HomePage() {
 
       if (!visible) {
         applySelectionState(null, []);
-        setPublicSupplementPending(false);
         resetSingleAdminEditor(null);
         resetBulkAdminEditor([]);
       }
@@ -355,6 +372,18 @@ export default function HomePage() {
       intent: CaseSelectionIntent,
     ) => {
       const nextCaseId = selectedCase?.id_case ?? null;
+
+      if (
+        intent === "replace" &&
+        ((nextCaseId === null && selectedCaseIds.length === 0 && activeCaseId === null) ||
+          (nextCaseId !== null &&
+            activeCaseId === nextCaseId &&
+            selectedCaseIds.length === 1 &&
+            selectedCaseIds[0] === nextCaseId))
+      ) {
+        return;
+      }
+
       const selectionWillChange =
         intent === "replace"
           ? nextCaseId !== activeCaseId || selectedCaseIds.length > (nextCaseId ? 1 : 0)
@@ -371,11 +400,6 @@ export default function HomePage() {
 
       if (intent === "replace") {
         applySelectionState(nextCaseId, nextCaseId ? [nextCaseId] : []);
-
-        if (!nextCaseId) {
-          setPublicSupplementPending(false);
-        }
-
         return;
       }
 
@@ -395,22 +419,19 @@ export default function HomePage() {
           : nextCaseId;
 
         setActiveCaseId(nextActiveCaseId);
-        setSearchValue(nextActiveCaseId ?? "");
         setSearchError(null);
-        setPublicSupplement(null);
-        setPublicSupplementPending(Boolean(nextActiveCaseId));
         setAdminError(null);
         setAdminPanelMode("read");
 
         return nextSelectedCaseIds;
       });
     },
-    [activeCaseId, applySelectionState, confirmDiscardChanges, selectedCaseIds.length],
+    [activeCaseId, applySelectionState, confirmDiscardChanges, selectedCaseIds],
   );
 
   const focusOnCase = useCallback(
-    (caseId: string) => {
-      const stableCase = stableCasesById.get(caseId);
+    (query: string) => {
+      const stableCase = resolveCaseSearchMatch(stableCases, query);
 
       if (!stableCase) {
         setSearchError("Aucune case ne correspond a cet id_case.");
@@ -427,11 +448,12 @@ export default function HomePage() {
 
       setCasesVisible(true);
       setPanelVisible(true);
-      setFocusCaseId(caseId);
+      setSearchValue(stableCase.id_case);
+      setFocusCaseId(stableCase.id_case);
       setFocusRequest((value) => value + 1);
-      applySelectionState(caseId, [caseId]);
+      applySelectionState(stableCase.id_case, [stableCase.id_case]);
     },
-    [applySelectionState, confirmDiscardChanges, stableCasesById],
+    [applySelectionState, confirmDiscardChanges, stableCases],
   );
 
   const handleLoginSubmit = useCallback(async (payload: LoginPayload) => {
@@ -641,19 +663,6 @@ export default function HomePage() {
 
         const refreshedRecords = await refreshAdminRecords(selectedCaseIds);
 
-        if (activeCaseId) {
-          const refreshedActiveRecord = refreshedRecords.find(
-            (record) => record.id_case === activeCaseId,
-          );
-
-          if (refreshedActiveRecord) {
-            setPublicSupplement({
-              id_case: refreshedActiveRecord.id_case,
-              note_publique: refreshedActiveRecord.notes.note_publique,
-            });
-          }
-        }
-
         resetBulkAdminEditor(refreshedRecords);
       } else {
         const currentCaseId = activeCaseId;
@@ -672,10 +681,6 @@ export default function HomePage() {
           [record.id_case]: record,
         }));
         resetSingleAdminEditor(record);
-        setPublicSupplement({
-          id_case: record.id_case,
-          note_publique: record.notes.note_publique,
-        });
       }
 
       setAdminPanelMode("read");
@@ -747,47 +752,6 @@ export default function HomePage() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!activeCase) {
-      return;
-    }
-
-    const selectedCaseId = activeCase.id_case;
-    let cancelled = false;
-
-    async function loadPublicSupplement() {
-      setPublicSupplementPending(true);
-
-      try {
-        const supplement = await fetchJson<PublicCaseSupplement>(
-          `/api/cases/${selectedCaseId}/public`,
-        );
-
-        if (!cancelled) {
-          setPublicSupplement(supplement);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Impossible de charger la note publique.", error);
-          setPublicSupplement({
-            id_case: selectedCaseId,
-            note_publique: null,
-          });
-        }
-      } finally {
-        if (!cancelled) {
-          setPublicSupplementPending(false);
-        }
-      }
-    }
-
-    void loadPublicSupplement();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeCase]);
 
   useEffect(() => {
     if (!adminModeEnabled || !adminSession.authenticated || selectedCaseIds.length === 0) {
@@ -889,8 +853,6 @@ export default function HomePage() {
             selectedCaseIds={selectedCaseIds}
             totalCases={totalCases}
             casesVisible={casesVisible}
-            publicSupplement={publicSupplement}
-            publicSupplementPending={publicSupplementPending}
             adminModeEnabled={adminModeEnabled}
             adminPanelMode={adminPanelMode}
             activeAdminRecord={activeAdminRecord}

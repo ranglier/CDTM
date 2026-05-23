@@ -10,7 +10,6 @@ import type {
   AdminBulkEditDraft,
   AdminCaseDraft,
   AdminCaseRecord,
-  PublicCaseSupplement,
 } from "@/admin/types";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
@@ -25,8 +24,6 @@ type CaseInfoPanelProps = {
   selectedCaseIds: string[];
   totalCases?: number;
   casesVisible: boolean;
-  publicSupplement: PublicCaseSupplement | null;
-  publicSupplementPending: boolean;
   adminModeEnabled: boolean;
   adminPanelMode: AdminPanelMode;
   activeAdminRecord: AdminCaseRecord | null;
@@ -164,45 +161,17 @@ function summarizeMeta(metas: AdminBlockMeta[]): string {
   return `Derniere sauvegarde ${formatMeta(latestMeta)}`;
 }
 
-function ReadValue({
+function CompactInfoRow({
   label,
   value,
-  compact = false,
 }: {
   label: string;
   value: string;
-  compact?: boolean;
 }) {
   return (
-    <div className="rounded-[20px] border border-border/70 bg-background/40 p-4">
+    <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 last:border-b-0 last:pb-0 first:pt-0">
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p
-        className={
-          compact
-            ? "mt-2 text-sm font-medium text-foreground"
-            : "mt-2 text-sm leading-6 text-foreground"
-        }
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-[22px] border border-border/70 bg-background/40 p-4">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-foreground">{value}</p>
-      {hint ? <p className="mt-1 text-sm text-muted-foreground">{hint}</p> : null}
+      <p className="text-right text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
@@ -415,15 +384,9 @@ function buildAdminReadSummary(
   selectedCaseIds: string[],
   activeAdminRecord: AdminCaseRecord | null,
   selectedAdminRecords: AdminCaseRecord[],
-  publicSupplement: PublicCaseSupplement | null,
 ) {
-  const isMultiSelection = selectedCaseIds.length > 1;
   const hasEveryAdminRecord =
     selectedAdminRecords.length > 0 && selectedAdminRecords.length === selectedCaseIds.length;
-
-  const publicNoteSummary = hasEveryAdminRecord
-    ? summarizeStrings(selectedAdminRecords.map((record) => record.notes.note_publique))
-    : summarizeStrings([publicSupplement?.note_publique]);
 
   const staffNoteSummary = hasEveryAdminRecord
     ? summarizeStrings(selectedAdminRecords.map((record) => record.notes.note_staff))
@@ -454,7 +417,6 @@ function buildAdminReadSummary(
     : summarizeStrings([activeAdminRecord?.control.controle_type]);
 
   return {
-    publicNoteSummary,
     staffNoteSummary,
     terrainCatSummary,
     terrainTypeSummary,
@@ -471,8 +433,6 @@ function buildAdminReadSummary(
     controlMeta: hasEveryAdminRecord
       ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta))
       : formatMeta(activeAdminRecord?.control.meta ?? { updated_at: null, updated_by: null }),
-    hasEveryAdminRecord,
-    isMultiSelection,
   };
 }
 
@@ -498,8 +458,6 @@ export function CaseInfoPanel({
   selectedCaseIds,
   totalCases = 0,
   casesVisible,
-  publicSupplement,
-  publicSupplementPending,
   adminModeEnabled,
   adminPanelMode,
   activeAdminRecord,
@@ -528,7 +486,6 @@ export function CaseInfoPanel({
     selectedCaseIds,
     activeAdminRecord,
     selectedAdminRecords,
-    publicSupplement,
   );
   const singleTerrainTypeOptions = getTerrainTypesForCategory(singleDraft.terrain.terrain_cat);
   const bulkTerrainCategory =
@@ -581,22 +538,10 @@ export function CaseInfoPanel({
           ) : adminModeEnabled && adminPanelMode === "edit" ? (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
               <div className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary">
-                      {isMultiSelection ? "Edition de masse" : "Edition"}
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-foreground">
-                      {isMultiSelection
-                        ? `${selectedCaseIds.length} cases selectionnees`
-                        : activeCase?.id_case ?? "Case active"}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {isMultiSelection
-                        ? "Seuls les champs modifies seront appliques a toute la selection."
-                        : "Le formulaire remplace temporairement la vue de lecture."}
-                    </p>
-                  </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-primary">
+                    Modification
+                  </p>
                   <div className="rounded-full border border-border/70 bg-background/55 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     {adminSaving
                       ? "Enregistrement..."
@@ -604,6 +549,20 @@ export function CaseInfoPanel({
                         ? "Brouillon modifie"
                         : "Pret a enregistrer"}
                   </div>
+                </div>
+                <div className="mt-3">
+                  <CompactInfoRow
+                    label="Cases selectionnees"
+                    value={String(selectedCaseIds.length)}
+                  />
+                  <CompactInfoRow
+                    label="Case active"
+                    value={activeCase?.id_case ?? "Aucune"}
+                  />
+                  <CompactInfoRow
+                    label="Mode"
+                    value={isMultiSelection ? "Edition de masse" : "Edition simple"}
+                  />
                 </div>
               </div>
 
@@ -862,122 +821,30 @@ export function CaseInfoPanel({
             </div>
           ) : (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SummaryCard
-                  label="Cases selectionnees"
-                  value={String(selectionSummary.count)}
-                  hint={isMultiSelection ? "Selection multiple active" : "Selection simple"}
-                />
-                <SummaryCard
-                  label="Case active"
-                  value={selectionSummary.activeCaseId}
-                  hint={isMultiSelection ? "Reference courante dans la selection" : "Case affichee"}
-                />
-              </div>
-
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionHeading
                   title="Resume de selection"
                   description="Les informations stables restent issues de la couche publique."
                 />
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <ReadValue label="Region" value={renderValue(selectionSummary.region)} compact />
-                  <ReadValue
+                <div className="mt-4">
+                  <CompactInfoRow
+                    label="Cases selectionnees"
+                    value={String(selectionSummary.count)}
+                  />
+                  <CompactInfoRow label="Case active" value={selectionSummary.activeCaseId} />
+                  <CompactInfoRow label="Region" value={renderValue(selectionSummary.region)} />
+                  <CompactInfoRow
                     label="Sous-region"
                     value={renderValue(selectionSummary.sousRegion)}
-                    compact
                   />
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <ReadValue label="Cote" value={renderValue(selectionSummary.cote)} compact />
-                  <ReadValue label="Lac majeur" value={renderValue(selectionSummary.lac)} compact />
-                  <ReadValue
+                  <CompactInfoRow label="Cote" value={renderValue(selectionSummary.cote)} />
+                  <CompactInfoRow label="Lac majeur" value={renderValue(selectionSummary.lac)} />
+                  <CompactInfoRow
                     label="Cours d'eau majeur"
                     value={renderValue(selectionSummary.coursEau)}
-                    compact
                   />
                 </div>
               </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionHeading
-                  title="Donnees publiques"
-                  description={
-                    publicSupplementPending
-                      ? "Chargement du complement public."
-                      : "La note publique reste visible hors mode admin."
-                  }
-                />
-                <div className="mt-4 grid gap-3">
-                  <ReadValue
-                    label="Note publique"
-                    value={
-                      publicSupplementPending
-                        ? "Chargement..."
-                        : isMultiSelection && !adminSummary.hasEveryAdminRecord
-                          ? "Visible pour la case active. Passe en mode admin pour un resume agrege."
-                        : renderValue(adminSummary.publicNoteSummary)
-                    }
-                  />
-                </div>
-              </section>
-
-              {adminModeEnabled ? (
-                <section className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-                  <SectionHeading
-                    title="Donnees admin"
-                    description={
-                      adminLoading
-                        ? "Chargement des donnees staff."
-                        : isMultiSelection
-                          ? "Resume agrege de la selection, avec indication des etats mixtes."
-                          : "Etat courant admin de la case active."
-                    }
-                  />
-                  <div className="mt-4 grid gap-3">
-                    <ReadValue label="Note staff" value={renderValue(adminSummary.staffNoteSummary)} />
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <ReadValue
-                        label="Categorie terrain"
-                        value={renderValue(adminSummary.terrainCatSummary)}
-                        compact
-                      />
-                      <ReadValue
-                        label="Type terrain"
-                        value={renderValue(adminSummary.terrainTypeSummary)}
-                        compact
-                      />
-                      <ReadValue
-                        label="Relief"
-                        value={renderValue(adminSummary.reliefSummary)}
-                        compact
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <ReadValue
-                        label="Faction"
-                        value={renderValue(adminSummary.factionSummary)}
-                        compact
-                      />
-                      <ReadValue
-                        label="Controleur"
-                        value={renderValue(adminSummary.controleurSummary)}
-                        compact
-                      />
-                      <ReadValue
-                        label="Type de controle"
-                        value={renderValue(adminSummary.controlTypeSummary)}
-                        compact
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <ReadValue label="Meta notes" value={adminSummary.notesMeta} compact />
-                      <ReadValue label="Meta terrain" value={adminSummary.terrainMeta} compact />
-                      <ReadValue label="Meta controle" value={adminSummary.controlMeta} compact />
-                    </div>
-                  </div>
-                </section>
-              ) : null}
 
               {adminError ? (
                 <div className="rounded-[22px] border border-destructive/60 bg-destructive/15 px-4 py-3 text-sm text-foreground">
