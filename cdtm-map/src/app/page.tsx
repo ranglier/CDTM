@@ -64,6 +64,8 @@ function createLoggedOutSession(): AdminSession {
   return {
     authenticated: false,
     username: null,
+    role: null,
+    is_tech_admin: false,
   };
 }
 
@@ -1033,7 +1035,7 @@ export default function HomePage() {
         adminModeEnabled={adminModeEnabled}
         navigationItems={[
           { href: "#carte", label: "Carte", current: true },
-          ...(adminSession.authenticated
+          ...(adminSession.is_tech_admin
             ? [{ href: "/admin/tech", label: "Technique" }]
             : []),
         ]}

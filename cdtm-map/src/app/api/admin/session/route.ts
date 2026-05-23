@@ -66,6 +66,8 @@ export async function DELETE(request: NextRequest) {
     {
       authenticated: false,
       username: null,
+      role: null,
+      is_tech_admin: false,
     },
     {
       status: 200,

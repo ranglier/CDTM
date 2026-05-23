@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { DynamicCaseTableUpdateInput } from "@/admin/tech-types";
-import { getCurrentStaffUser } from "@/server/auth";
+import { requireTechAdminUser } from "@/server/auth";
 import {
   getDynamicCaseTableDefinition,
   updateDynamicCaseTable,
@@ -19,6 +19,15 @@ function createUnauthorizedResponse() {
   );
 }
 
+function createForbiddenResponse() {
+  return NextResponse.json(
+    {
+      error: "Cette page est reservee aux administrateurs techniques.",
+    },
+    { status: 403 },
+  );
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ table: string }> },
@@ -32,9 +41,13 @@ export async function GET(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  try {
+    await requireTechAdminUser(request);
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
 
-  if (!user) {
     return createUnauthorizedResponse();
   }
 
@@ -82,16 +95,22 @@ export async function PATCH(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  let userId: number;
 
-  if (!user) {
+  try {
+    userId = (await requireTechAdminUser(request)).userId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
+
     return createUnauthorizedResponse();
   }
 
   try {
     const params = await context.params;
     const body = (await request.json()) as DynamicCaseTableUpdateInput;
-    const definition = await updateDynamicCaseTable(params.table, body, user.userId);
+    const definition = await updateDynamicCaseTable(params.table, body, userId);
 
     return NextResponse.json(definition, {
       status: 200,

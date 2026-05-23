@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { DynamicCaseTableFieldCreateInput } from "@/admin/tech-types";
-import { getCurrentStaffUser } from "@/server/auth";
+import { requireTechAdminUser } from "@/server/auth";
 import { addDynamicCaseTableField } from "@/server/admin-tech-repository";
 import { isDatabaseConfigured } from "@/server/db";
 
@@ -13,6 +13,15 @@ function createUnauthorizedResponse() {
       error: "Acces admin non autorise.",
     },
     { status: 401 },
+  );
+}
+
+function createForbiddenResponse() {
+  return NextResponse.json(
+    {
+      error: "Cette page est reservee aux administrateurs techniques.",
+    },
+    { status: 403 },
   );
 }
 
@@ -29,16 +38,22 @@ export async function POST(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  let userId: number;
 
-  if (!user) {
+  try {
+    userId = (await requireTechAdminUser(request)).userId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
+
     return createUnauthorizedResponse();
   }
 
   try {
     const params = await context.params;
     const body = (await request.json()) as DynamicCaseTableFieldCreateInput;
-    const result = await addDynamicCaseTableField(params.table, body, user.userId);
+    const result = await addDynamicCaseTableField(params.table, body, userId);
 
     return NextResponse.json(result, {
       status: 200,

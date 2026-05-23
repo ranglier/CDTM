@@ -43,6 +43,7 @@ Par defaut :
 
 Sans `ADMIN_USERNAME` et `ADMIN_PASSWORD`, aucun compte staff n'est bootstrappe automatiquement.
 `POSTGRES_PASSWORD` ne doit pas etre reutilise comme mot de passe admin applicatif.
+Si un compte est bootstrappe via `ADMIN_USERNAME` / `ADMIN_PASSWORD`, il devient `tech_admin`.
 
 ## Note
 

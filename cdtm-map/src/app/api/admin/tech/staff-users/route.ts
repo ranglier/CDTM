@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { DynamicCaseTableCreateInput } from "@/admin/tech-types";
+import type { StaffAccountCreateInput } from "@/admin/tech-types";
 import { requireTechAdminUser } from "@/server/auth";
-import {
-  createDynamicCaseTable,
-  listDynamicCaseTableSummaries,
-} from "@/server/admin-tech-repository";
 import { isDatabaseConfigured } from "@/server/db";
+import {
+  createStaffAccount,
+  listStaffAccounts,
+} from "@/server/staff-account-repository";
 
 export const runtime = "nodejs";
 
@@ -28,6 +28,19 @@ function createForbiddenResponse() {
   );
 }
 
+async function ensureTechAdmin(request: NextRequest) {
+  try {
+    await requireTechAdminUser(request);
+    return null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
+
+    return createUnauthorizedResponse();
+  }
+}
+
 export async function GET(request: NextRequest) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json(
@@ -38,27 +51,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  try {
-    await requireTechAdminUser(request);
-  } catch (error) {
-    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
-      return createForbiddenResponse();
-    }
+  const guardResponse = await ensureTechAdmin(request);
 
-    return createUnauthorizedResponse();
+  if (guardResponse) {
+    return guardResponse;
   }
 
   try {
-    const tables = await listDynamicCaseTableSummaries();
+    const accounts = await listStaffAccounts();
 
-    return NextResponse.json(tables, {
+    return NextResponse.json(accounts, {
       status: 200,
       headers: {
         "cache-control": "no-store",
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture du schema impossible.";
+    const message = error instanceof Error ? error.message : "Lecture des comptes impossible.";
 
     return NextResponse.json(
       {
@@ -79,35 +88,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let userId: number;
+  const guardResponse = await ensureTechAdmin(request);
 
-  try {
-    userId = (await requireTechAdminUser(request)).userId;
-  } catch (error) {
-    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
-      return createForbiddenResponse();
-    }
-
-    return createUnauthorizedResponse();
+  if (guardResponse) {
+    return guardResponse;
   }
 
   try {
-    const body = (await request.json()) as DynamicCaseTableCreateInput;
-    const result = await createDynamicCaseTable(body, userId);
+    const body = (await request.json()) as StaffAccountCreateInput;
+    const account = await createStaffAccount(body);
 
-    return NextResponse.json(result, {
+    return NextResponse.json(account, {
       status: 200,
       headers: {
         "cache-control": "no-store",
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Creation de table impossible.";
+    const message = error instanceof Error ? error.message : "Creation de compte impossible.";
     const status =
-      message.includes("obligatoire") ||
-      message.includes("existe deja") ||
-      message.includes("snake_case") ||
-      message.includes("trop long")
+      message.includes("obligatoires") ||
+      message.includes("Role invalide") ||
+      message.includes("existe deja")
         ? 400
         : 500;
 

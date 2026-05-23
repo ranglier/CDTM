@@ -4,7 +4,7 @@ import {
   getReferenceTableDefinition,
   type ReferenceTableKey,
 } from "@/admin/tech-types";
-import { getCurrentStaffUser } from "@/server/auth";
+import { requireTechAdminUser } from "@/server/auth";
 import {
   deleteReferenceTableRow,
   listReferenceTableRows,
@@ -20,6 +20,15 @@ function createUnauthorizedResponse() {
       error: "Acces admin non autorise.",
     },
     { status: 401 },
+  );
+}
+
+function createForbiddenResponse() {
+  return NextResponse.json(
+    {
+      error: "Cette page est reservee aux administrateurs techniques.",
+    },
+    { status: 403 },
   );
 }
 
@@ -46,9 +55,13 @@ export async function GET(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  try {
+    await requireTechAdminUser(request);
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
 
-  if (!user) {
     return createUnauthorizedResponse();
   }
 
@@ -93,9 +106,15 @@ export async function POST(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  let userId: number;
 
-  if (!user) {
+  try {
+    userId = (await requireTechAdminUser(request)).userId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
+
     return createUnauthorizedResponse();
   }
 
@@ -103,7 +122,7 @@ export async function POST(
     const params = await context.params;
     const tableKey = parseReferenceTableKey(params.table);
     const body = (await request.json()) as { row?: unknown };
-    const row = await saveReferenceTableRow(tableKey, body.row ?? {}, user.userId);
+    const row = await saveReferenceTableRow(tableKey, body.row ?? {}, userId);
 
     return NextResponse.json(row, {
       status: 200,
@@ -145,9 +164,13 @@ export async function DELETE(
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  try {
+    await requireTechAdminUser(request);
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
 
-  if (!user) {
     return createUnauthorizedResponse();
   }
 

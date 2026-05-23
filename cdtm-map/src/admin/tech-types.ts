@@ -1,3 +1,5 @@
+import type { AdminRole } from "@/admin/roles";
+
 export type TechFieldType =
   | "text"
   | "textarea"
@@ -120,11 +122,32 @@ export type DynamicCaseTableFieldCreateResult = {
   added_field: DynamicCaseTableFieldDefinition;
 };
 
+export type StaffAccountSummary = {
+  id: number;
+  username: string;
+  role: AdminRole;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+};
+
+export type StaffAccountCreateInput = {
+  username: string;
+  password: string;
+  role: AdminRole;
+};
+
+export type StaffAccountUpdateInput = {
+  role?: AdminRole;
+  is_active?: boolean;
+  password?: string;
+};
+
 export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "nomenclatures",
-    title: "Nomenclatures",
-    description: "Valeurs controlees globales, y compris les listes hierarchiques.",
+    title: "Listes generales",
+    description: "Listes de choix communes, y compris les familles de valeurs organisees.",
     physical_name: "reference_nomenclature_values",
     primary_key: "id_entry",
     fields: [
@@ -142,7 +165,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "factions",
     title: "Factions",
-    description: "Factions globales disponibles pour les champs de controle et les tables futures.",
+    description: "Liste des factions proposees dans les formulaires.",
     physical_name: "reference_factions",
     primary_key: "id_faction",
     fields: [
@@ -158,7 +181,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "controleurs",
     title: "Controleurs",
-    description: "Entites nommees pouvant controler une case ou une table dynamique.",
+    description: "Liste des entites ou personnages pouvant controler une case.",
     physical_name: "reference_controleurs",
     primary_key: "id_controleur",
     fields: [
@@ -173,7 +196,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "styles",
     title: "Styles",
-    description: "Definitions globales de styles cartographiques metier.",
+    description: "Liste des styles reutilisables pour l'affichage cartographique.",
     physical_name: "reference_styles",
     primary_key: "id_style",
     fields: [
@@ -191,7 +214,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "emplacements_rules",
     title: "Regles d'emplacements",
-    description: "Regles globales utilisees pour les calculs et validations d'emplacements.",
+    description: "Parametres communs utilises pour les calculs et validations d'emplacements.",
     physical_name: "reference_emplacements_rules",
     primary_key: "rule_key",
     fields: [

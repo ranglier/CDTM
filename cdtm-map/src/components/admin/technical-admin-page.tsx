@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import type { AdminRole } from "@/admin/roles";
 import type {
   DynamicCaseTableCreateInput,
   DynamicCaseTableDefinition,
@@ -15,6 +16,8 @@ import type {
   ReferenceTableRow,
   ReferenceTableRowsResponse,
   ReferenceTableStatus,
+  StaffAccountCreateInput,
+  StaffAccountSummary,
   TechFieldDefinition,
 } from "@/admin/tech-types";
 import type { AdminSession } from "@/admin/types";
@@ -23,7 +26,7 @@ import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 
-type TabKey = "references" | "schema";
+type TabKey = "references" | "schema" | "accounts";
 
 type EditableRow = {
   localId: string;
@@ -38,7 +41,13 @@ function createLoggedOutSession(): AdminSession {
   return {
     authenticated: false,
     username: null,
+    role: null,
+    is_tech_admin: false,
   };
+}
+
+function getRoleLabel(role: AdminRole): string {
+  return role === "tech_admin" ? "Admin technique" : "Staff";
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -167,13 +176,93 @@ const dynamicFieldTypeOptions: Array<{
   value: DynamicCaseTableFieldType;
   label: string;
 }> = [
-  { value: "text", label: "Texte" },
+  { value: "text", label: "Texte court" },
   { value: "textarea", label: "Texte long" },
-  { value: "boolean", label: "Booleen" },
-  { value: "integer", label: "Entier" },
-  { value: "datetime", label: "Date/heure" },
-  { value: "reference", label: "Reference" },
+  { value: "boolean", label: "Oui / non" },
+  { value: "integer", label: "Nombre entier" },
+  { value: "datetime", label: "Date / heure" },
+  { value: "reference", label: "Choix dans une liste" },
 ];
+
+function toSnakeCaseIdentifier(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function getFieldTypeLabel(value: DynamicCaseTableFieldType): string {
+  return (
+    dynamicFieldTypeOptions.find((option) => option.value === value)?.label ?? value
+  );
+}
+
+function getFriendlyFieldLabel(fieldName: string): string {
+  switch (fieldName) {
+    case "id_entry":
+      return "Identifiant interne";
+    case "group_key":
+      return "Famille de valeurs";
+    case "entry_key":
+      return "Valeur interne";
+    case "parent_entry_key":
+      return "Valeur parente";
+    case "sort_order":
+      return "Ordre";
+    case "updated_by_user_id":
+      return "Derniere modification par";
+    case "created_at":
+      return "Creation";
+    case "updated_at":
+      return "Derniere mise a jour";
+    case "id_faction":
+      return "Identifiant faction";
+    case "id_controleur":
+      return "Identifiant controleur";
+    case "rule_key":
+      return "Identifiant regle";
+    case "rule_label":
+      return "Nom de la regle";
+    case "value_text":
+      return "Valeur texte";
+    case "value_integer":
+      return "Valeur numerique";
+    default:
+      return fieldName;
+  }
+}
+
+function InfoCallout({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-[18px] border border-primary/20 bg-primary/8 px-4 py-3 text-sm leading-6 text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+function TechnicalDetails({
+  lines,
+  title = "Details techniques",
+}: {
+  lines: string[];
+  title?: string;
+}) {
+  return (
+    <details className="mt-3 rounded-[16px] border border-border/60 bg-background/30 px-4 py-3">
+      <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </summary>
+      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function TechnicalAdminPage() {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -185,14 +274,14 @@ export function TechnicalAdminPage() {
   const [referenceRows, setReferenceRows] = useState<EditableRow[]>([]);
   const [referenceSearchInput, setReferenceSearchInput] = useState("");
   const [referenceSearch, setReferenceSearch] = useState("");
-  const [referencesLoading, setReferencesLoading] = useState(true);
+  const [referencesLoading, setReferencesLoading] = useState(false);
   const [referenceRowsLoading, setReferenceRowsLoading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
 
   const [schemaSummaries, setSchemaSummaries] = useState<DynamicCaseTableSummary[]>([]);
   const [activeSchemaKey, setActiveSchemaKey] = useState<string | null>(null);
   const [activeSchemaDefinition, setActiveSchemaDefinition] = useState<DynamicCaseTableDefinition | null>(null);
-  const [schemaLoading, setSchemaLoading] = useState(true);
+  const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [createTableDraft, setCreateTableDraft] = useState<DynamicCaseTableCreateInput>({
     table_key: "",
@@ -201,6 +290,7 @@ export function TechnicalAdminPage() {
   });
   const [createTablePending, setCreateTablePending] = useState(false);
   const [createTableError, setCreateTableError] = useState<string | null>(null);
+  const [createTableKeyEdited, setCreateTableKeyEdited] = useState(false);
   const [schemaMetaDraft, setSchemaMetaDraft] = useState<DynamicCaseTableUpdateInput>({
     title: "",
     description: "",
@@ -217,12 +307,61 @@ export function TechnicalAdminPage() {
   });
   const [createFieldPending, setCreateFieldPending] = useState(false);
   const [createFieldError, setCreateFieldError] = useState<string | null>(null);
+  const [createFieldKeyEdited, setCreateFieldKeyEdited] = useState(false);
   const [nomenclatureGroups, setNomenclatureGroups] = useState<string[]>([]);
+  const [staffAccounts, setStaffAccounts] = useState<StaffAccountSummary[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<number | null>(null);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [createAccountDraft, setCreateAccountDraft] = useState<StaffAccountCreateInput>({
+    username: "",
+    password: "",
+    role: "staff",
+  });
+  const [createAccountPending, setCreateAccountPending] = useState(false);
+  const [createAccountError, setCreateAccountError] = useState<string | null>(null);
+  const [accountUpdateRole, setAccountUpdateRole] = useState<AdminRole>("staff");
+  const [accountUpdateIsActive, setAccountUpdateIsActive] = useState(true);
+  const [accountUpdatePending, setAccountUpdatePending] = useState(false);
+  const [accountUpdateError, setAccountUpdateError] = useState<string | null>(null);
 
   const activeReference = useMemo(
     () => referenceStatuses.find((table) => table.definition.key === activeReferenceKey) ?? null,
     [activeReferenceKey, referenceStatuses],
   );
+  const selectedReferenceStatus = useMemo(
+    () =>
+      createFieldDraft.reference_table_key
+        ? referenceStatuses.find(
+            (table) => table.definition.key === createFieldDraft.reference_table_key,
+          ) ?? null
+        : null,
+    [createFieldDraft.reference_table_key, referenceStatuses],
+  );
+  const suggestedTableKey = useMemo(
+    () => toSnakeCaseIdentifier(createTableDraft.title),
+    [createTableDraft.title],
+  );
+  const suggestedFieldKey = useMemo(
+    () => toSnakeCaseIdentifier(createFieldDraft.label),
+    [createFieldDraft.label],
+  );
+  const activeStaffAccount = useMemo(
+    () => staffAccounts.find((account) => account.id === activeAccountId) ?? null,
+    [activeAccountId, staffAccounts],
+  );
+
+  const hydrateSession = useCallback(async () => {
+    try {
+      const nextSession = await fetchJson<AdminSession>("/api/admin/session");
+      setSession(nextSession);
+      return nextSession;
+    } catch {
+      const loggedOut = createLoggedOutSession();
+      setSession(loggedOut);
+      return loggedOut;
+    }
+  }, []);
 
   const loadReferenceStatuses = useCallback(async () => {
     setReferencesLoading(true);
@@ -310,48 +449,95 @@ export function TechnicalAdminPage() {
     }
   }, []);
 
+  const loadStaffAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+
+    try {
+      const nextAccounts = await fetchJson<StaffAccountSummary[]>("/api/admin/tech/staff-users");
+      setStaffAccounts(nextAccounts);
+      setActiveAccountId((current) => current ?? nextAccounts[0]?.id ?? null);
+    } catch (error) {
+      setAccountsError(error instanceof Error ? error.message : "Chargement des comptes impossible.");
+      setStaffAccounts([]);
+      setActiveAccountId(null);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function hydrateSession() {
-      try {
-        const nextSession = await fetchJson<AdminSession>("/api/admin/session");
-
-        if (!cancelled) {
-          setSession(nextSession);
-        }
-      } catch {
-        if (!cancelled) {
-          setSession(createLoggedOutSession());
-        }
+    void hydrateSession().then((nextSession) => {
+      if (cancelled) {
+        return;
       }
-    }
 
-    void hydrateSession();
-    void loadReferenceStatuses();
-    void loadSchemaSummaries();
+      if (!nextSession.is_tech_admin) {
+        setReferencesLoading(false);
+        setSchemaLoading(false);
+        setAccountsLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [loadReferenceStatuses, loadSchemaSummaries]);
+  }, [hydrateSession]);
 
   useEffect(() => {
-    if (!activeReferenceKey) {
+    if (!session?.is_tech_admin) {
+      return;
+    }
+
+    void loadReferenceStatuses();
+    void loadSchemaSummaries();
+    void loadStaffAccounts();
+  }, [loadReferenceStatuses, loadSchemaSummaries, loadStaffAccounts, session?.is_tech_admin]);
+
+  useEffect(() => {
+    if (!session?.is_tech_admin || !activeReferenceKey) {
       return;
     }
 
     void loadReferenceRows(activeReferenceKey, referenceSearch);
-  }, [activeReferenceKey, loadReferenceRows, referenceSearch]);
+  }, [activeReferenceKey, loadReferenceRows, referenceSearch, session?.is_tech_admin]);
 
   useEffect(() => {
-    if (!activeSchemaKey) {
+    if (!session?.is_tech_admin || !activeSchemaKey) {
       setActiveSchemaDefinition(null);
       return;
     }
 
     void loadSchemaDefinition(activeSchemaKey);
-  }, [activeSchemaKey, loadSchemaDefinition]);
+  }, [activeSchemaKey, loadSchemaDefinition, session?.is_tech_admin]);
+
+  useEffect(() => {
+    if (!createTableKeyEdited) {
+      setCreateTableDraft((current) =>
+        current.table_key === suggestedTableKey ? current : { ...current, table_key: suggestedTableKey },
+      );
+    }
+  }, [createTableKeyEdited, suggestedTableKey]);
+
+  useEffect(() => {
+    if (!createFieldKeyEdited) {
+      setCreateFieldDraft((current) =>
+        current.field_key === suggestedFieldKey ? current : { ...current, field_key: suggestedFieldKey },
+      );
+    }
+  }, [createFieldKeyEdited, suggestedFieldKey]);
+
+  useEffect(() => {
+    if (!activeStaffAccount) {
+      return;
+    }
+
+    setAccountUpdateRole(activeStaffAccount.role);
+    setAccountUpdateIsActive(activeStaffAccount.is_active);
+    setAccountUpdateError(null);
+  }, [activeStaffAccount]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -505,6 +691,7 @@ export function TechnicalAdminPage() {
         title: "",
         description: "",
       });
+      setCreateTableKeyEdited(false);
       await loadSchemaSummaries();
       setActiveSchemaKey(result.definition.table_key);
     } catch (error) {
@@ -563,6 +750,7 @@ export function TechnicalAdminPage() {
         reference_table_key: null,
         reference_group_key: null,
       });
+      setCreateFieldKeyEdited(false);
       await loadSchemaSummaries();
     } catch (error) {
       setCreateFieldError(error instanceof Error ? error.message : "Ajout de champ impossible.");
@@ -571,9 +759,91 @@ export function TechnicalAdminPage() {
     }
   }, [activeSchemaDefinition, createFieldDraft, loadSchemaSummaries]);
 
-  const activeSchemaFieldCount = activeSchemaDefinition?.fields.length ?? 0;
+  const handleCreateAccount = useCallback(async () => {
+    setCreateAccountPending(true);
+    setCreateAccountError(null);
 
-  if (!session || referencesLoading || schemaLoading) {
+    try {
+      const createdAccount = await fetchJson<StaffAccountSummary>("/api/admin/tech/staff-users", {
+        method: "POST",
+        body: JSON.stringify(createAccountDraft),
+      });
+
+      setCreateAccountDraft({
+        username: "",
+        password: "",
+        role: "staff",
+      });
+      await loadStaffAccounts();
+      setActiveAccountId(createdAccount.id);
+      await hydrateSession();
+    } catch (error) {
+      setCreateAccountError(error instanceof Error ? error.message : "Creation de compte impossible.");
+    } finally {
+      setCreateAccountPending(false);
+    }
+  }, [createAccountDraft, hydrateSession, loadStaffAccounts]);
+
+  const handleUpdateAccount = useCallback(async () => {
+    if (!activeStaffAccount) {
+      return;
+    }
+
+    setAccountUpdatePending(true);
+    setAccountUpdateError(null);
+
+    try {
+      const updatedAccount = await fetchJson<StaffAccountSummary>(
+        `/api/admin/tech/staff-users/${activeStaffAccount.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            role: accountUpdateRole,
+            is_active: accountUpdateIsActive,
+          }),
+        },
+      );
+
+      setStaffAccounts((current) =>
+        current.map((account) => (account.id === updatedAccount.id ? updatedAccount : account)),
+      );
+      const nextSession = await hydrateSession();
+
+      if (nextSession.is_tech_admin) {
+        await loadStaffAccounts();
+      }
+    } catch (error) {
+      setAccountUpdateError(error instanceof Error ? error.message : "Mise a jour impossible.");
+    } finally {
+      setAccountUpdatePending(false);
+    }
+  }, [
+    accountUpdateIsActive,
+    accountUpdateRole,
+    activeStaffAccount,
+    hydrateSession,
+    loadStaffAccounts,
+  ]);
+
+  const activeSchemaFieldCount = activeSchemaDefinition?.fields.length ?? 0;
+  const selectedReferenceTableKey = createFieldDraft.reference_table_key ?? "";
+  const canCreateTable =
+    createTableDraft.title.trim().length > 0 && createTableDraft.table_key.trim().length > 0;
+  const canCreateField =
+    createFieldDraft.label.trim().length > 0 &&
+    createFieldDraft.field_key.trim().length > 0 &&
+    (createFieldDraft.field_type !== "reference" ||
+      (selectedReferenceTableKey.length > 0 &&
+        (selectedReferenceTableKey !== "nomenclatures" ||
+          (createFieldDraft.reference_group_key ?? "").trim().length > 0)));
+  const canCreateAccount =
+    createAccountDraft.username.trim().length > 0 &&
+    createAccountDraft.password.trim().length > 0;
+
+  if (
+    !session ||
+    (session.is_tech_admin && (referencesLoading || schemaLoading || accountsLoading))
+  ) {
     return (
       <AppShell>
         <SectionPanel className="p-6">
@@ -587,9 +857,35 @@ export function TechnicalAdminPage() {
     return (
       <AppShell>
         <SectionPanel className="p-6">
-          <h1 className="font-chronicle text-3xl text-foreground">Admin technique</h1>
+          <h1 className="font-chronicle text-3xl text-foreground">Administration des donnees</h1>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
             Cette page est reservee au staff connecte.
+          </p>
+          <div className="mt-6">
+            <Button asChild variant="outline">
+              <Link href="/">Retour a la carte</Link>
+            </Button>
+          </div>
+        </SectionPanel>
+      </AppShell>
+    );
+  }
+
+  if (!session.is_tech_admin) {
+    return (
+      <AppShell>
+        <SiteHeader
+          adminAuthenticated
+          adminModeEnabled
+          navigationItems={[{ href: "/", label: "Carte" }]}
+          showAdminAction={false}
+          onAdminAction={() => {}}
+          onAdminLogout={() => void handleLogout()}
+        />
+        <SectionPanel className="p-6">
+          <h1 className="font-chronicle text-3xl text-foreground">Administration des donnees</h1>
+          <p className="mt-4 text-sm leading-7 text-muted-foreground">
+            Cette page est reservee aux administrateurs techniques.
           </p>
           <div className="mt-6">
             <Button asChild variant="outline">
@@ -608,7 +904,7 @@ export function TechnicalAdminPage() {
         adminModeEnabled
         navigationItems={[
           { href: "/", label: "Carte" },
-          { href: "/admin/tech", label: "Technique", current: true },
+          ...(session.is_tech_admin ? [{ href: "/admin/tech", label: "Technique", current: true }] : []),
         ]}
         showAdminAction={false}
         onAdminAction={() => {}}
@@ -618,10 +914,11 @@ export function TechnicalAdminPage() {
       <section className="grid flex-1 gap-6 xl:grid-cols-[19rem_minmax(0,1fr)]">
         <SectionPanel className="p-5 sm:p-6">
           <h1 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
-            Admin technique
+            Administration des donnees
           </h1>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            Referentiels globaux et tables metier appliquees a l&apos;ensemble des cases.
+            Cette page aide a maintenir les listes de choix et les informations
+            supplementaires disponibles pour toutes les cases.
           </p>
 
           <div className="mt-6 flex gap-3">
@@ -631,7 +928,7 @@ export function TechnicalAdminPage() {
               size="sm"
               onClick={() => setActiveTab("references")}
             >
-              Referentiels
+              Listes de valeurs
             </Button>
             <Button
               type="button"
@@ -639,7 +936,15 @@ export function TechnicalAdminPage() {
               size="sm"
               onClick={() => setActiveTab("schema")}
             >
-              Schema / Tables
+              Champs personnalises
+            </Button>
+            <Button
+              type="button"
+              variant={activeTab === "accounts" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setActiveTab("accounts")}
+            >
+              Comptes staff
             </Button>
           </div>
 
@@ -647,6 +952,10 @@ export function TechnicalAdminPage() {
 
           {activeTab === "references" ? (
             <div className="mt-6 space-y-3">
+              <InfoCallout>
+                Ces listes servent a proposer des choix coherents dans les formulaires :
+                terrains, factions, types de controle, styles, etc.
+              </InfoCallout>
               {referenceStatuses.map((table) => (
                 <button
                   key={table.definition.key}
@@ -670,25 +979,30 @@ export function TechnicalAdminPage() {
                 </button>
               ))}
             </div>
-          ) : (
+          ) : activeTab === "schema" ? (
             <div className="mt-6 space-y-4">
+              <InfoCallout>
+                Ces categories permettent d&apos;ajouter de nouvelles informations sur
+                toutes les cases sans modifier la carte.
+              </InfoCallout>
               <div className="rounded-[20px] border border-border/70 bg-background/35 p-4">
-                <p className="text-sm font-semibold text-foreground">Nouvelle table metier</p>
+                <p className="text-sm font-semibold text-foreground">
+                  Nouvelle categorie d&apos;informations
+                </p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Cree une nouvelle rubrique qui apparaitra dans le panneau de
+                  modification des cases.
+                </p>
+                <div className="mt-4">
+                  <InfoCallout>
+                    Ces changements modifient la structure des informations disponibles
+                    pour toutes les cases. A utiliser avec prudence.
+                  </InfoCallout>
+                </div>
                 <div className="mt-4 space-y-3">
                   <input
                     className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                    placeholder="nom_logique"
-                    value={createTableDraft.table_key}
-                    onChange={(event) =>
-                      setCreateTableDraft((current) => ({
-                        ...current,
-                        table_key: event.target.value,
-                      }))
-                    }
-                  />
-                  <input
-                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                    placeholder="Titre"
+                    placeholder="ex : Informations militaires"
                     value={createTableDraft.title}
                     onChange={(event) =>
                       setCreateTableDraft((current) => ({
@@ -699,7 +1013,7 @@ export function TechnicalAdminPage() {
                   />
                   <textarea
                     className="min-h-24 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                    placeholder="Description"
+                    placeholder="ex : Garnisons, fortifications et menaces connues"
                     value={createTableDraft.description}
                     onChange={(event) =>
                       setCreateTableDraft((current) => ({
@@ -708,9 +1022,66 @@ export function TechnicalAdminPage() {
                       }))
                     }
                   />
+                  <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-foreground">Nom interne</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCreateTableKeyEdited(false);
+                          setCreateTableDraft((current) => ({
+                            ...current,
+                            table_key: suggestedTableKey,
+                          }));
+                        }}
+                      >
+                        Regenerer
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Il est propose automatiquement a partir du titre. Tu peux le corriger si besoin.
+                    </p>
+                    <input
+                      className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      placeholder="ex : informations_militaires"
+                      value={createTableDraft.table_key}
+                      onChange={(event) => {
+                        setCreateTableKeyEdited(true);
+                        setCreateTableDraft((current) => ({
+                          ...current,
+                          table_key: event.target.value,
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                    <p className="text-sm font-medium text-foreground">Resume avant creation</p>
+                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <p>
+                        <span className="text-foreground">Titre :</span>{" "}
+                        {createTableDraft.title.trim() || "Non renseigne"}
+                      </p>
+                      <p>
+                        <span className="text-foreground">Description :</span>{" "}
+                        {createTableDraft.description.trim() || "Aucune description"}
+                      </p>
+                      <p>
+                        <span className="text-foreground">Nom interne :</span>{" "}
+                        {createTableDraft.table_key.trim() || "Non genere"}
+                      </p>
+                      <p>Cette categorie sera disponible pour toutes les cases.</p>
+                      <p>Verifie ce resume avant de creer.</p>
+                    </div>
+                  </div>
                   {createTableError ? <p className="text-sm text-destructive">{createTableError}</p> : null}
-                  <Button type="button" onClick={() => void handleCreateSchemaTable()} disabled={createTablePending}>
-                    {createTablePending ? "Creation..." : "Creer la table"}
+                  <Button
+                    type="button"
+                    onClick={() => void handleCreateSchemaTable()}
+                    disabled={createTablePending || !canCreateTable}
+                  >
+                    {createTablePending ? "Creation..." : "Creer la categorie"}
                   </Button>
                 </div>
               </div>
@@ -730,15 +1101,112 @@ export function TechnicalAdminPage() {
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-foreground">{table.title}</p>
                       <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        {table.field_count} champ(s)
+                        {table.field_count} information(s)
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">{table.physical_name}</p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {table.description || "Aucune description"}
                     </p>
+                    <TechnicalDetails
+                      title="Nom interne"
+                      lines={[
+                        `identifiant_automatique : ${table.table_key}`,
+                        `physical_name : ${table.physical_name}`,
+                      ]}
+                    />
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4">
+              <InfoCallout>
+                Ces comptes donnent acces au mode admin de la carte. Seuls les comptes
+                `tech_admin` peuvent ouvrir et modifier cette page.
+              </InfoCallout>
+              <div className="rounded-[20px] border border-border/70 bg-background/35 p-4">
+                <p className="text-sm font-semibold text-foreground">Nouveau compte staff</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Cree un compte avec un mot de passe temporaire, puis transmets-le de maniere sure.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <input
+                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                    placeholder="Identifiant"
+                    value={createAccountDraft.username}
+                    onChange={(event) =>
+                      setCreateAccountDraft((current) => ({
+                        ...current,
+                        username: event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                    placeholder="Mot de passe temporaire"
+                    type="password"
+                    value={createAccountDraft.password}
+                    onChange={(event) =>
+                      setCreateAccountDraft((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                  />
+                  <select
+                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                    value={createAccountDraft.role}
+                    onChange={(event) =>
+                      setCreateAccountDraft((current) => ({
+                        ...current,
+                        role: event.target.value as AdminRole,
+                      }))
+                    }
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="tech_admin">Admin technique</option>
+                  </select>
+                  {createAccountError ? <p className="text-sm text-destructive">{createAccountError}</p> : null}
+                  <Button
+                    type="button"
+                    disabled={createAccountPending || !canCreateAccount}
+                    onClick={() => void handleCreateAccount()}
+                  >
+                    {createAccountPending ? "Creation..." : "Creer le compte"}
+                  </Button>
+                </div>
+              </div>
+
+              {accountsError ? <p className="text-sm text-destructive">{accountsError}</p> : null}
+
+              <div className="space-y-3">
+                {staffAccounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun compte staff enregistre.</p>
+                ) : (
+                  staffAccounts.map((account) => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
+                        account.id === activeAccountId
+                          ? "border-primary/45 bg-primary/10"
+                          : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
+                      }`}
+                      onClick={() => setActiveAccountId(account.id)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">{account.username}</p>
+                        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          {account.is_active ? "actif" : "inactif"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {getRoleLabel(account.role)}
+                        {session.username === account.username ? " • compte courant" : ""}
+                      </p>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -753,9 +1221,16 @@ export function TechnicalAdminPage() {
                     <h2 className="text-2xl font-semibold text-foreground">
                       {activeReference.definition.title}
                     </h2>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {activeReference.definition.physical_name}
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {activeReference.definition.description}
                     </p>
+                    <TechnicalDetails
+                      title="Details techniques"
+                      lines={[
+                        `nom interne : ${activeReference.definition.key}`,
+                        `stockage : ${activeReference.definition.physical_name}`,
+                      ]}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row">
@@ -768,7 +1243,7 @@ export function TechnicalAdminPage() {
                     >
                       <input
                         className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 sm:w-72"
-                        placeholder="Filtrer"
+                        placeholder="Filtrer cette liste"
                         value={referenceSearchInput}
                         onChange={(event) => setReferenceSearchInput(event.target.value)}
                       />
@@ -778,7 +1253,7 @@ export function TechnicalAdminPage() {
                     </form>
 
                     <Button type="button" onClick={handleAddReferenceRow}>
-                      Ajouter une ligne
+                      Ajouter une valeur
                     </Button>
                   </div>
                 </div>
@@ -832,7 +1307,7 @@ export function TechnicalAdminPage() {
                               className={field.type === "textarea" ? "lg:col-span-2" : ""}
                             >
                               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                                {field.label}
+                                {getFriendlyFieldLabel(field.label)}
                               </p>
                               <FieldEditor
                                 field={field}
@@ -851,19 +1326,27 @@ export function TechnicalAdminPage() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Aucun referentiel selectionne.</p>
+              <p className="text-sm text-muted-foreground">Aucune liste de valeurs selectionnee.</p>
             )
-          ) : activeSchemaDefinition ? (
+          ) : activeTab === "schema" ? (
+            activeSchemaDefinition ? (
             <>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h2 className="text-2xl font-semibold text-foreground">{activeSchemaDefinition.title}</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {activeSchemaDefinition.physical_name}
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {activeSchemaDefinition.description || "Aucune description pour cette categorie."}
                   </p>
+                  <TechnicalDetails
+                    title="Details techniques"
+                    lines={[
+                      `identifiant_automatique : ${activeSchemaDefinition.table_key}`,
+                      `physical_name : ${activeSchemaDefinition.physical_name}`,
+                    ]}
+                  />
                 </div>
                 <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  {activeSchemaDefinition.is_active ? "Active" : "Inactive"}
+                  {activeSchemaDefinition.is_active ? "Visible dans les cases" : "Masquee dans les cases"}
                 </div>
               </div>
 
@@ -871,7 +1354,11 @@ export function TechnicalAdminPage() {
 
               <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <section className="rounded-[20px] border border-border/70 bg-background/35 p-4">
-                  <p className="text-sm font-semibold text-foreground">Metadonnees</p>
+                  <p className="text-sm font-semibold text-foreground">Presentation</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Modifie le nom visible, le texte d&apos;aide et l&apos;affichage de cette
+                    categorie.
+                  </p>
                   <div className="mt-4 space-y-3">
                     <input
                       className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
@@ -904,7 +1391,7 @@ export function TechnicalAdminPage() {
                           }))
                         }
                       />
-                      Table active dans le panneau case
+                      Categorie visible dans le panneau des cases
                     </label>
                     {schemaMetaError ? <p className="text-sm text-destructive">{schemaMetaError}</p> : null}
                     <Button
@@ -918,22 +1405,20 @@ export function TechnicalAdminPage() {
                 </section>
 
                 <section className="rounded-[20px] border border-border/70 bg-background/35 p-4">
-                  <p className="text-sm font-semibold text-foreground">Ajouter un champ</p>
+                  <p className="text-sm font-semibold text-foreground">Ajouter une information</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Ajoute un champ a renseigner pour chaque case dans cette categorie.
+                  </p>
+                  <div className="mt-4">
+                    <InfoCallout>
+                      Ces changements modifient la structure des informations disponibles
+                      pour toutes les cases. A utiliser avec prudence.
+                    </InfoCallout>
+                  </div>
                   <div className="mt-4 space-y-3">
                     <input
                       className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="nom_champ"
-                      value={createFieldDraft.field_key}
-                      onChange={(event) =>
-                        setCreateFieldDraft((current) => ({
-                          ...current,
-                          field_key: event.target.value,
-                        }))
-                      }
-                    />
-                    <input
-                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="Libelle"
+                      placeholder="ex : Niveau de fortification"
                       value={createFieldDraft.label}
                       onChange={(event) =>
                         setCreateFieldDraft((current) => ({
@@ -958,11 +1443,50 @@ export function TechnicalAdminPage() {
                         </option>
                       ))}
                     </select>
+                    <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">Nom interne du champ</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setCreateFieldKeyEdited(false);
+                            setCreateFieldDraft((current) => ({
+                              ...current,
+                              field_key: suggestedFieldKey,
+                            }));
+                          }}
+                        >
+                          Regenerer
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Il est propose automatiquement a partir du libelle. Garde-le simple et stable.
+                      </p>
+                      <input
+                        className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                        placeholder="ex : niveau_fortification"
+                        value={createFieldDraft.field_key}
+                        onChange={(event) => {
+                          setCreateFieldKeyEdited(true);
+                          setCreateFieldDraft((current) => ({
+                            ...current,
+                            field_key: event.target.value,
+                          }));
+                        }}
+                      />
+                    </div>
 
                     {createFieldDraft.field_type === "reference" ? (
-                      <>
+                      <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                        <p className="text-sm font-medium text-foreground">Liste de valeurs</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          Ce type de champ ne laisse pas une saisie libre. Il proposera un choix
+                          issu d&apos;une liste deja maintenue dans l&apos;onglet Listes de valeurs.
+                        </p>
                         <select
-                          className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                          className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
                           value={createFieldDraft.reference_table_key ?? ""}
                           onChange={(event) =>
                             setCreateFieldDraft((current) => ({
@@ -974,8 +1498,8 @@ export function TechnicalAdminPage() {
                                   : null,
                             }))
                           }
-                        >
-                          <option value="">Choisir une table globale</option>
+                          >
+                          <option value="">Choisir une liste de valeurs</option>
                           {referenceStatuses.map((table) => (
                             <option key={table.definition.key} value={table.definition.key}>
                               {table.definition.title}
@@ -984,30 +1508,67 @@ export function TechnicalAdminPage() {
                         </select>
 
                         {createFieldDraft.reference_table_key === "nomenclatures" ? (
-                          <select
-                            className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                            value={createFieldDraft.reference_group_key ?? ""}
-                            onChange={(event) =>
-                              setCreateFieldDraft((current) => ({
-                                ...current,
-                                reference_group_key: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Choisir un groupe de nomenclature</option>
-                            {nomenclatureGroups.map((groupKey) => (
-                              <option key={groupKey} value={groupKey}>
-                                {groupKey}
-                              </option>
-                            ))}
-                          </select>
+                          <>
+                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                              Choisis ensuite la famille exacte a utiliser dans cette liste.
+                            </p>
+                            <select
+                              className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                              value={createFieldDraft.reference_group_key ?? ""}
+                              onChange={(event) =>
+                                setCreateFieldDraft((current) => ({
+                                  ...current,
+                                  reference_group_key: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Choisir une famille de valeurs</option>
+                              {nomenclatureGroups.map((groupKey) => (
+                                <option key={groupKey} value={groupKey}>
+                                  {groupKey}
+                                </option>
+                              ))}
+                            </select>
+                          </>
                         ) : null}
-                      </>
+                      </div>
                     ) : null}
 
+                    <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                      <p className="text-sm font-medium text-foreground">Resume avant creation</p>
+                      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        <p>
+                          <span className="text-foreground">Libelle :</span>{" "}
+                          {createFieldDraft.label.trim() || "Non renseigne"}
+                        </p>
+                        <p>
+                          <span className="text-foreground">Type :</span>{" "}
+                          {getFieldTypeLabel(createFieldDraft.field_type)}
+                        </p>
+                        <p>
+                          <span className="text-foreground">Nom interne :</span>{" "}
+                          {createFieldDraft.field_key.trim() || "Non genere"}
+                        </p>
+                        {selectedReferenceStatus ? (
+                          <p>
+                            <span className="text-foreground">Liste choisie :</span>{" "}
+                            {selectedReferenceStatus.definition.title}
+                            {createFieldDraft.reference_group_key
+                              ? ` / ${createFieldDraft.reference_group_key}`
+                              : ""}
+                          </p>
+                        ) : null}
+                        <p>Verifie ce resume avant de creer.</p>
+                      </div>
+                    </div>
+
                     {createFieldError ? <p className="text-sm text-destructive">{createFieldError}</p> : null}
-                    <Button type="button" disabled={createFieldPending} onClick={() => void handleCreateField()}>
-                      {createFieldPending ? "Ajout..." : "Ajouter le champ"}
+                    <Button
+                      type="button"
+                      disabled={createFieldPending || !canCreateField}
+                      onClick={() => void handleCreateField()}
+                    >
+                      {createFieldPending ? "Ajout..." : "Ajouter l'information"}
                     </Button>
                   </div>
                 </section>
@@ -1015,13 +1576,13 @@ export function TechnicalAdminPage() {
 
               <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-foreground">Champs ({activeSchemaFieldCount})</p>
-                  <p className="text-sm text-muted-foreground">Mode guide, uniquement additif</p>
+                  <p className="text-sm font-semibold text-foreground">Informations ({activeSchemaFieldCount})</p>
+                  <p className="text-sm text-muted-foreground">Ajouts progressifs uniquement</p>
                 </div>
 
                 <div className="mt-4 space-y-3">
                   {activeSchemaDefinition.fields.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aucun champ custom pour cette table.</p>
+                    <p className="text-sm text-muted-foreground">Aucune information personnalisee pour cette categorie.</p>
                   ) : (
                     activeSchemaDefinition.fields.map((field) => (
                       <div
@@ -1031,18 +1592,24 @@ export function TechnicalAdminPage() {
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-foreground">{field.label}</p>
                           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                            {field.field_type}
+                            {getFieldTypeLabel(field.field_type)}
                           </p>
                         </div>
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          <p>{field.field_key}</p>
-                          {field.reference_table_key ? (
-                            <p>
-                              reference: {field.reference_table_key}
-                              {field.reference_group_key ? ` / ${field.reference_group_key}` : ""}
-                            </p>
-                          ) : null}
-                        </div>
+                        <TechnicalDetails
+                          title="Details techniques"
+                          lines={[
+                            `identifiant_du_champ : ${field.field_key}`,
+                            ...(field.reference_table_key
+                              ? [
+                                  `liste reliee : ${field.reference_table_key}${
+                                    field.reference_group_key
+                                      ? ` / ${field.reference_group_key}`
+                                      : ""
+                                  }`,
+                                ]
+                              : []),
+                          ]}
+                        />
                       </div>
                     ))
                   )}
@@ -1050,7 +1617,70 @@ export function TechnicalAdminPage() {
               </section>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">Aucune table metier selectionnee.</p>
+            <p className="text-sm text-muted-foreground">Aucune categorie d&apos;informations selectionnee.</p>
+          )
+          ) : activeStaffAccount ? (
+            <>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-foreground">{activeStaffAccount.username}</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {getRoleLabel(activeStaffAccount.role)}
+                    {session.username === activeStaffAccount.username ? " • compte courant" : ""}
+                  </p>
+                  <TechnicalDetails
+                    title="Details techniques"
+                    lines={[
+                      `identifiant : ${activeStaffAccount.id}`,
+                      `cree le : ${new Date(activeStaffAccount.created_at).toLocaleString("fr-FR")}`,
+                      `derniere connexion : ${
+                        activeStaffAccount.last_login_at
+                          ? new Date(activeStaffAccount.last_login_at).toLocaleString("fr-FR")
+                          : "jamais"
+                      }`,
+                    ]}
+                  />
+                </div>
+                <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  {activeStaffAccount.is_active ? "Compte actif" : "Compte desactive"}
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                <p className="text-sm font-semibold text-foreground">Acces et statut</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Change le role du compte ou desactive-le sans suppression physique.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <select
+                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                    value={accountUpdateRole}
+                    onChange={(event) => setAccountUpdateRole(event.target.value as AdminRole)}
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="tech_admin">Admin technique</option>
+                  </select>
+                  <label className="flex items-center gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={accountUpdateIsActive}
+                      onChange={(event) => setAccountUpdateIsActive(event.target.checked)}
+                    />
+                    Compte actif
+                  </label>
+                  {accountUpdateError ? <p className="text-sm text-destructive">{accountUpdateError}</p> : null}
+                  <Button
+                    type="button"
+                    disabled={accountUpdatePending}
+                    onClick={() => void handleUpdateAccount()}
+                  >
+                    {accountUpdatePending ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aucun compte staff selectionne.</p>
           )}
         </SectionPanel>
       </section>

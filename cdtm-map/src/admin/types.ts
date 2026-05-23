@@ -2,6 +2,7 @@ import type {
   DynamicCaseTableFieldDefinition,
   ReferenceOption,
 } from "@/admin/tech-types";
+import type { AdminRole } from "@/admin/roles";
 
 export type PublicCaseProperties = {
   registry_id_case: string;
@@ -169,6 +170,8 @@ export type AdminBulkUpdateResult = {
 export type AdminSession = {
   authenticated: boolean;
   username: string | null;
+  role: AdminRole | null;
+  is_tech_admin: boolean;
 };
 
 function createEmptyBulkFieldState(): AdminBulkEditFieldState {

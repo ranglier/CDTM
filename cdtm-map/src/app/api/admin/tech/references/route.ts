@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getCurrentStaffUser } from "@/server/auth";
+import { requireTechAdminUser } from "@/server/auth";
 import { listReferenceTableStatuses } from "@/server/admin-tech-repository";
 import { isDatabaseConfigured } from "@/server/db";
 
@@ -15,6 +15,15 @@ function createUnauthorizedResponse() {
   );
 }
 
+function createForbiddenResponse() {
+  return NextResponse.json(
+    {
+      error: "Cette page est reservee aux administrateurs techniques.",
+    },
+    { status: 403 },
+  );
+}
+
 export async function GET(request: NextRequest) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json(
@@ -25,9 +34,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const user = await getCurrentStaffUser(request);
+  try {
+    await requireTechAdminUser(request);
+  } catch (error) {
+    if (error instanceof Error && error.message === "TECH_ADMIN_REQUIRED") {
+      return createForbiddenResponse();
+    }
 
-  if (!user) {
     return createUnauthorizedResponse();
   }
 

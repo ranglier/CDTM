@@ -1,5 +1,6 @@
 import type { NextRequest, NextResponse } from "next/server";
 
+import { isTechAdminRole, type AdminRole } from "@/admin/roles";
 import type { AdminSession } from "@/admin/types";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import { getServerEnv } from "@/server/env";
@@ -9,11 +10,15 @@ type StaffUserRow = {
   id: number;
   username: string;
   password_hash: string;
+  role: AdminRole;
+  is_active: boolean;
 };
 
 export type AuthenticatedStaffUser = {
   userId: number;
   username: string;
+  role: AdminRole;
+  isActive: boolean;
 };
 
 export type StaffLoginResult = {
@@ -73,13 +78,15 @@ export async function getCurrentStaffUser(
   const result = await getPool().query<{
     user_id: number;
     username: string;
+    role: AdminRole;
   }>(
     `
-      SELECT sessions.user_id, users.username
+      SELECT sessions.user_id, users.username, users.role
       FROM staff_sessions AS sessions
       INNER JOIN staff_users AS users ON users.id = sessions.user_id
       WHERE sessions.session_token_hash = $1
         AND sessions.expires_at > NOW()
+        AND users.is_active = TRUE
       LIMIT 1
     `,
     [tokenHash],
@@ -94,7 +101,25 @@ export async function getCurrentStaffUser(
   return {
     userId: row.user_id,
     username: row.username,
+    role: row.role,
+    isActive: true,
   };
+}
+
+export async function requireTechAdminUser(
+  request: NextRequest,
+): Promise<AuthenticatedStaffUser> {
+  const user = await getCurrentStaffUser(request);
+
+  if (!user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  if (!isTechAdminRole(user.role)) {
+    throw new Error("TECH_ADMIN_REQUIRED");
+  }
+
+  return user;
 }
 
 export async function getAdminSessionState(request: NextRequest): Promise<AdminSession> {
@@ -103,6 +128,8 @@ export async function getAdminSessionState(request: NextRequest): Promise<AdminS
   return {
     authenticated: Boolean(user),
     username: user?.username ?? null,
+    role: user?.role ?? null,
+    is_tech_admin: isTechAdminRole(user?.role ?? null),
   };
 }
 
@@ -126,6 +153,8 @@ export async function loginStaffUser(
   const result = await getPool().query<StaffUserRow>(
     `
       SELECT id, username, password_hash
+           , role
+           , is_active
       FROM staff_users
       WHERE username = $1
       LIMIT 1
@@ -135,7 +164,7 @@ export async function loginStaffUser(
 
   const user = result.rows[0];
 
-  if (!user || !(await verifySecret(normalizedPassword, user.password_hash))) {
+  if (!user || !user.is_active || !(await verifySecret(normalizedPassword, user.password_hash))) {
     throw new Error("Identifiants invalides.");
   }
 
@@ -164,6 +193,8 @@ export async function loginStaffUser(
     session: {
       authenticated: true,
       username: user.username,
+      role: user.role,
+      is_tech_admin: isTechAdminRole(user.role),
     },
     sessionToken: rawToken,
     expiresAt,

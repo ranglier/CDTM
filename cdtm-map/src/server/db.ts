@@ -2,6 +2,7 @@ import { Pool, type PoolClient } from "pg";
 
 import controleursExample from "../../data/reference/controleurs.example.json";
 import emplacementsRules from "../../data/reference/emplacements_rules.json";
+import type { AdminRole } from "@/admin/roles";
 import nomenclatures from "../../data/reference/nomenclatures.json";
 import { referenceTableDefinitions } from "@/admin/tech-types";
 import { getServerEnv } from "@/server/env";
@@ -332,14 +333,16 @@ async function bootstrapAdminUser(pool: Pool): Promise<void> {
 
   await pool.query(
     `
-      INSERT INTO staff_users (username, password_hash)
-      VALUES ($1, $2)
+      INSERT INTO staff_users (username, password_hash, role, is_active)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (username) DO UPDATE
       SET
         password_hash = EXCLUDED.password_hash,
+        role = EXCLUDED.role,
+        is_active = EXCLUDED.is_active,
         updated_at = NOW()
     `,
-    [env.bootstrapAdminUsername, passwordHash],
+    [env.bootstrapAdminUsername, passwordHash, "tech_admin" satisfies AdminRole, true],
   );
 }
 
@@ -360,10 +363,46 @@ async function initializeDatabase(): Promise<boolean> {
         id BIGSERIAL PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'staff',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         last_login_at TIMESTAMPTZ
       )
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ADD COLUMN IF NOT EXISTS role TEXT
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN
+    `);
+    await client.query(`
+      UPDATE staff_users
+      SET role = 'staff'
+      WHERE role IS NULL OR role NOT IN ('staff', 'tech_admin')
+    `);
+    await client.query(`
+      UPDATE staff_users
+      SET is_active = TRUE
+      WHERE is_active IS NULL
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ALTER COLUMN role SET DEFAULT 'staff'
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ALTER COLUMN role SET NOT NULL
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ALTER COLUMN is_active SET DEFAULT TRUE
+    `);
+    await client.query(`
+      ALTER TABLE staff_users
+      ALTER COLUMN is_active SET NOT NULL
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS staff_sessions (
