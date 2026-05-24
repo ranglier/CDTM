@@ -4,6 +4,7 @@ coverage/
 dist/
 build/
 *.tsbuildinfo
+*.gpkg
 .env
 .env.*
 !.env.example
