@@ -135,9 +135,6 @@ Les objets ponctuels utiliseront exclusivement des icones Game-icons. Les icones
 
 - cle interne ;
 - libelle ;
-- URL source ;
-- auteur ;
-- licence ;
 - categorie ;
 - image uploadee localement ;
 - texte alternatif ;

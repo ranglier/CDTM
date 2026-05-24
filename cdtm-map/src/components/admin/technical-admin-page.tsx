@@ -743,8 +743,6 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Valeur numerique";
     case "icon_key":
       return "Cle icone";
-    case "license":
-      return "Licence";
     case "category":
       return "Categorie";
     case "image_path":
