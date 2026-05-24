@@ -78,6 +78,7 @@ const NOMENCLATURE_LABELS: Record<string, string> = {
 
 const STYLE_FIELDS = ["fill", "stroke", "opacity"] as const;
 type StyleFieldName = (typeof STYLE_FIELDS)[number];
+const DEFAULT_STYLE_STROKE = "#000000";
 const REFERENCE_TECHNICAL_FIELDS = new Set([
   "group_key",
   "entry_key",
@@ -115,13 +116,14 @@ function formatOpacityValue(value: number | null | undefined): string {
 
 function createStylePreview(fill: string, stroke: string, opacity: string) {
   const normalizedFill = normalizeHexColor(fill);
-  const normalizedStroke = normalizeHexColor(stroke) ?? "#1f2937";
+  const normalizedStroke = normalizeHexColor(stroke) ?? DEFAULT_STYLE_STROKE;
   const normalizedOpacity = normalizeOpacityValue(opacity);
+  const effectiveOpacity = normalizedOpacity ?? (normalizedFill ? 1 : 0);
 
   return {
     fill: normalizedFill ?? "#5f6b7a",
     stroke: normalizedStroke,
-    opacity: normalizedOpacity ?? 1,
+    opacity: effectiveOpacity,
   };
 }
 
@@ -148,9 +150,12 @@ function StylePreview({
     <div
       className="h-10 w-16 rounded-[12px] border"
       style={{
-        backgroundColor: preview.fill,
+        backgroundColor: normalizeHexColor(fill)
+          ? `${preview.fill}${Math.round(preview.opacity * 255)
+              .toString(16)
+              .padStart(2, "0")}`
+          : "transparent",
         borderColor: preview.stroke,
-        opacity: preview.opacity,
       }}
       aria-hidden="true"
     />
@@ -168,12 +173,24 @@ function buildStylePayload(
     return null;
   }
 
+  const normalizedFill = values.fill?.trim() || "";
+  const normalizedStroke = values.stroke?.trim() || "";
+  const normalizedOpacity = values.opacity?.trim() || "";
+
+  if (
+    normalizedFill.length === 0 &&
+    (normalizedStroke.length === 0 || normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
+    (normalizedOpacity.length === 0 || normalizedOpacity === "0")
+  ) {
+    return null;
+  }
+
   return {
     target_type: targetType,
     target_id: targetId,
-    fill: values.fill?.trim() || null,
-    stroke: values.stroke?.trim() || null,
-    opacity: values.opacity?.trim() || null,
+    fill: normalizedFill || null,
+    stroke: normalizedStroke || null,
+    opacity: normalizedOpacity || null,
   };
 }
 
@@ -283,8 +300,12 @@ function withStyleValues(
     values: {
       ...row.values,
       fill: style?.fill ?? "",
-      stroke: style?.stroke ?? "",
-      opacity: formatOpacityValue(style?.opacity),
+      stroke: style?.stroke ?? DEFAULT_STYLE_STROKE,
+      opacity: style?.opacity !== null && style?.opacity !== undefined
+        ? formatOpacityValue(style.opacity)
+        : style?.fill
+          ? "1"
+          : "0",
     },
   };
 }
@@ -516,7 +537,6 @@ export function TechnicalAdminPage() {
           title: "Categories de terrain",
           groupKey: "terrain_cat",
           rowCount: nomenclatureGroupCounts.terrain_cat ?? 0,
-          styleTargetType: "terrain_cat",
         },
         {
           id: "nomenclatures:terrain_type",
@@ -921,14 +941,31 @@ export function TechnicalAdminPage() {
     setReferenceRows((current) =>
       current.map((row) =>
         row.localId === localId
-          ? {
-              ...row,
-              values: {
+          ? (() => {
+              const nextValues = {
                 ...row.values,
                 [fieldName]: value,
-              },
-              error: null,
-            }
+              };
+
+              if (fieldName === "fill" || fieldName === "stroke") {
+                const hasChosenColor =
+                  nextValues.fill.trim().length > 0 ||
+                  (nextValues.stroke.trim().length > 0 &&
+                    nextValues.stroke.trim().toLowerCase() !== DEFAULT_STYLE_STROKE);
+
+                if (!hasChosenColor) {
+                  nextValues.opacity = "0";
+                } else if (nextValues.opacity.trim().length === 0 || nextValues.opacity.trim() === "0") {
+                  nextValues.opacity = "1";
+                }
+              }
+
+              return {
+                ...row,
+                values: nextValues,
+                error: null,
+              };
+            })()
           : row,
       ),
     );
@@ -946,6 +983,12 @@ export function TechnicalAdminPage() {
         values: {
           ...createEmptyRowValues(activeReference.definition),
           ...(activeReferenceView.groupKey ? { group_key: activeReferenceView.groupKey } : {}),
+          ...(activeReferenceView.styleTargetType
+            ? {
+                stroke: DEFAULT_STYLE_STROKE,
+                opacity: "0",
+              }
+            : {}),
         },
         originalPrimaryKey: "",
         saving: false,
@@ -1823,22 +1866,20 @@ export function TechnicalAdminPage() {
 
                                 {showStyles ? (
                                   <>
-                                    <div className="lg:col-span-2">
-                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                                        Apercu
-                                      </p>
-                                      <StylePreview
-                                        fill={row.values.fill ?? ""}
-                                        stroke={row.values.stroke ?? ""}
-                                        opacity={row.values.opacity ?? ""}
-                                      />
-                                    </div>
-
                                     <div>
                                       <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                         Couleur de fond
                                       </p>
-                                      <div className="flex gap-3">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="color"
+                                          className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
+                                          value={normalizeHexColor(row.values.fill ?? "") ?? "#5f6b7a"}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "fill", event.target.value)
+                                          }
+                                        />
                                         <input
                                           className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
                                             isHexColorInputValid(row.values.fill ?? "")
@@ -1851,15 +1892,6 @@ export function TechnicalAdminPage() {
                                             handleReferenceRowValueChange(row.localId, "fill", event.target.value)
                                           }
                                         />
-                                        <input
-                                          type="color"
-                                          className="h-11 w-16 rounded-[14px] border border-border/70 bg-background/55 p-1"
-                                          value={normalizeHexColor(row.values.fill ?? "") ?? "#5f6b7a"}
-                                          disabled={row.saving}
-                                          onChange={(event) =>
-                                            handleReferenceRowValueChange(row.localId, "fill", event.target.value)
-                                          }
-                                        />
                                       </div>
                                     </div>
 
@@ -1867,7 +1899,16 @@ export function TechnicalAdminPage() {
                                       <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                         Couleur de contour
                                       </p>
-                                      <div className="flex gap-3">
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="color"
+                                          className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
+                                          value={normalizeHexColor(row.values.stroke ?? "") ?? DEFAULT_STYLE_STROKE}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "stroke", event.target.value)
+                                          }
+                                        />
                                         <input
                                           className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
                                             isHexColorInputValid(row.values.stroke ?? "")
@@ -1875,15 +1916,6 @@ export function TechnicalAdminPage() {
                                               : "border-destructive/70"
                                           }`}
                                           value={row.values.stroke ?? ""}
-                                          disabled={row.saving}
-                                          onChange={(event) =>
-                                            handleReferenceRowValueChange(row.localId, "stroke", event.target.value)
-                                          }
-                                        />
-                                        <input
-                                          type="color"
-                                          className="h-11 w-16 rounded-[14px] border border-border/70 bg-background/55 p-1"
-                                          value={normalizeHexColor(row.values.stroke ?? "") ?? "#1f2937"}
                                           disabled={row.saving}
                                           onChange={(event) =>
                                             handleReferenceRowValueChange(row.localId, "stroke", event.target.value)

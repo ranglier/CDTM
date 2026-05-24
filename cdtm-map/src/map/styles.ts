@@ -20,7 +20,7 @@ type CaseStyleOptions = {
 };
 
 const DEFAULT_FILL = "rgba(0, 0, 0, 0)";
-const DEFAULT_STROKE = "rgba(14, 15, 18, 0.96)";
+const DEFAULT_STROKE = "rgba(0, 0, 0, 0.96)";
 const DEFAULT_STROKE_WIDTH = 1.2;
 
 const styleCache = new Map<string, Style>();
@@ -93,7 +93,6 @@ function resolveBaseStyle(
   if (displayMode === "topographic" && properties) {
     return (
       getStyleForTarget(styles, "terrain_type", properties.terrain_type) ??
-      getStyleForTarget(styles, "terrain_cat", properties.terrain_cat) ??
       getStyleForTarget(styles, "relief", properties.relief)
     );
   }
@@ -108,7 +107,8 @@ export function getCaseStyle({
   styles,
 }: CaseStyleOptions): Style {
   const resolved = resolveBaseStyle(displayMode, properties, styles);
-  const fillOpacity = resolved?.opacity ?? (displayMode === "neutral" ? 0 : 0.72);
+  const fillOpacity =
+    displayMode === "neutral" ? 0 : resolved?.fill ? (resolved.opacity ?? 1) : 0;
   const fillColor = toRgba(resolved?.fill ?? null, fillOpacity, DEFAULT_FILL);
   const baseStrokeColor = toRgba(resolved?.stroke ?? null, 0.96, DEFAULT_STROKE);
 

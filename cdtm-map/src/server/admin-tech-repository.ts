@@ -192,11 +192,7 @@ function getReferenceStyleTargetType(
   if (definition.key === "nomenclatures") {
     const normalizedGroupKey = normalizeText(groupKey);
 
-    if (
-      normalizedGroupKey === "terrain_cat" ||
-      normalizedGroupKey === "terrain_type" ||
-      normalizedGroupKey === "relief"
-    ) {
+    if (normalizedGroupKey === "terrain_type" || normalizedGroupKey === "relief") {
       return normalizedGroupKey;
     }
   }
