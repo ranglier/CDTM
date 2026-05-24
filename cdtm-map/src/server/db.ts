@@ -772,11 +772,23 @@ async function initializeDatabase(): Promise<boolean> {
       ADD COLUMN IF NOT EXISTS image_size_bytes INTEGER
     `);
     await client.query(`
-      UPDATE reference_map_icons
-      SET image_path = image_url
-      WHERE image_path IS NULL
-        AND image_url IS NOT NULL
-        AND image_url LIKE '/uploads/map-icons/%'
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'reference_map_icons'
+            AND column_name = 'image_url'
+        ) THEN
+          UPDATE reference_map_icons
+          SET image_path = image_url
+          WHERE image_path IS NULL
+            AND image_url IS NOT NULL
+            AND image_url LIKE '/uploads/map-icons/%';
+        END IF;
+      END
+      $$;
     `);
     await client.query(`
       ALTER TABLE reference_map_icons
