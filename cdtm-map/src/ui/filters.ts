@@ -3,7 +3,7 @@ export type CaseFilters = {
   terrainCat?: string;
   terrainType?: string;
   faction?: string;
-  peupleMajoritaire?: string;
+  peuple?: string;
   controleType?: string;
   cote?: boolean;
 };

@@ -340,27 +340,23 @@ function normalizeDateTime(value: unknown): string | null {
   return parsed.toISOString();
 }
 
-function normalizeImageUrl(value: unknown): string | null {
+function normalizeImagePath(value: unknown): string | null {
   const normalized = normalizeNullableText(value);
 
   if (!normalized) {
     return null;
   }
 
-  if (
-    normalized.startsWith("http://") ||
-    normalized.startsWith("https://") ||
-    normalized.startsWith("/")
-  ) {
+  if (/^\/uploads\/map-icons\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(normalized)) {
     return normalized;
   }
 
-  throw new Error("URL d'image invalide.");
+  throw new Error("Chemin d'image invalide.");
 }
 
 function normalizeFieldValue(field: TechFieldDefinition, value: unknown): ReferenceTableRowValue {
-  if (field.name === "image_url") {
-    return normalizeImageUrl(value);
+  if (field.name === "image_path") {
+    return normalizeImagePath(value);
   }
 
   switch (field.type) {
@@ -499,13 +495,36 @@ function buildReferenceTableQuery(
   const normalizedGroupKey =
     definition.key === "nomenclatures" ? normalizeNullableText(groupKey) : null;
 
+  const orderBy = (() => {
+    switch (definition.key) {
+      case "nomenclatures":
+        return "LOWER(COALESCE(ref.label, ref.entry_key)) ASC, ref.entry_key ASC";
+      case "factions":
+        return "LOWER(COALESCE(ref.nom, ref.id_faction)) ASC, ref.id_faction ASC";
+      case "controleurs":
+        return "LOWER(COALESCE(ref.nom, ref.id_controleur)) ASC, ref.id_controleur ASC";
+      case "emplacements_rules":
+        return "LOWER(COALESCE(ref.rule_label, ref.rule_key)) ASC, ref.rule_key ASC";
+      case "map_icons":
+        return "LOWER(COALESCE(ref.label, ref.icon_key)) ASC, ref.icon_key ASC";
+      case "map_point_types":
+        return "LOWER(COALESCE(ref.label, ref.type_key)) ASC, ref.type_key ASC";
+      case "races":
+        return "LOWER(COALESCE(ref.label, ref.race_key)) ASC, ref.race_key ASC";
+      case "peuples":
+        return "LOWER(COALESCE(ref.label, ref.peuple_key)) ASC, ref.peuple_key ASC";
+      default:
+        return `ref.${definition.primary_key} ASC`;
+    }
+  })();
+
   if ((!search || searchColumns.length === 0) && !normalizedGroupKey) {
     return {
       sql: `
         SELECT ${columns}, staff_users.username AS updated_by_username
         FROM ${definition.physical_name} AS ref
         LEFT JOIN staff_users ON staff_users.id = ref.updated_by_user_id
-        ORDER BY ref.${definition.primary_key} DESC
+        ORDER BY ${orderBy}
         LIMIT $1
       `,
       values: [limit],
@@ -537,7 +556,7 @@ function buildReferenceTableQuery(
       FROM ${definition.physical_name} AS ref
       LEFT JOIN staff_users ON staff_users.id = ref.updated_by_user_id
       WHERE ${whereClauses.join(" AND ")}
-      ORDER BY ref.${definition.primary_key} DESC
+      ORDER BY ${orderBy}
       LIMIT $${values.length + 1}
     `,
     values: [...values, limit],
@@ -732,7 +751,7 @@ async function listReferenceOptionsInternal(
           SELECT entry_key, label
           FROM reference_nomenclature_values
           WHERE group_key = $1
-          ORDER BY sort_order ASC, entry_key ASC
+          ORDER BY LOWER(COALESCE(label, entry_key)) ASC, entry_key ASC
         `,
         [normalizedGroupKey],
       );
@@ -804,7 +823,7 @@ async function listReferenceOptionsInternal(
           SELECT icon_key, label
           FROM reference_map_icons
           WHERE is_active = TRUE
-          ORDER BY sort_order ASC, icon_key ASC
+          ORDER BY LOWER(COALESCE(label, icon_key)) ASC, icon_key ASC
         `,
       );
 
@@ -819,7 +838,7 @@ async function listReferenceOptionsInternal(
           SELECT type_key, label
           FROM reference_map_point_types
           WHERE is_active = TRUE
-          ORDER BY sort_order ASC, type_key ASC
+          ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
         `,
       );
 
@@ -834,7 +853,7 @@ async function listReferenceOptionsInternal(
           SELECT race_key, label
           FROM reference_races
           WHERE is_active = TRUE
-          ORDER BY sort_order ASC, race_key ASC
+          ORDER BY LOWER(COALESCE(label, race_key)) ASC, race_key ASC
         `,
       );
 
@@ -849,7 +868,7 @@ async function listReferenceOptionsInternal(
           SELECT peuple_key, label
           FROM reference_peuples
           WHERE is_active = TRUE
-          ORDER BY sort_order ASC, peuple_key ASC
+          ORDER BY LOWER(COALESCE(label, peuple_key)) ASC, peuple_key ASC
         `,
       );
 
@@ -922,7 +941,7 @@ export async function getStaticAdminReferenceData(
             SELECT entry_key, label, parent_entry_key
             FROM reference_nomenclature_values
             WHERE group_key = 'terrain_type'
-            ORDER BY sort_order ASC, entry_key ASC
+            ORDER BY LOWER(COALESCE(label, entry_key)) ASC, entry_key ASC
           `,
         ),
         listReferenceOptionsInternal(client, "nomenclatures", "relief"),

@@ -9,7 +9,7 @@ export type CaseProperties = {
   lac_majeur?: boolean | null;
   cours_eau_majeur?: boolean | null;
   faction?: string | null;
-  peuple_majoritaire?: string | null;
+  peuple?: string | null;
   bonus_speciaux?: string[] | null;
   empl_base?: number | null;
   empl_max?: number | null;
@@ -63,7 +63,7 @@ export function buildCasePopup(properties: CaseProperties = {}): string {
       ? renderRow("Cours d'eau majeur", properties.cours_eau_majeur)
       : "",
     renderRow("Faction", properties.faction),
-    renderRow("Peuple majoritaire", properties.peuple_majoritaire),
+    renderRow("Peuple", properties.peuple),
     renderRow("Emplacements", formatEmplacements(properties)),
     renderRow("Contrôleur", properties.controleur),
     renderRow("Type de contrôle", properties.controle_type),

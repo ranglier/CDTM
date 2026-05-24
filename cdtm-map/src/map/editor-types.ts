@@ -11,10 +11,12 @@ export type MapIcon = {
   author: string;
   license: string;
   category: string | null;
-  image_url: string | null;
+  image_path: string | null;
+  image_original_name: string | null;
+  image_mime_type: string | null;
+  image_size_bytes: number | null;
   image_alt: string | null;
   is_active: boolean;
-  sort_order: number;
   updated_by_user_id: number | null;
   created_at: string;
   updated_at: string;
@@ -28,7 +30,6 @@ export type MapPointType = {
   default_icon_key: string | null;
   consumes_slot: boolean;
   slot_weight: number;
-  sort_order: number;
   is_active: boolean;
   updated_by_user_id: number | null;
   created_at: string;
@@ -77,7 +78,6 @@ export type Race = {
   race_key: string;
   label: string;
   description: string | null;
-  sort_order: number;
   is_active: boolean;
   updated_by_user_id: number | null;
   created_at: string;
@@ -89,7 +89,6 @@ export type Peuple = {
   race_key: string;
   label: string;
   description: string | null;
-  sort_order: number;
   is_active: boolean;
   updated_by_user_id: number | null;
   created_at: string;

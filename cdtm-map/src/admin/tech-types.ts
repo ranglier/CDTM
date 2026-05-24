@@ -74,6 +74,13 @@ export type ReferenceStyleValue = Pick<
   "fill" | "stroke" | "pattern_type" | "pattern_color"
 >;
 
+export type MapIconUploadMetadata = {
+  image_path: string;
+  image_original_name: string;
+  image_mime_type: string;
+  image_size_bytes: number;
+};
+
 export type AdminStyleUpsertInput = {
   target_type: MapStyleTargetType;
   target_id: string;
@@ -268,10 +275,12 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "author", label: "author", type: "text", required: true, searchable: true },
       { name: "license", label: "license", type: "text", searchable: true },
       { name: "category", label: "category", type: "text", searchable: true },
-      { name: "image_url", label: "image_url", type: "text", searchable: true },
+      { name: "image_path", label: "image_path", type: "text", searchable: true },
+      { name: "image_original_name", label: "image_original_name", type: "text", searchable: true },
+      { name: "image_mime_type", label: "image_mime_type", type: "text", searchable: true },
+      { name: "image_size_bytes", label: "image_size_bytes", type: "integer" },
       { name: "image_alt", label: "image_alt", type: "text", searchable: true },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
@@ -296,7 +305,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       },
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
       { name: "slot_weight", label: "slot_weight", type: "integer" },
-      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
@@ -313,7 +321,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "race_key", label: "race_key", type: "text", required: true, searchable: true },
       { name: "label", label: "label", type: "text", required: true, searchable: true },
       { name: "description", label: "description", type: "textarea", searchable: true },
-      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
@@ -338,7 +345,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       },
       { name: "label", label: "label", type: "text", required: true, searchable: true },
       { name: "description", label: "description", type: "textarea", searchable: true },
-      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },

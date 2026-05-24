@@ -89,6 +89,17 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
   await client.query(
     `
       UPDATE reference_nomenclature_values
+      SET
+        group_key = 'peuple',
+        id_entry = CONCAT('peuple:', entry_key),
+        updated_at = NOW()
+      WHERE group_key = 'peuple_majoritaire'
+    `,
+  );
+
+  await client.query(
+    `
+      UPDATE reference_nomenclature_values
       SET parent_entry_key = 'terres_gelees', updated_at = NOW()
       WHERE parent_entry_key = 'desert_glace'
     `,
@@ -294,18 +305,17 @@ async function seedReferenceRaces(client: PoolClient): Promise<void> {
     "hobbits",
   ] as const;
 
-  for (const [index, raceKey] of races.entries()) {
+  for (const raceKey of races) {
     await client.query(
       `
-        INSERT INTO reference_races (race_key, label, sort_order)
-        VALUES ($1, $2, $3)
+        INSERT INTO reference_races (race_key, label)
+        VALUES ($1, $2)
         ON CONFLICT (race_key) DO UPDATE
         SET
           label = EXCLUDED.label,
-          sort_order = EXCLUDED.sort_order,
           updated_at = NOW()
       `,
-      [raceKey, raceKey, index],
+      [raceKey, raceKey],
     );
   }
 }
@@ -328,19 +338,18 @@ async function seedReferencePeuples(client: PoolClient): Promise<void> {
     ["hobbits", "hobbits"],
   ] as const;
 
-  for (const [index, [peupleKey, raceKey]] of peuples.entries()) {
+  for (const [peupleKey, raceKey] of peuples) {
     await client.query(
       `
-        INSERT INTO reference_peuples (peuple_key, race_key, label, sort_order)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO reference_peuples (peuple_key, race_key, label)
+        VALUES ($1, $2, $3)
         ON CONFLICT (peuple_key) DO UPDATE
         SET
           race_key = EXCLUDED.race_key,
           label = EXCLUDED.label,
-          sort_order = EXCLUDED.sort_order,
           updated_at = NOW()
       `,
-      [peupleKey, raceKey, peupleKey, index],
+      [peupleKey, raceKey, peupleKey],
     );
   }
 }
@@ -364,7 +373,7 @@ async function seedMapPointTypes(client: PoolClient): Promise<void> {
     ["dependance", "locality", false],
   ] as const;
 
-  for (const [index, [typeKey, objectFamily, consumesSlot]] of pointTypes.entries()) {
+  for (const [typeKey, objectFamily, consumesSlot] of pointTypes) {
     await client.query(
       `
         INSERT INTO reference_map_point_types (
@@ -373,20 +382,18 @@ async function seedMapPointTypes(client: PoolClient): Promise<void> {
           label,
           default_icon_key,
           consumes_slot,
-          slot_weight,
-          sort_order
+          slot_weight
         )
-        VALUES ($1, $2, $3, NULL, $4, $5, $6)
+        VALUES ($1, $2, $3, NULL, $4, $5)
         ON CONFLICT (type_key) DO UPDATE
         SET
           object_family = EXCLUDED.object_family,
           label = EXCLUDED.label,
           consumes_slot = EXCLUDED.consumes_slot,
           slot_weight = EXCLUDED.slot_weight,
-          sort_order = EXCLUDED.sort_order,
           updated_at = NOW()
       `,
-      [typeKey, objectFamily, typeKey, consumesSlot, 0, index],
+      [typeKey, objectFamily, typeKey, consumesSlot, 0],
     );
   }
 }
@@ -585,6 +592,7 @@ async function initializeDatabase(): Promise<boolean> {
       CREATE TABLE IF NOT EXISTS case_emplacements_current (
         id_case TEXT PRIMARY KEY REFERENCES case_registry(id_case) ON DELETE CASCADE,
         peuple_majoritaire TEXT,
+        peuple TEXT,
         bonus_speciaux TEXT,
         empl_base INTEGER,
         empl_max INTEGER,
@@ -595,6 +603,12 @@ async function initializeDatabase(): Promise<boolean> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      UPDATE case_emplacements_current
+      SET peuple = COALESCE(peuple, peuple_majoritaire)
+      WHERE peuple IS NULL
+        AND peuple_majoritaire IS NOT NULL
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS case_public_current (
@@ -730,14 +744,47 @@ async function initializeDatabase(): Promise<boolean> {
         author TEXT NOT NULL,
         license TEXT NOT NULL DEFAULT 'CC BY 3.0',
         category TEXT,
-        image_url TEXT,
+        image_path TEXT,
+        image_original_name TEXT,
+        image_mime_type TEXT,
+        image_size_bytes INTEGER,
         image_alt TEXT,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-        sort_order INTEGER NOT NULL DEFAULT 0,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ADD COLUMN IF NOT EXISTS image_path TEXT
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ADD COLUMN IF NOT EXISTS image_original_name TEXT
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ADD COLUMN IF NOT EXISTS image_mime_type TEXT
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ADD COLUMN IF NOT EXISTS image_size_bytes INTEGER
+    `);
+    await client.query(`
+      UPDATE reference_map_icons
+      SET image_path = image_url
+      WHERE image_path IS NULL
+        AND image_url IS NOT NULL
+        AND image_url LIKE '/uploads/map-icons/%'
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      DROP COLUMN IF EXISTS image_url
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      DROP COLUMN IF EXISTS sort_order
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS reference_map_point_types (
@@ -748,12 +795,15 @@ async function initializeDatabase(): Promise<boolean> {
         default_icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
         consumes_slot BOOLEAN NOT NULL DEFAULT FALSE,
         slot_weight INTEGER NOT NULL DEFAULT 0 CHECK (slot_weight >= 0),
-        sort_order INTEGER NOT NULL DEFAULT 0,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_point_types
+      DROP COLUMN IF EXISTS sort_order
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS map_points (
@@ -795,7 +845,6 @@ async function initializeDatabase(): Promise<boolean> {
         race_key TEXT PRIMARY KEY,
         label TEXT NOT NULL,
         description TEXT,
-        sort_order INTEGER NOT NULL DEFAULT 0,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -803,17 +852,24 @@ async function initializeDatabase(): Promise<boolean> {
       )
     `);
     await client.query(`
+      ALTER TABLE reference_races
+      DROP COLUMN IF EXISTS sort_order
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS reference_peuples (
         peuple_key TEXT PRIMARY KEY,
         race_key TEXT NOT NULL REFERENCES reference_races(race_key) ON DELETE RESTRICT,
         label TEXT NOT NULL,
         description TEXT,
-        sort_order INTEGER NOT NULL DEFAULT 0,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE reference_peuples
+      DROP COLUMN IF EXISTS sort_order
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS dynamic_case_tables (
@@ -867,15 +923,15 @@ async function initializeDatabase(): Promise<boolean> {
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS reference_map_icons_active_idx
-      ON reference_map_icons(is_active, sort_order, icon_key)
+      ON reference_map_icons(is_active, label, icon_key)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS reference_map_point_types_family_idx
-      ON reference_map_point_types(object_family, sort_order, type_key)
+      ON reference_map_point_types(object_family, label, type_key)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS reference_peuples_race_idx
-      ON reference_peuples(race_key, sort_order, peuple_key)
+      ON reference_peuples(race_key, label, peuple_key)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS map_points_status_idx

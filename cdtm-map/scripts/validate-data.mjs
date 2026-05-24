@@ -20,7 +20,7 @@ const fallbackReservedBusinessFields = [
   "relief",
   "terrain_secondaire",
   "faction",
-  "peuple_majoritaire",
+  "peuple",
   "bonus_speciaux",
   "empl_base",
   "empl_max",

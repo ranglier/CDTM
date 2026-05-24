@@ -13,6 +13,7 @@ import type {
   ReferenceOption,
   ReferenceStyleValue,
   DynamicCaseTableSummary,
+  MapIconUploadMetadata,
   DynamicCaseTableUpdateInput,
   ReferenceTableDefinition,
   ReferenceTableKey,
@@ -42,6 +43,7 @@ type EditableRow = {
   values: Record<string, string>;
   originalPrimaryKey: string;
   saving: boolean;
+  uploading: boolean;
   error: string | null;
   isNew: boolean;
 };
@@ -67,7 +69,6 @@ const FEATURED_NOMENCLATURE_GROUPS = new Set([
   "terrain_type",
   "relief",
   "controle_type",
-  "peuple_majoritaire",
 ]);
 
 const NOMENCLATURE_LABELS: Record<string, string> = {
@@ -75,7 +76,7 @@ const NOMENCLATURE_LABELS: Record<string, string> = {
   terrain_type: "Types de terrain",
   relief: "Reliefs",
   controle_type: "Types de controle",
-  peuple_majoritaire: "Peuples majoritaires",
+  peuple: "Peuples",
 };
 
 const STYLE_FIELDS = ["fill", "stroke", "pattern_type", "pattern_color"] as const;
@@ -102,9 +103,19 @@ const REFERENCE_TECHNICAL_FIELDS = new Set([
   "type_key",
   "race_key",
   "peuple_key",
+  "image_path",
+  "image_original_name",
+  "image_mime_type",
+  "image_size_bytes",
   "updated_by_user_id",
   "created_at",
   "updated_at",
+]);
+const LOCKED_REFERENCE_FIELDS = new Set([
+  "image_path",
+  "image_original_name",
+  "image_mime_type",
+  "image_size_bytes",
 ]);
 
 function getStyleTargetIdForRow(view: ReferenceView | null, values: Record<string, string>): string | null {
@@ -228,7 +239,7 @@ function StylePreview({
 
 function isPreviewImageUrl(value: string): boolean {
   const trimmed = value.trim();
-  return trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("/");
+  return trimmed.startsWith("/uploads/map-icons/");
 }
 
 function ImagePreview({ imageUrl, imageAlt }: { imageUrl: string; imageAlt: string }) {
@@ -240,7 +251,7 @@ function ImagePreview({ imageUrl, imageAlt }: { imageUrl: string; imageAlt: stri
   }
 
   if (!isPreviewImageUrl(trimmedUrl)) {
-    return <p className="text-sm text-muted-foreground">URL d’image invalide ou non prise en charge.</p>;
+    return <p className="text-sm text-muted-foreground">Image non disponible pour l’instant.</p>;
   }
 
   if (hasError) {
@@ -364,6 +375,31 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function uploadMapIconFile(file: File): Promise<MapIconUploadMetadata> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await fetch("/api/admin/tech/uploads/map-icons", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Upload impossible.";
+
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data.error) {
+        message = data.error;
+      }
+    } catch {}
+
+    throw new Error(message);
+  }
+
+  return (await response.json()) as MapIconUploadMetadata;
+}
+
 function rowValueToInputValue(value: string | number | boolean | null): string {
   if (value === null) {
     return "";
@@ -395,6 +431,7 @@ function toEditableRow(definition: ReferenceTableDefinition, row: ReferenceTable
     ),
     originalPrimaryKey: rowValueToInputValue(row[definition.primary_key] ?? null),
     saving: false,
+    uploading: false,
     error: null,
     isNew: false,
   };
@@ -686,8 +723,6 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Valeur interne";
     case "parent_entry_key":
       return "Valeur parente";
-    case "sort_order":
-      return "Ordre";
     case "updated_by_user_id":
       return "Derniere modification par";
     case "created_at":
@@ -716,8 +751,14 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Licence";
     case "category":
       return "Categorie";
-    case "image_url":
-      return "URL image";
+    case "image_path":
+      return "Chemin image";
+    case "image_original_name":
+      return "Nom de fichier";
+    case "image_mime_type":
+      return "Type MIME";
+    case "image_size_bytes":
+      return "Taille fichier";
     case "image_alt":
       return "Texte alternatif";
     case "is_active":
@@ -883,11 +924,11 @@ export function TechnicalAdminPage() {
       title: "Peuples",
       views: [
         {
-          id: "nomenclatures:peuple_majoritaire",
+          id: "nomenclatures:peuple",
           tableKey: "nomenclatures",
-          title: "Peuples majoritaires",
-          groupKey: "peuple_majoritaire",
-          rowCount: nomenclatureGroupCounts.peuple_majoritaire ?? 0,
+          title: "Peuples",
+          groupKey: "peuple",
+          rowCount: nomenclatureGroupCounts.peuple ?? 0,
         },
       ],
     });
@@ -1326,6 +1367,53 @@ export function TechnicalAdminPage() {
     );
   }, [activeReference]);
 
+  const handleMapIconUpload = useCallback(async (row: EditableRow, file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    setReferenceRows((current) =>
+      current.map((item) =>
+        item.localId === row.localId ? { ...item, uploading: true, error: null } : item,
+      ),
+    );
+
+    try {
+      const uploaded = await uploadMapIconFile(file);
+
+      setReferenceRows((current) =>
+        current.map((item) =>
+          item.localId === row.localId
+            ? {
+                ...item,
+                uploading: false,
+                values: applyReferenceAutoFill("map_icons", item.values, {
+                  ...item.values,
+                  image_path: uploaded.image_path,
+                  image_original_name: uploaded.image_original_name,
+                  image_mime_type: uploaded.image_mime_type,
+                  image_size_bytes: String(uploaded.image_size_bytes),
+                  image_alt: item.values.image_alt || item.values.label || file.name,
+                }),
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setReferenceRows((current) =>
+        current.map((item) =>
+          item.localId === row.localId
+            ? {
+                ...item,
+                uploading: false,
+                error: error instanceof Error ? error.message : "Upload impossible.",
+              }
+            : item,
+        ),
+      );
+    }
+  }, []);
+
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
       return;
@@ -1348,6 +1436,7 @@ export function TechnicalAdminPage() {
         },
         originalPrimaryKey: "",
         saving: false,
+        uploading: false,
         error: null,
         isNew: true,
       },
@@ -2158,7 +2247,7 @@ export function TechnicalAdminPage() {
                             "Type sans categorie parente";
                           const showStyles = Boolean(activeReferenceView?.styleTargetType);
                           const hasImageFields =
-                            activeReference.definition.fields.some((field) => field.name === "image_url") &&
+                            activeReference.definition.fields.some((field) => field.name === "image_path") &&
                             activeReference.definition.fields.some((field) => field.name === "image_alt");
                           const previewAlt =
                             row.values.image_alt ||
@@ -2222,7 +2311,7 @@ export function TechnicalAdminPage() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    disabled={row.saving}
+                                    disabled={row.saving || row.uploading}
                                     onClick={(event) => {
                                       event.preventDefault();
                                       void handleDeleteReferenceRow(row);
@@ -2230,7 +2319,7 @@ export function TechnicalAdminPage() {
                                   >
                                     Supprimer
                                   </Button>
-                                  <Button type="button" size="sm" disabled={row.saving}>
+                                  <Button type="button" size="sm" disabled={row.saving || row.uploading}>
                                     Modifier
                                   </Button>
                                 </div>
@@ -2270,7 +2359,7 @@ export function TechnicalAdminPage() {
                                       <FieldEditor
                                         field={field}
                                         value={row.values[field.name] ?? ""}
-                                        disabled={row.saving}
+                                        disabled={row.saving || row.uploading}
                                         options={referenceFieldOptions[field.name]}
                                         onChange={(value) =>
                                           handleReferenceRowValueChange(row.localId, field.name, value)
@@ -2282,12 +2371,28 @@ export function TechnicalAdminPage() {
 
                                 {hasImageFields ? (
                                   <div className="lg:col-span-2">
-                                    <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                                      Apercu image
-                                    </p>
+                                    <div className="mb-3 flex items-center justify-between gap-3">
+                                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Image importee
+                                      </p>
+                                      <label className="inline-flex cursor-pointer items-center rounded-full border border-border/70 bg-background/35 px-3 py-1.5 text-sm text-foreground transition hover:border-primary/60">
+                                        <input
+                                          type="file"
+                                          accept=".png,.webp,.svg,image/png,image/webp,image/svg+xml"
+                                          className="hidden"
+                                          disabled={row.saving || row.uploading}
+                                          onChange={(event) => {
+                                            const file = event.target.files?.[0] ?? null;
+                                            void handleMapIconUpload(row, file);
+                                            event.currentTarget.value = "";
+                                          }}
+                                        />
+                                        {row.uploading ? "Import..." : "Importer une image"}
+                                      </label>
+                                    </div>
                                     <ImagePreview
-                                      key={`${row.localId}:${row.values.image_url ?? ""}`}
-                                      imageUrl={row.values.image_url ?? ""}
+                                      key={`${row.localId}:${row.values.image_path ?? ""}`}
+                                      imageUrl={row.values.image_path ?? ""}
                                       imageAlt={previewAlt}
                                     />
                                   </div>
@@ -2443,7 +2548,7 @@ export function TechnicalAdminPage() {
                                           <select
                                             className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
                                             value={row.values[field.name] ?? ""}
-                                            disabled={row.saving}
+                                            disabled={row.saving || row.uploading}
                                             onChange={(event) =>
                                               handleReferenceRowValueChange(
                                                 row.localId,
@@ -2463,7 +2568,9 @@ export function TechnicalAdminPage() {
                                           <FieldEditor
                                             field={field}
                                             value={row.values[field.name] ?? ""}
-                                            disabled={row.saving}
+                                            disabled={
+                                              row.saving || row.uploading || LOCKED_REFERENCE_FIELDS.has(field.name)
+                                            }
                                             options={referenceFieldOptions[field.name]}
                                             onChange={(value) =>
                                               handleReferenceRowValueChange(row.localId, field.name, value)
@@ -2483,7 +2590,7 @@ export function TechnicalAdminPage() {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={row.saving}
+                                  disabled={row.saving || row.uploading}
                                   onClick={() => {
                                     if (row.isNew) {
                                       void handleDeleteReferenceRow(row);
@@ -2498,10 +2605,10 @@ export function TechnicalAdminPage() {
                                 <Button
                                   type="button"
                                   size="sm"
-                                  disabled={row.saving}
+                                  disabled={row.saving || row.uploading}
                                   onClick={() => void handleSaveReferenceRow(row)}
                                 >
-                                  {row.saving ? "Enregistrement..." : "Enregistrer"}
+                                  {row.saving ? "Enregistrement..." : row.uploading ? "Import..." : "Enregistrer"}
                                 </Button>
                               </div>
                             </details>
