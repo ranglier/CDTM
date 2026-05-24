@@ -5,7 +5,7 @@
 L'admin V1 ajoute un acces staff a la carte pour :
 
 - se connecter ;
-- consulter et modifier `notes`, `terrain` et `controle` ;
+- consulter et modifier le terrain, le controle et les donnees publiques de case ;
 - enregistrer ces donnees en base via `id_case`.
 
 Deux roles existent :
@@ -62,17 +62,18 @@ La commande :
 
 - la couche stable reste servie depuis `public/data/cases.geojson`
 - les donnees admin sont stockees dans PostgreSQL
-- `note_publique` peut etre exposee publiquement
-- `note_staff` reste reservee aux routes admin
+- toutes les donnees de case exposees dans l'application sont publiques en lecture
+- les champs de notes ne font plus partie du contrat applicatif courant
 
 ## Admin technique
 
 L'admin technique sert a maintenir les structures partagees par toutes les cases.
 
-On y trouve deux espaces :
+On y trouve notamment :
 
 - `Listes de valeurs` : listes de choix reutilisees dans les formulaires, par exemple les terrains, factions, types de controle ou styles ;
-- `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases.
+- `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases ;
+- `Comptes staff` : gestion des comptes `staff` et `tech_admin`.
 
 Certaines listes partagees passent techniquement par la meme table `reference_nomenclature_values`, mais l'interface les separe en vues metier distinctes.
 
@@ -113,14 +114,87 @@ Les details techniques restent rattaches a `reference_styles`, mais ce n'est plu
 
 L'opacite n'est plus reglable.
 
-Une section `Comptes staff` permet aussi de :
+## Editeur cartographique prevu
 
-- lister les comptes existants ;
-- creer un compte `staff` ou `tech_admin` ;
-- changer le role d'un compte ;
-- desactiver un compte sans le supprimer.
+Une nouvelle page `/editeur` est prevue pour travailler directement sur la carte.
 
-Un compte `staff` connecte ne voit pas le lien `Technique` et ne peut pas ouvrir `/admin/tech`.
+Objectifs :
+
+- placer librement des localites et landmarks, sans les forcer au centre des cases ;
+- tracer et modifier des routes sous forme de lignes libres ;
+- afficher et editer des forces ponctuelles comme les armees et flottes ;
+- detecter la case sous un point ou les cases traversees par une route ;
+- preparer les validations d'emplacements.
+
+L'editeur doit etre protege au minimum par le role `tech_admin` dans sa premiere version.
+
+Les objets ponctuels utiliseront exclusivement des icones Game-icons. Les icones doivent etre gerees dans un catalogue administrable avec :
+
+- cle interne ;
+- libelle ;
+- URL source ;
+- auteur ;
+- licence ;
+- categorie ;
+- statut actif/inactif.
+
+Catalogue initial valide :
+
+| Usage | Icone Game-icons |
+| --- | --- |
+| Fort | `stone-tower` |
+| Ruines | `tower-fall` |
+| Ville fortifiee | `castle` |
+| Ville non fortifiee | `medieval-village-01` |
+| Avant-poste | `watchtower` |
+| Port | `anchor` |
+| Pont | `stone-bridge` |
+| Mine | `bridge` |
+| Barad-Dur | `evil-tower` |
+| Moria | `arabic-door` |
+| Hobbit bourg | `hobbit-dwelling` |
+| Hauts-des-Galgals | `tumulus` |
+| Armee | `rally-the-troops` |
+| Flotte | `caravel` |
+
+Les types d'objets doivent rester separes des icones : un type pointe vers une icone par defaut, mais un objet cartographique peut eventuellement surcharger son icone.
+
+Le type `dependance` doit permettre de representer un lieu dependant d'une cite ou localite voisine.
+
+## Races, peuples et emplacements
+
+Les emplacements doivent etre calcules a partir du sous-type de terrain (`terrain_type`), pas directement depuis la categorie (`terrain_cat`).
+
+Si aucun chiffre n'est defini pour un sous-type, il herite de la valeur de sa categorie parente.
+
+Renommage valide :
+
+- ne plus utiliser `desert_gele` ;
+- utiliser `terres_gelees`.
+
+Une table `reference_races` doit regrouper les peuples par grande race :
+
+- `nains`
+- `orques`
+- `elfes`
+- `hommes`
+- `hobbits`
+
+Une table `reference_peuples` doit rattacher chaque peuple a une race.
+
+Formule valide :
+
+```text
+empl_max = sous_type_terrain + bonus_race + bonus_contextuel
+empl_max = min(5, max(1, empl_max))
+```
+
+Regles :
+
+- aucune valeur finale ne peut depasser 5 ;
+- aucune valeur finale ne peut descendre sous 1 ;
+- aucun depassement d'occupation n'est autorise ;
+- si les objets occupant une case excedent `empl_max`, la publication doit etre refusee.
 
 ## Consultation puis edition
 
@@ -153,7 +227,7 @@ L'interface affiche parfois ces noms internes pour aider au diagnostic, mais les
 
 ## Limites V1
 
-- pas d'historisation
-- pas de versioning metier
+- pas d'historisation complete
+- pas de versioning metier complet
 - seulement des tables `*_current`
-- pas d'edition des geometries
+- edition cartographique encore a implementer
