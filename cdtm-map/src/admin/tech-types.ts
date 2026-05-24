@@ -31,9 +31,10 @@ export type ReferenceTableKey =
   | "factions"
   | "controleurs"
   | "styles"
-  | "emplacements_rules"
   | "map_icons"
-  | "map_point_types"
+  | "locality_types"
+  | "landmark_types"
+  | "force_types"
   | "races"
   | "peuples";
 
@@ -104,7 +105,6 @@ export type DynamicCaseTableFieldDefinition = {
   field_type: DynamicCaseTableFieldType;
   reference_table_key: ReferenceTableKey | null;
   reference_group_key: string | null;
-  sort_order: number;
 };
 
 export type DynamicCaseTableDefinition = {
@@ -189,7 +189,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "entry_key", label: "entry_key", type: "text", required: true, searchable: true },
       { name: "label", label: "label", type: "text", searchable: true },
       { name: "parent_entry_key", label: "parent_entry_key", type: "text", searchable: true },
-      { name: "sort_order", label: "sort_order", type: "integer" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
@@ -246,23 +245,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     ],
   },
   {
-    key: "emplacements_rules",
-    title: "Regles d'emplacements",
-    description: "Parametres communs utilises pour les calculs et validations d'emplacements.",
-    physical_name: "reference_emplacements_rules",
-    primary_key: "rule_key",
-    fields: [
-      { name: "rule_key", label: "rule_key", type: "text", required: true, searchable: true },
-      { name: "rule_label", label: "rule_label", type: "text", searchable: true },
-      { name: "value_text", label: "value_text", type: "textarea", searchable: true },
-      { name: "value_integer", label: "value_integer", type: "integer" },
-      { name: "description", label: "description", type: "textarea", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
-    ],
-  },
-  {
     key: "map_icons",
     title: "Icones de carte",
     description: "Catalogue vide par defaut des icones Game-icons utilisables sur la carte.",
@@ -284,14 +266,13 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     ],
   },
   {
-    key: "map_point_types",
-    title: "Types de points",
-    description: "Types d'objets ponctuels libres, separes des icones de carte.",
-    physical_name: "reference_map_point_types",
+    key: "locality_types",
+    title: "Types de localites",
+    description: "Types d'agglomerations, ports, forts et autres implantations.",
+    physical_name: "reference_locality_types",
     primary_key: "type_key",
     fields: [
       { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
-      { name: "object_family", label: "object_family", type: "text", required: true, searchable: true },
       { name: "label", label: "label", type: "text", required: true, searchable: true },
       { name: "description", label: "description", type: "textarea", searchable: true },
       {
@@ -302,6 +283,50 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       },
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
       { name: "slot_weight", label: "slot_weight", type: "integer" },
+      { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "landmark_types",
+    title: "Types de landmarks",
+    description: "Types de ruines, ponts, mines et autres points remarquables.",
+    physical_name: "reference_landmark_types",
+    primary_key: "type_key",
+    fields: [
+      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "default_icon_key",
+        label: "default_icon_key",
+        type: "reference",
+        reference_table_key: "map_icons",
+      },
+      { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "force_types",
+    title: "Types de forces",
+    description: "Types d'armees, flottes et autres forces mobiles.",
+    physical_name: "reference_force_types",
+    primary_key: "type_key",
+    fields: [
+      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "default_icon_key",
+        label: "default_icon_key",
+        type: "reference",
+        reference_table_key: "map_icons",
+      },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },

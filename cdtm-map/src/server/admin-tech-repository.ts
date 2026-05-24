@@ -503,11 +503,11 @@ function buildReferenceTableQuery(
         return "LOWER(COALESCE(ref.nom, ref.id_faction)) ASC, ref.id_faction ASC";
       case "controleurs":
         return "LOWER(COALESCE(ref.nom, ref.id_controleur)) ASC, ref.id_controleur ASC";
-      case "emplacements_rules":
-        return "LOWER(COALESCE(ref.rule_label, ref.rule_key)) ASC, ref.rule_key ASC";
       case "map_icons":
         return "LOWER(COALESCE(ref.label, ref.icon_key)) ASC, ref.icon_key ASC";
-      case "map_point_types":
+      case "locality_types":
+      case "landmark_types":
+      case "force_types":
         return "LOWER(COALESCE(ref.label, ref.type_key)) ASC, ref.type_key ASC";
       case "races":
         return "LOWER(COALESCE(ref.label, ref.race_key)) ASC, ref.race_key ASC";
@@ -681,11 +681,10 @@ async function selectDynamicCaseTableDefinition(
         label,
         field_type,
         reference_table_key,
-        reference_group_key,
-        sort_order
+        reference_group_key
       FROM dynamic_case_table_fields
       WHERE table_key = $1
-      ORDER BY sort_order ASC, field_key ASC
+      ORDER BY LOWER(label) ASC, field_key ASC
     `,
     [tableKey],
   );
@@ -766,7 +765,7 @@ async function listReferenceOptionsInternal(
         `
           SELECT id_faction, nom
           FROM reference_factions
-          ORDER BY id_faction ASC
+          ORDER BY LOWER(COALESCE(nom, id_faction)) ASC, id_faction ASC
         `,
       );
 
@@ -780,7 +779,7 @@ async function listReferenceOptionsInternal(
         `
           SELECT id_controleur, nom
           FROM reference_controleurs
-          ORDER BY id_controleur ASC
+          ORDER BY LOWER(COALESCE(nom, id_controleur)) ASC, id_controleur ASC
         `,
       );
 
@@ -803,20 +802,6 @@ async function listReferenceOptionsInternal(
         label: row.cible_id?.trim().length ? row.cible_id : row.id_style,
       }));
     }
-    case "emplacements_rules": {
-      const result = await client.query<{ rule_key: string; rule_label: string | null }>(
-        `
-          SELECT rule_key, rule_label
-          FROM reference_emplacements_rules
-          ORDER BY rule_key ASC
-        `,
-      );
-
-      return result.rows.map((row) => ({
-        value: row.rule_key,
-        label: row.rule_label?.trim().length ? row.rule_label : row.rule_key,
-      }));
-    }
     case "map_icons": {
       const result = await client.query<{ icon_key: string; label: string | null }>(
         `
@@ -832,11 +817,19 @@ async function listReferenceOptionsInternal(
         label: row.label?.trim().length ? row.label : row.icon_key,
       }));
     }
-    case "map_point_types": {
+    case "locality_types":
+    case "landmark_types":
+    case "force_types": {
+      const tableName =
+        tableKey === "locality_types"
+          ? "reference_locality_types"
+          : tableKey === "landmark_types"
+            ? "reference_landmark_types"
+            : "reference_force_types";
       const result = await client.query<{ type_key: string; label: string | null }>(
         `
           SELECT type_key, label
-          FROM reference_map_point_types
+          FROM ${tableName}
           WHERE is_active = TRUE
           ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
         `,
@@ -1569,16 +1562,6 @@ export async function addDynamicCaseTableField(
       `,
     );
 
-    const sortOrderResult = await client.query<{ max_sort_order: number | null }>(
-      `
-        SELECT MAX(sort_order) AS max_sort_order
-        FROM dynamic_case_table_fields
-        WHERE table_key = $1
-      `,
-      [tableKey],
-    );
-    const nextSortOrder = (sortOrderResult.rows[0]?.max_sort_order ?? -1) + 1;
-
     await client.query(
       `
         INSERT INTO dynamic_case_table_fields (
@@ -1587,10 +1570,9 @@ export async function addDynamicCaseTableField(
           label,
           field_type,
           reference_table_key,
-          reference_group_key,
-          sort_order
+          reference_group_key
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `,
       [
         tableKey,
@@ -1599,7 +1581,6 @@ export async function addDynamicCaseTableField(
         input.field_type,
         input.field_type === "reference" ? input.reference_table_key ?? null : null,
         input.field_type === "reference" ? normalizeNullableText(input.reference_group_key) : null,
-        nextSortOrder,
       ],
     );
 

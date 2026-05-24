@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { AdminRole } from "@/admin/roles";
 import type {
@@ -64,20 +64,17 @@ type ReferenceViewSection = {
   views: ReferenceView[];
 };
 
-const FEATURED_NOMENCLATURE_GROUPS = new Set([
-  "terrain_cat",
-  "terrain_type",
-  "relief",
-  "controle_type",
-]);
-
-const NOMENCLATURE_LABELS: Record<string, string> = {
-  terrain_cat: "Categories de terrain",
-  terrain_type: "Types de terrain",
-  relief: "Reliefs",
-  controle_type: "Types de controle",
-  peuple: "Peuples",
+type SidebarSection = {
+  id: string;
+  title: string;
+  items: Array<
+    | { kind: "reference"; id: string; label: string; count: number | null }
+    | { kind: "schema"; id: string; label: string; count: number | null }
+    | { kind: "account"; id: string; label: string; count: number | null }
+  >;
 };
+
+const SIDEBAR_SECTION_STORAGE_KEY = "cdtm-tech-admin-sidebar-sections";
 
 const STYLE_FIELDS = ["fill", "stroke", "pattern_type", "pattern_color"] as const;
 type StyleFieldName = (typeof STYLE_FIELDS)[number];
@@ -117,6 +114,34 @@ const LOCKED_REFERENCE_FIELDS = new Set([
   "image_mime_type",
   "image_size_bytes",
 ]);
+
+function CollapsibleSidebarSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[18px] border border-border/60 bg-background/25">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        onClick={onToggle}
+      >
+        <span className="text-sm font-semibold text-foreground">{title}</span>
+        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          {open ? "Ouvert" : "Ferme"}
+        </span>
+      </button>
+      {open ? <div className="border-t border-border/50 p-3">{children}</div> : null}
+    </div>
+  );
+}
 
 function getStyleTargetIdForRow(view: ReferenceView | null, values: Record<string, string>): string | null {
   if (!view?.styleTargetType) {
@@ -311,20 +336,6 @@ function buildStylePayload(
   };
 }
 
-function formatNomenclatureGroupLabel(groupKey: string): string {
-  const predefined = NOMENCLATURE_LABELS[groupKey];
-
-  if (predefined) {
-    return predefined;
-  }
-
-  return groupKey
-    .split("_")
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
@@ -507,22 +518,6 @@ function FieldEditor({
     );
   }
 
-  if (field.name === "object_family") {
-    return (
-      <select
-        className={className}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">Non renseigne</option>
-        <option value="locality">locality</option>
-        <option value="landmark">landmark</option>
-        <option value="force">force</option>
-      </select>
-    );
-  }
-
   if (field.type === "boolean") {
     return (
       <select
@@ -644,18 +639,6 @@ function applyReferenceAutoFill(
     }
   }
 
-  if (tableKey === "emplacements_rules") {
-    const previousSuggestion = toSnakeCaseIdentifier(currentValues.rule_label ?? "");
-    const nextSuggestion = toSnakeCaseIdentifier(nextValues.rule_label ?? "");
-
-    if (
-      nextSuggestion &&
-      shouldReplaceAutoValue(currentValues.rule_key ?? "", previousSuggestion)
-    ) {
-      nextValues.rule_key = nextSuggestion;
-    }
-  }
-
   if (tableKey === "map_icons") {
     const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
     const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
@@ -668,7 +651,7 @@ function applyReferenceAutoFill(
     }
   }
 
-  if (tableKey === "map_point_types") {
+  if (tableKey === "locality_types" || tableKey === "landmark_types" || tableKey === "force_types") {
     const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
     const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
 
@@ -733,14 +716,6 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Identifiant faction";
     case "id_controleur":
       return "Identifiant controleur";
-    case "rule_key":
-      return "Identifiant regle";
-    case "rule_label":
-      return "Nom de la regle";
-    case "value_text":
-      return "Valeur texte";
-    case "value_integer":
-      return "Valeur numerique";
     case "icon_key":
       return "Cle icone";
     case "category":
@@ -759,8 +734,6 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Actif";
     case "type_key":
       return "Identifiant type";
-    case "object_family":
-      return "Famille d'objet";
     case "default_icon_key":
       return "Icone par defaut";
     case "consumes_slot":
@@ -833,6 +806,7 @@ export function TechnicalAdminPage() {
   const [nomenclatureGroups, setNomenclatureGroups] = useState<string[]>([]);
   const [staffAccounts, setStaffAccounts] = useState<StaffAccountSummary[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<number | null>(null);
+  const [sidebarSectionOpenState, setSidebarSectionOpenState] = useState<Record<string, boolean>>({});
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [createAccountDraft, setCreateAccountDraft] = useState<StaffAccountCreateInput>({
@@ -910,6 +884,24 @@ export function TechnicalAdminPage() {
           groupKey: "controle_type",
           rowCount: nomenclatureGroupCounts.controle_type ?? 0,
         },
+        {
+          id: "factions",
+          tableKey: "factions",
+          title: "Factions",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "factions")?.row_count ?? 0,
+          styleTargetType: "faction",
+        },
+        {
+          id: "controleurs",
+          tableKey: "controleurs",
+          title: "Controleurs",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "controleurs")?.row_count ?? 0,
+          styleTargetType: "controleur",
+        },
       ],
     });
 
@@ -917,36 +909,6 @@ export function TechnicalAdminPage() {
       id: "peuples",
       title: "Peuples",
       views: [
-        {
-          id: "nomenclatures:peuple",
-          tableKey: "nomenclatures",
-          title: "Peuples",
-          groupKey: "peuple",
-          rowCount: nomenclatureGroupCounts.peuple ?? 0,
-        },
-      ],
-    });
-
-    addSection({
-      id: "editeur-cartographique",
-      title: "Editeur cartographique",
-      views: [
-        {
-          id: "map_icons",
-          tableKey: "map_icons",
-          title: "Icones de carte",
-          groupKey: null,
-          rowCount:
-            referenceStatuses.find((table) => table.definition.key === "map_icons")?.row_count ?? 0,
-        },
-        {
-          id: "map_point_types",
-          tableKey: "map_point_types",
-          title: "Types de points",
-          groupKey: null,
-          rowCount:
-            referenceStatuses.find((table) => table.definition.key === "map_point_types")?.row_count ?? 0,
-        },
         {
           id: "races",
           tableKey: "races",
@@ -966,53 +928,43 @@ export function TechnicalAdminPage() {
       ],
     });
 
-    const otherNomenclatureViews = Object.keys(nomenclatureGroupCounts)
-      .filter((groupKey) => !FEATURED_NOMENCLATURE_GROUPS.has(groupKey))
-      .sort()
-      .map<ReferenceView>((groupKey) => ({
-        id: `nomenclatures:${groupKey}`,
-        tableKey: "nomenclatures",
-        title: formatNomenclatureGroupLabel(groupKey),
-        groupKey,
-        rowCount: nomenclatureGroupCounts[groupKey] ?? 0,
-      }));
-
     addSection({
-      id: "autres-listes",
-      title: "Autres listes",
-      views: otherNomenclatureViews,
-    });
-
-    const otherTables = referenceStatuses
-      .filter(
-        (table) =>
-          ![
-            "nomenclatures",
-            "styles",
-            "map_icons",
-            "map_point_types",
-            "races",
-            "peuples",
-          ].includes(table.definition.key),
-      )
-      .map<ReferenceView>((table) => ({
-        id: table.definition.key,
-        tableKey: table.definition.key,
-        title: table.definition.title,
-        groupKey: null,
-        rowCount: table.row_count,
-        styleTargetType:
-          table.definition.key === "factions"
-            ? "faction"
-            : table.definition.key === "controleurs"
-              ? "controleur"
-              : null,
-      }));
-
-    addSection({
-      id: "autres-referentiels",
-      title: "Autres referentiels",
-      views: otherTables,
+      id: "objets-cartographiques",
+      title: "Objets cartographiques",
+      views: [
+        {
+          id: "map_icons",
+          tableKey: "map_icons",
+          title: "Icones de carte",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "map_icons")?.row_count ?? 0,
+        },
+        {
+          id: "locality_types",
+          tableKey: "locality_types",
+          title: "Types de localites",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "locality_types")?.row_count ?? 0,
+        },
+        {
+          id: "landmark_types",
+          tableKey: "landmark_types",
+          title: "Types de landmarks",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "landmark_types")?.row_count ?? 0,
+        },
+        {
+          id: "force_types",
+          tableKey: "force_types",
+          title: "Types de forces",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "force_types")?.row_count ?? 0,
+        },
+      ],
     });
 
     return sections;
@@ -1031,6 +983,112 @@ export function TechnicalAdminPage() {
         : null,
     [activeReferenceView, referenceStatuses],
   );
+  const sidebarSections = useMemo<SidebarSection[]>(
+    () => [
+      {
+        id: "terrains",
+        title: "Terrains",
+        items:
+          referenceViewSections
+            .find((section) => section.id === "terrains")
+            ?.views.map((view) => ({
+              kind: "reference" as const,
+              id: view.id,
+              label: view.title,
+              count: view.rowCount,
+            })) ?? [],
+      },
+      {
+        id: "controle",
+        title: "Controle",
+        items:
+          referenceViewSections
+            .find((section) => section.id === "controle")
+            ?.views.map((view) => ({
+              kind: "reference" as const,
+              id: view.id,
+              label: view.title,
+              count: view.rowCount,
+            })) ?? [],
+      },
+      {
+        id: "peuples",
+        title: "Peuples",
+        items:
+          referenceViewSections
+            .find((section) => section.id === "peuples")
+            ?.views.map((view) => ({
+              kind: "reference" as const,
+              id: view.id,
+              label: view.title,
+              count: view.rowCount,
+            })) ?? [],
+      },
+      {
+        id: "objets-cartographiques",
+        title: "Objets cartographiques",
+        items:
+          referenceViewSections
+            .find((section) => section.id === "objets-cartographiques")
+            ?.views.map((view) => ({
+              kind: "reference" as const,
+              id: view.id,
+              label: view.title,
+              count: view.rowCount,
+            })) ?? [],
+      },
+      {
+        id: "schema",
+        title: "Champs personnalises",
+        items:
+          schemaSummaries.length > 0
+            ? schemaSummaries.map((table) => ({
+                kind: "schema" as const,
+                id: table.table_key,
+                label: table.title,
+                count: table.field_count,
+              }))
+            : [{ kind: "schema" as const, id: "__schema__", label: "Tables metier dynamiques", count: null }],
+      },
+      {
+        id: "accounts",
+        title: "Comptes staff",
+        items:
+          staffAccounts.length > 0
+            ? staffAccounts.map((account) => ({
+                kind: "account" as const,
+                id: String(account.id),
+                label: account.username,
+                count: null,
+              }))
+            : [{ kind: "account" as const, id: "__accounts__", label: "Utilisateurs", count: null }],
+      },
+    ],
+    [referenceViewSections, schemaSummaries, staffAccounts],
+  );
+  const activeSidebarSectionIds = useMemo(() => {
+    const activeIds: string[] = [];
+
+    if (activeTab === "references" && activeReferenceViewId) {
+      const activeSection = referenceViewSections.find((section) =>
+        section.views.some((view) => view.id === activeReferenceViewId),
+      );
+
+      if (activeSection) {
+        activeIds.push(activeSection.id);
+      }
+    }
+
+    if (activeTab === "schema") {
+      activeIds.push("schema");
+    }
+
+    if (activeTab === "accounts") {
+      activeIds.push("accounts");
+    }
+
+    return activeIds;
+  }, [activeReferenceViewId, activeTab, referenceViewSections]);
   const selectedReferenceStatus = useMemo(
     () =>
       createFieldDraft.reference_table_key
@@ -1268,6 +1326,52 @@ export function TechnicalAdminPage() {
     setReferenceSearch("");
     setReferenceSearchInput("");
   }, [activeReferenceViewId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_SECTION_STORAGE_KEY);
+
+      if (!stored) {
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as Record<string, boolean>;
+      setSidebarSectionOpenState((current) => (Object.keys(current).length > 0 ? current : parsed));
+    } catch {
+      // ignore malformed local storage payloads
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      SIDEBAR_SECTION_STORAGE_KEY,
+      JSON.stringify(sidebarSectionOpenState),
+    );
+  }, [sidebarSectionOpenState]);
+
+  useEffect(() => {
+    if (activeSidebarSectionIds.length === 0) {
+      return;
+    }
+
+    setSidebarSectionOpenState((current) => {
+      const nextState = { ...current };
+
+      for (const sectionId of activeSidebarSectionIds) {
+        nextState[sectionId] = true;
+      }
+
+      return nextState;
+    });
+  }, [activeSidebarSectionIds]);
 
   useEffect(() => {
     if (!session?.is_tech_admin || !activeSchemaKey) {
@@ -1818,6 +1922,20 @@ export function TechnicalAdminPage() {
   const canCreateAccount =
     createAccountDraft.username.trim().length > 0 &&
     createAccountDraft.password.trim().length > 0;
+  void [
+    schemaSummaries,
+    createTablePending,
+    createTableError,
+    showCreateTableForm,
+    accountsError,
+    createAccountPending,
+    createAccountError,
+    showCreateAccountForm,
+    handleCreateSchemaTable,
+    handleCreateAccount,
+    canCreateTable,
+    canCreateAccount,
+  ];
 
   if (
     !session ||
@@ -1897,303 +2015,99 @@ export function TechnicalAdminPage() {
             Administration
           </h1>
 
-          <div className="mt-6 grid gap-3">
-            <Button
-              type="button"
-              variant={activeTab === "references" ? "secondary" : "outline"}
-              size="sm"
-              className="w-full"
-              onClick={() => setActiveTab("references")}
-            >
-              Listes de valeurs
-            </Button>
-            <Button
-              type="button"
-              variant={activeTab === "schema" ? "secondary" : "outline"}
-              size="sm"
-              className="w-full"
-              onClick={() => setActiveTab("schema")}
-            >
-              Champs personnalises
-            </Button>
-            <Button
-              type="button"
-              variant={activeTab === "accounts" ? "secondary" : "outline"}
-              size="sm"
-              className="w-full"
-              onClick={() => setActiveTab("accounts")}
-            >
-              Comptes staff
-            </Button>
-          </div>
-
           {globalError ? <p className="mt-4 text-sm text-destructive">{globalError}</p> : null}
 
-          {activeTab === "references" ? (
-            <div className="mt-6 space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  onClick={handleAddReferenceRow}
-                  disabled={!activeReferenceView}
-                >
-                  Ajouter une valeur
-                </Button>
-              </div>
-              {referenceViewSections.map((section) => (
-                <div key={section.id} className="space-y-2">
-                  <p className="px-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                    {section.title}
-                  </p>
-                  {section.views.map((view) => (
-                    <button
-                      key={view.id}
-                      type="button"
-                      className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
-                        view.id === activeReferenceViewId
-                          ? "border-primary/45 bg-primary/10"
-                          : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
-                      }`}
-                      onClick={() => setActiveReferenceViewId(view.id)}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-foreground">{view.title}</p>
-                        {view.rowCount !== null ? (
-                          <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                            {view.rowCount}
+          <div className="mt-6 space-y-4">
+            {sidebarSections.map((section) => (
+              <CollapsibleSidebarSection
+                key={section.id}
+                title={section.title}
+                open={sidebarSectionOpenState[section.id] ?? activeSidebarSectionIds.includes(section.id)}
+                onToggle={() =>
+                  setSidebarSectionOpenState((current) => ({
+                    ...current,
+                    [section.id]: !(current[section.id] ?? activeSidebarSectionIds.includes(section.id)),
+                  }))
+                }
+              >
+                <div className="space-y-2">
+                  {section.items.map((item) => {
+                    const isActive =
+                      item.kind === "reference"
+                        ? activeTab === "references" && item.id === activeReferenceViewId
+                        : item.kind === "schema"
+                          ? activeTab === "schema" && item.id === activeSchemaKey
+                          : activeTab === "accounts" && item.id === String(activeAccountId);
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`w-full rounded-[16px] border px-4 py-3 text-left transition ${
+                          isActive
+                            ? "border-primary/45 bg-primary/10"
+                            : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
+                        }`}
+                        onClick={() => {
+                          if (item.kind === "reference") {
+                            setActiveTab("references");
+                            setActiveReferenceViewId(item.id);
+                            return;
+                          }
+
+                          if (item.kind === "schema") {
+                            setActiveTab("schema");
+                            setActiveSchemaKey(item.id === "__schema__" ? null : item.id);
+                            return;
+                          }
+
+                          setActiveTab("accounts");
+                          setActiveAccountId(item.id === "__accounts__" ? null : Number(item.id));
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-foreground">{item.label}</span>
+                          {item.count !== null ? (
+                            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                              {item.count}
+                            </span>
+                          ) : null}
+                        </div>
+                        {item.kind === "account" ? (
+                          <span className="mt-1 block text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            Utilisateur
                           </span>
                         ) : null}
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          ) : activeTab === "schema" ? (
-            <div className="mt-6 space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant={showCreateTableForm ? "secondary" : "outline"}
-                  onClick={() => setShowCreateTableForm((current) => !current)}
-                >
-                  {showCreateTableForm ? "Fermer" : "Creer une categorie"}
-                </Button>
-              </div>
-              {showCreateTableForm ? (
-                <div className="rounded-[20px] border border-border/70 bg-background/35 p-4">
-                  <p className="text-sm font-semibold text-foreground">Nouvelle categorie</p>
-                  <div className="mt-4 space-y-3">
-                    <input
-                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="ex : Informations militaires"
-                      value={createTableDraft.title}
-                      onChange={(event) =>
-                        setCreateTableDraft((current) => ({
-                          ...current,
-                          title: event.target.value,
-                        }))
-                      }
-                    />
-                    <textarea
-                      className="min-h-24 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="ex : Garnisons, fortifications et menaces connues"
-                      value={createTableDraft.description}
-                      onChange={(event) =>
-                        setCreateTableDraft((current) => ({
-                          ...current,
-                          description: event.target.value,
-                        }))
-                      }
-                    />
-                    <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-foreground">Nom interne</p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setCreateTableKeyEdited(false);
-                            setCreateTableDraft((current) => ({
-                              ...current,
-                              table_key: suggestedTableKey,
-                            }));
-                          }}
-                        >
-                          Regenerer
-                        </Button>
-                      </div>
-                      <input
-                        className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                        placeholder="ex : informations_militaires"
-                        value={createTableDraft.table_key}
-                        onChange={(event) => {
-                          setCreateTableKeyEdited(true);
-                          setCreateTableDraft((current) => ({
-                            ...current,
-                            table_key: event.target.value,
-                          }));
-                        }}
-                      />
-                    </div>
-                    <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
-                      <p className="text-sm font-medium text-foreground">Resume</p>
-                      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        <p>
-                          <span className="text-foreground">Titre :</span>{" "}
-                          {createTableDraft.title.trim() || "Non renseigne"}
-                        </p>
-                        <p>
-                          <span className="text-foreground">Description :</span>{" "}
-                          {createTableDraft.description.trim() || "Aucune description"}
-                        </p>
-                        <p>
-                          <span className="text-foreground">Nom interne :</span>{" "}
-                          {createTableDraft.table_key.trim() || "Non genere"}
-                        </p>
-                      </div>
-                    </div>
-                    {createTableError ? <p className="text-sm text-destructive">{createTableError}</p> : null}
-                    <Button
-                      type="button"
-                      onClick={() => void handleCreateSchemaTable()}
-                      disabled={createTablePending || !canCreateTable}
-                    >
-                      {createTablePending ? "Creation..." : "Creer la categorie"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="space-y-3">
-                {schemaSummaries.map((table) => (
-                  <button
-                    key={table.table_key}
-                    type="button"
-                    className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
-                      table.table_key === activeSchemaKey
-                        ? "border-primary/45 bg-primary/10"
-                        : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
-                    }`}
-                    onClick={() => setActiveSchemaKey(table.table_key)}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-foreground">{table.title}</p>
-                      <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        {table.field_count} information(s)
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-6 space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant={showCreateAccountForm ? "secondary" : "outline"}
-                  onClick={() => setShowCreateAccountForm((current) => !current)}
-                >
-                  {showCreateAccountForm ? "Fermer" : "Creer un compte"}
-                </Button>
-              </div>
-              {showCreateAccountForm ? (
-                <div className="rounded-[20px] border border-border/70 bg-background/35 p-4">
-                  <p className="text-sm font-semibold text-foreground">Nouveau compte</p>
-                  <div className="mt-4 space-y-3">
-                    <input
-                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="Identifiant"
-                      value={createAccountDraft.username}
-                      onChange={(event) =>
-                        setCreateAccountDraft((current) => ({
-                          ...current,
-                          username: event.target.value,
-                        }))
-                      }
-                    />
-                    <input
-                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      placeholder="Mot de passe temporaire"
-                      type="password"
-                      value={createAccountDraft.password}
-                      onChange={(event) =>
-                        setCreateAccountDraft((current) => ({
-                          ...current,
-                          password: event.target.value,
-                        }))
-                      }
-                    />
-                    <select
-                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                      value={createAccountDraft.role}
-                      onChange={(event) =>
-                        setCreateAccountDraft((current) => ({
-                          ...current,
-                          role: event.target.value as AdminRole,
-                        }))
-                      }
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="tech_admin">Admin technique</option>
-                    </select>
-                    {createAccountError ? <p className="text-sm text-destructive">{createAccountError}</p> : null}
-                    <Button
-                      type="button"
-                      disabled={createAccountPending || !canCreateAccount}
-                      onClick={() => void handleCreateAccount()}
-                    >
-                      {createAccountPending ? "Creation..." : "Creer le compte"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {accountsError ? <p className="text-sm text-destructive">{accountsError}</p> : null}
-
-              <div className="space-y-3">
-                {staffAccounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun compte staff enregistre.</p>
-                ) : (
-                  staffAccounts.map((account) => (
-                    <button
-                      key={account.id}
-                      type="button"
-                      className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
-                        account.id === activeAccountId
-                          ? "border-primary/45 bg-primary/10"
-                          : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
-                      }`}
-                      onClick={() => setActiveAccountId(account.id)}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-foreground">{account.username}</p>
-                        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          {account.is_active ? "actif" : "inactif"}
-                        </span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+              </CollapsibleSidebarSection>
+            ))}
+          </div>
         </SectionPanel>
 
         <SectionPanel className="p-5 sm:p-6">
           {activeTab === "references" ? (
             activeReference ? (
               <>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <h2 className="text-2xl font-semibold text-foreground">
-                    {activeReferenceView?.title ?? activeReference.definition.title}
-                  </h2>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="text-2xl font-semibold text-foreground">
+                        {activeReferenceView?.title ?? activeReference.definition.title}
+                      </h2>
+                      <Button
+                        type="button"
+                        onClick={handleAddReferenceRow}
+                        disabled={!activeReferenceView}
+                      >
+                        Ajouter une valeur
+                      </Button>
+                    </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <form
-                    className="flex gap-3"
+                    <form
+                      className="flex gap-3"
                       onSubmit={(event) => {
                         event.preventDefault();
                         setReferenceSearch(referenceSearchInput.trim());
@@ -2254,9 +2168,7 @@ export function TechnicalAdminPage() {
                               ? row.values.race_key
                                 ? getOptionLabel(referenceFieldOptions.race_key, row.values.race_key)
                                 : "Race non renseignee"
-                              : activeReference.definition.key === "map_point_types"
-                                ? row.values.object_family || "Famille non renseignee"
-                                : activeReferenceView?.groupKey === "terrain_type"
+                              : activeReferenceView?.groupKey === "terrain_type"
                                   ? terrainParentLabel
                                   : displayFields
                                       .map((field) => row.values[field.name])
@@ -2617,9 +2529,92 @@ export function TechnicalAdminPage() {
               <p className="text-sm text-muted-foreground">Aucune liste de valeurs selectionnee.</p>
             )
           ) : activeTab === "schema" ? (
-            activeSchemaDefinition ? (
-              <>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <h2 className="text-2xl font-semibold text-foreground">
+                  {activeSchemaDefinition ? activeSchemaDefinition.title : "Champs personnalises"}
+                </h2>
+                <Button
+                  type="button"
+                  variant={showCreateTableForm ? "secondary" : "outline"}
+                  onClick={() => setShowCreateTableForm((current) => !current)}
+                >
+                  {showCreateTableForm ? "Fermer" : "Creer une categorie"}
+                </Button>
+              </div>
+
+              {showCreateTableForm ? (
+                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                  <div className="space-y-3">
+                    <input
+                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      placeholder="Titre de la categorie"
+                      value={createTableDraft.title}
+                      onChange={(event) =>
+                        setCreateTableDraft((current) => ({
+                          ...current,
+                          title: event.target.value,
+                        }))
+                      }
+                    />
+                    <textarea
+                      className="min-h-24 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      placeholder="Description"
+                      value={createTableDraft.description}
+                      onChange={(event) =>
+                        setCreateTableDraft((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                    />
+                    <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">Nom interne</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setCreateTableKeyEdited(false);
+                            setCreateTableDraft((current) => ({
+                              ...current,
+                              table_key: suggestedTableKey,
+                            }));
+                          }}
+                        >
+                          Regenerer
+                        </Button>
+                      </div>
+                      <input
+                        className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                        value={createTableDraft.table_key}
+                        onChange={(event) => {
+                          setCreateTableKeyEdited(true);
+                          setCreateTableDraft((current) => ({
+                            ...current,
+                            table_key: event.target.value,
+                          }));
+                        }}
+                      />
+                    </div>
+                    {createTableError ? <p className="text-sm text-destructive">{createTableError}</p> : null}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        disabled={createTablePending || !canCreateTable}
+                        onClick={() => void handleCreateSchemaTable()}
+                      >
+                        {createTablePending ? "Creation..." : "Creer la categorie"}
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {activeSchemaDefinition ? (
+                <>
+                <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <h2 className="text-2xl font-semibold text-foreground">
                     {activeSchemaDefinition.title}
                   </h2>
@@ -2915,11 +2910,82 @@ export function TechnicalAdminPage() {
                   </div>
                 </section>
               </>
+              ) : (
+                <p className="mt-6 text-sm text-muted-foreground">
+                  Aucune categorie d&apos;informations selectionnee.
+                </p>
+              )}
+            </>
           ) : (
-            <p className="text-sm text-muted-foreground">Aucune categorie d&apos;informations selectionnee.</p>
-          )
-          ) : activeStaffAccount ? (
             <>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <h2 className="text-2xl font-semibold text-foreground">Comptes staff</h2>
+                <Button
+                  type="button"
+                  variant={showCreateAccountForm ? "secondary" : "outline"}
+                  onClick={() => setShowCreateAccountForm((current) => !current)}
+                >
+                  {showCreateAccountForm ? "Fermer" : "Creer un compte"}
+                </Button>
+              </div>
+
+              {showCreateAccountForm ? (
+                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                  <div className="space-y-3">
+                    <input
+                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      placeholder="Identifiant"
+                      value={createAccountDraft.username}
+                      onChange={(event) =>
+                        setCreateAccountDraft((current) => ({
+                          ...current,
+                          username: event.target.value,
+                        }))
+                      }
+                    />
+                    <input
+                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      type="password"
+                      placeholder="Mot de passe temporaire"
+                      value={createAccountDraft.password}
+                      onChange={(event) =>
+                        setCreateAccountDraft((current) => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                    />
+                    <select
+                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                      value={createAccountDraft.role}
+                      onChange={(event) =>
+                        setCreateAccountDraft((current) => ({
+                          ...current,
+                          role: event.target.value as AdminRole,
+                        }))
+                      }
+                    >
+                      <option value="staff">Staff</option>
+                      <option value="tech_admin">Admin technique</option>
+                    </select>
+                    {createAccountError ? <p className="text-sm text-destructive">{createAccountError}</p> : null}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        disabled={createAccountPending || !canCreateAccount}
+                        onClick={() => void handleCreateAccount()}
+                      >
+                        {createAccountPending ? "Creation..." : "Creer le compte"}
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {accountsError ? <p className="mt-4 text-sm text-destructive">{accountsError}</p> : null}
+
+              {activeStaffAccount ? (
+                <>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <h2 className="text-2xl font-semibold text-foreground">
                   {activeStaffAccount.username}
@@ -2983,9 +3049,11 @@ export function TechnicalAdminPage() {
                   </div>
                 </div>
               </details>
+                </>
+              ) : (
+                <p className="mt-6 text-sm text-muted-foreground">Aucun compte staff selectionne.</p>
+              )}
             </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Aucun compte staff selectionne.</p>
           )}
         </SectionPanel>
       </section>

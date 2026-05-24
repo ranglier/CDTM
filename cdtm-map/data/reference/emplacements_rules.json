@@ -1,9 +1,0 @@
-{
-  "status": "draft_business_rules_not_used_by_core_cases_validation",
-  "note": "Ces règles sont conservées comme base de travail pour une future table métier. Elles ne sont plus appliquées directement à la couche stable cases.",
-  "bounds": {
-    "min": 1,
-    "max": 5
-  },
-  "calculation_note": "Futur calcul métier envisagé : empl_max = terrain_type + bonus_race + bonus_contextuel, borne entre bounds.min et bounds.max. Si un terrain_type ne porte pas sa propre valeur, il herite de sa categorie parente. Les champs calcules ne doivent pas etre stockes dans la couche stable cases."
-}

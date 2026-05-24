@@ -27,16 +27,6 @@
       "empl": {
         "type": ["integer", "null"],
         "minimum": 0
-      },
-      "visibilite": {
-        "type": ["string", "null"],
-        "enum": ["publique", "staff", "secrete", "incertaine", null]
-      },
-      "note_publique": {
-        "type": ["string", "null"]
-      },
-      "note_staff": {
-        "type": ["string", "null"]
       }
     },
     "required": ["id_localite"]

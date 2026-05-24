@@ -44,12 +44,6 @@ export type AdminPublicCaseRecord = PublicCaseProperties & {
   meta: AdminBlockMeta;
 };
 
-export type AdminNotesRecord = {
-  note_publique: string | null;
-  note_staff: string | null;
-  meta: AdminBlockMeta;
-};
-
 export type AdminTerrainRecord = {
   terrain_cat: string | null;
   terrain_type: string | null;
@@ -82,7 +76,6 @@ export type AdminDynamicSectionRecord = {
 export type AdminCaseRecord = {
   id_case: string;
   public: AdminPublicCaseRecord;
-  notes: AdminNotesRecord;
   terrain: AdminTerrainRecord;
   control: AdminControlRecord;
   dynamic_sections: AdminDynamicSectionRecord[];
@@ -97,10 +90,6 @@ export type AdminCaseDraft = {
     cote: string;
     lac_majeur: string;
     cours_eau_majeur: string;
-  };
-  notes: {
-    note_publique: string;
-    note_staff: string;
   };
   terrain: {
     terrain_cat: string;
@@ -129,10 +118,6 @@ export type AdminBulkEditDraft = {
     lac_majeur: AdminBulkEditFieldState;
     cours_eau_majeur: AdminBulkEditFieldState;
   };
-  notes: {
-    note_publique: AdminBulkEditFieldState;
-    note_staff: AdminBulkEditFieldState;
-  };
   terrain: {
     terrain_cat: AdminBulkEditFieldState;
     terrain_type: AdminBulkEditFieldState;
@@ -152,10 +137,6 @@ export type AdminBulkPatch = {
     cote?: boolean | null;
     lac_majeur?: boolean | null;
     cours_eau_majeur?: boolean | null;
-  };
-  notes?: {
-    note_publique?: string | null;
-    note_staff?: string | null;
   };
   terrain?: {
     terrain_cat?: string | null;
@@ -223,10 +204,6 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
       lac_majeur: "",
       cours_eau_majeur: "",
     },
-    notes: {
-      note_publique: "",
-      note_staff: "",
-    },
     terrain: {
       terrain_cat: "",
       terrain_type: "",
@@ -249,10 +226,6 @@ export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
       cote: createEmptyBulkFieldState(),
       lac_majeur: createEmptyBulkFieldState(),
       cours_eau_majeur: createEmptyBulkFieldState(),
-    },
-    notes: {
-      note_publique: createEmptyBulkFieldState(),
-      note_staff: createEmptyBulkFieldState(),
     },
     terrain: {
       terrain_cat: createEmptyBulkFieldState(),
@@ -280,10 +253,6 @@ export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft
       cote: booleanToDraftValue(record.public.cote),
       lac_majeur: booleanToDraftValue(record.public.lac_majeur),
       cours_eau_majeur: booleanToDraftValue(record.public.cours_eau_majeur),
-    },
-    notes: {
-      note_publique: record.notes.note_publique ?? "",
-      note_staff: record.notes.note_staff ?? "",
     },
     terrain: {
       terrain_cat: record.terrain.terrain_cat ?? "",

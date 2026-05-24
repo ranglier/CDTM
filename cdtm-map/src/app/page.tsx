@@ -183,8 +183,6 @@ function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
     draft.public.cote,
     draft.public.lac_majeur,
     draft.public.cours_eau_majeur,
-    draft.notes.note_publique,
-    draft.notes.note_staff,
     draft.terrain.terrain_cat,
     draft.terrain.terrain_type,
     draft.terrain.relief,
@@ -221,10 +219,6 @@ function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
       cours_eau_majeur: buildBulkFieldState(
         records.map((record) => normalizeDraftBooleanValue(record.public.cours_eau_majeur)),
       ),
-    },
-    notes: {
-      note_publique: buildBulkFieldState(records.map((record) => record.notes.note_publique)),
-      note_staff: buildBulkFieldState(records.map((record) => record.notes.note_staff)),
     },
     terrain: {
       terrain_cat: buildBulkFieldState(records.map((record) => record.terrain.terrain_cat)),
@@ -275,22 +269,6 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
       patch.public.cours_eau_majeur = parseDraftBooleanValue(
         draft.public.cours_eau_majeur.value,
       );
-    }
-  }
-
-  if (draft.notes.note_publique.touched || draft.notes.note_staff.touched) {
-    patch.notes = {};
-
-    if (draft.notes.note_publique.touched) {
-      patch.notes.note_publique =
-        draft.notes.note_publique.value.trim().length > 0
-          ? draft.notes.note_publique.value.trim()
-          : null;
-    }
-
-    if (draft.notes.note_staff.touched) {
-      patch.notes.note_staff =
-        draft.notes.note_staff.value.trim().length > 0 ? draft.notes.note_staff.value.trim() : null;
     }
   }
 

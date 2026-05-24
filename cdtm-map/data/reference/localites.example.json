@@ -5,9 +5,6 @@
     "nom": "Localite exemple",
     "niveau": "village",
     "type": "domaine",
-    "empl": 1,
-    "visibilite": "publique",
-    "note_publique": "Exemple minimal a completer.",
-    "note_staff": null
+    "empl": 1
   }
 ]

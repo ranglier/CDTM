@@ -1,223 +1,66 @@
-# Admin V1
+# Administration
 
-## Role
+## Roles
 
-L'admin V1 ajoute un acces staff a la carte pour :
+- `staff` : edition des cases
+- `tech_admin` : edition des cases, referentiels globaux, tables dynamiques et comptes
 
-- se connecter ;
-- consulter et modifier le terrain, le controle et les donnees publiques de case ;
-- enregistrer ces donnees en base via `id_case`.
+## Page d'administration technique
 
-Deux roles existent :
+Le panneau lateral est un outil de navigation. Il est organise par categories repliables :
+- Terrains
+- Controle
+- Peuples
+- Objets cartographiques
+- Champs personnalises
+- Comptes staff
 
-- `staff` : acces au mode admin de la carte et modification des donnees de case ;
-- `tech_admin` : tous les droits `staff`, plus l'acces a `/admin/tech`, la gestion des listes techniques, des champs personnalises et des comptes staff.
+Le bouton `Ajouter une valeur` apparait dans l'en-tete du panneau principal, uniquement pour les `Listes de valeurs`.
 
-## Runtime
+## Referentiels actifs
 
-Variables utilisees :
+- Categories de terrain
+- Types de terrain
+- Reliefs
+- Types de controle
+- Factions
+- Controleurs
+- Races
+- Peuples
+- Icones de carte
+- Types de localites
+- Types de landmarks
+- Types de forces
 
-- `DATABASE_URL`
-- `ADMIN_SESSION_TTL_HOURS`
+Certaines vues partagent une meme table technique :
+- les nomenclatures utilisent `reference_nomenclature_values`
+- l'interface les separe en vues metier comme `Terrains` et `Controle`
 
-Variables optionnelles pour le bootstrap :
+## Champs retires
 
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD`
+Les concepts suivants ne sont plus edites dans l'application :
+- notes
+- visibilite
+- regles d'emplacements
 
-Valeur par defaut :
+Les commentaires ou annotations de jeu restent hors de la carte.
 
-```text
-ADMIN_SESSION_TTL_HOURS=168
-```
+## Objets cartographiques
 
-## Bootstrap
+Le modele cible est separe :
+- `map_localities`
+- `map_landmarks`
+- `map_forces`
 
-Si `ADMIN_USERNAME` et `ADMIN_PASSWORD` sont definis, l'application cree ou met a jour le compte staff correspondant au demarrage.
-Ce compte bootstrappe prend automatiquement le role `tech_admin`.
+Les types associes sont :
+- `reference_locality_types`
+- `reference_landmark_types`
+- `reference_force_types`
 
-Si ces variables sont absentes :
+## Peuples
 
-- aucun compte staff n'est bootstrappe automatiquement ;
-- le deploiement standard continue sans erreur.
+Le modele canonique repose sur :
+- `reference_races`
+- `reference_peuples`
 
-## Creation manuelle d'un compte admin
-
-Pour creer ou mettre a jour un compte utilisable tout de suite :
-
-```bash
-DATABASE_URL=postgresql://... npm run create:admin -- --username superadmin --password '<mot_de_passe>' --role tech_admin
-```
-
-La commande :
-
-- cree le compte s'il n'existe pas ;
-- met a jour son mot de passe s'il existe deja ;
-- peut definir le role `staff` ou `tech_admin` ;
-- invalide ses anciennes sessions.
-
-`POSTGRES_PASSWORD` ne doit jamais servir de mot de passe admin applicatif.
-
-## Separation des donnees
-
-- la couche stable reste servie depuis `public/data/cases.geojson`
-- les donnees admin sont stockees dans PostgreSQL
-- toutes les donnees de case exposees dans l'application sont publiques en lecture
-- les champs de notes ne font plus partie du contrat applicatif courant
-
-## Admin technique
-
-L'admin technique sert a maintenir les structures partagees par toutes les cases.
-
-On y trouve notamment :
-
-- `Listes de valeurs` : listes de choix reutilisees dans les formulaires, par exemple les terrains, factions, types de controle ou styles ;
-- `Icones de carte`, `Types de points`, `Races` et `Peuples` pour preparer l'editeur cartographique ;
-- `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases ;
-- `Comptes staff` : gestion des comptes `staff` et `tech_admin`.
-
-Les listes et referentiels sont tries automatiquement par ordre alphabetique de libelle. Il ne faut plus renseigner d'ordre d'affichage manuel dans les tables.
-
-Certaines listes partagees passent techniquement par la meme table `reference_nomenclature_values`, mais l'interface les separe en vues metier distinctes.
-
-Par exemple, l'espace `Listes de valeurs` presente directement des groupes comme :
-
-- `Terrains`
-- `Controle`
-- `Peuples`
-- `Autres listes`
-
-Le groupe fonctionnel `Terrains` rassemble notamment :
-
-- `terrain_cat`
-- `terrain_type`
-- `relief`
-
-Les reliefs restent donc affiches comme une composante du bloc `Terrains`, meme si les donnees restent stockees dans la table technique commune.
-
-Les couleurs de carte ne sont pas stockees dans les tables metier `factions`, `controleurs` ou `nomenclatures`.
-
-Elles restent dans `reference_styles`, mais l'interface les affiche directement :
-
-- dans `Factions` pour modifier la couleur d'une faction ;
-- dans `Controleurs` pour modifier la couleur d'un controleur ;
-- dans `Terrains` pour modifier la couleur et les motifs d'un type ou d'un relief.
-
-Pour chaque entree concernee, l'admin technique permet de renseigner :
-
-- la couleur de fond ;
-- la couleur de contour ;
-- le motif ;
-- la couleur du motif ;
-- un apercu visuel.
-
-Les categories de terrain n'ont pas de couleur propre.
-Les reliefs restent modifies depuis le groupe fonctionnel `Terrains` et servent notamment a definir des hachures ou motifs complementaires.
-Les details techniques restent rattaches a `reference_styles`, mais ce n'est plus l'entree principale pour modifier les couleurs.
-
-L'opacite n'est plus reglable.
-
-## Editeur cartographique prevu
-
-Une nouvelle page `/editeur` est prevue pour travailler directement sur la carte.
-
-Objectifs :
-
-- placer librement des localites et landmarks, sans les forcer au centre des cases ;
-- tracer et modifier des routes sous forme de lignes libres ;
-- afficher et editer des forces ponctuelles comme les armees et flottes ;
-- detecter la case sous un point ou les cases traversees par une route ;
-- preparer les validations d'emplacements.
-
-L'editeur doit etre protege au minimum par le role `tech_admin` dans sa premiere version.
-
-Les objets ponctuels utiliseront exclusivement des icones Game-icons. Les icones doivent etre gerees dans un catalogue administrable avec :
-
-- cle interne ;
-- libelle ;
-- categorie ;
-- image uploadee localement ;
-- texte alternatif ;
-- statut actif/inactif.
-
-Le catalogue Game-icons doit rester vide par defaut.
-
-Aucune icone n'est seedee automatiquement dans cette fondation de l'editeur.
-Les icones seront ajoutees manuellement plus tard depuis l'admin technique. Les images doivent etre uploadees et stockees localement dans l'application, pas referencees comme dependance externe principale.
-
-Les types d'objets doivent rester separes des icones : un type pointe vers une icone par defaut, mais un objet cartographique peut eventuellement surcharger son icone.
-
-Le type `dependance` doit permettre de representer un lieu dependant d'une cite ou localite voisine.
-
-## Races, peuples et emplacements
-
-Les emplacements doivent etre calcules a partir du sous-type de terrain (`terrain_type`), pas directement depuis la categorie (`terrain_cat`).
-
-Si aucun chiffre n'est defini pour un sous-type, il herite de la valeur de sa categorie parente.
-
-Renommage valide :
-
-- ne plus utiliser `desert_gele` ;
-- utiliser `terres_gelees`.
-
-Une table `reference_races` doit regrouper les peuples par grande race :
-
-- `nains`
-- `orques`
-- `elfes`
-- `hommes`
-- `hobbits`
-
-Une table `reference_peuples` doit rattacher chaque peuple a une race.
-
-`peuple` est la notion canonique. L'interface ne doit pas maintenir une liste separee `Peuples majoritaires`.
-
-Formule valide :
-
-```text
-empl_max = sous_type_terrain + bonus_race + bonus_contextuel
-empl_max = min(5, max(1, empl_max))
-```
-
-Regles :
-
-- aucune valeur finale ne peut depasser 5 ;
-- aucune valeur finale ne peut descendre sous 1 ;
-- aucun depassement d'occupation n'est autorise ;
-- si les objets occupant une case excedent `empl_max`, la publication doit etre refusee.
-
-## Consultation puis edition
-
-L'admin technique privilegie maintenant la consultation :
-
-- les onglets affichent d'abord des listes compactes ;
-- les details techniques restent replies dans des blocs dedies ;
-- les formulaires apparaissent seulement apres une action explicite.
-
-Concretement :
-
-- `Listes de valeurs` : selectionne une liste, consulte ses lignes, puis clique sur `Modifier` ou `Ajouter une valeur` ;
-- `Champs personnalises` : consulte les categories et leurs champs, puis ouvre `Modifier la presentation` ou `Ajouter une information` si besoin ;
-- `Comptes staff` : consulte les comptes, ouvre `Creer un compte` pour en ajouter un, puis `Modifier ce compte` pour changer son role ou son statut.
-
-Dans le panneau de case :
-
-- les champs vides ne sont plus affiches en lecture ;
-- les informations sont regroupees par sections ;
-- le formulaire complet n'apparait qu'apres clic sur `Modifier`.
-
-Les noms internes sont proposes automatiquement a partir des titres et libelles saisis. En usage normal, il vaut mieux les laisser tels quels et ne les modifier que si tu sais exactement pourquoi.
-
-Exemples :
-
-- `Informations militaires` devient `informations_militaires`
-- `Niveau de fortification` devient `niveau_de_fortification`
-
-L'interface affiche parfois ces noms internes pour aider au diagnostic, mais les libelles visibles et les descriptions restent les informations a privilegier pour l'usage courant.
-
-## Limites V1
-
-- pas d'historisation complete
-- pas de versioning metier complet
-- seulement des tables `*_current`
-- edition cartographique encore a implementer
+La vieille nomenclature `peuple` n'est plus une source de verite.

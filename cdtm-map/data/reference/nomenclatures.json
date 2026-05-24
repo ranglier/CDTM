@@ -23,9 +23,7 @@
     "empl_base",
     "empl_max",
     "controleur",
-    "controle_type",
-    "note_publique",
-    "note_staff"
+    "controle_type"
   ],
   "future_business": {
     "terrain_cat": [
@@ -92,42 +90,6 @@
       "vassalise",
       "inconnu"
     ],
-    "peuple": [
-      "gondoriens",
-      "eotheods",
-      "daliens",
-      "esgarothiens",
-      "hommes_de_vertbois",
-      "dunlandais",
-      "enedwaithrim",
-      "druedain",
-      "hommes_sauvages",
-      "orientaux",
-      "corsaires",
-      "umbareens",
-      "haradrim",
-      "variags",
-      "dunedain_du_nord",
-      "numenoreens_noirs",
-      "noldor",
-      "sindar",
-      "nandor",
-      "avari",
-      "snagas",
-      "uruk_hai",
-      "gobelins",
-      "longues_barbes",
-      "barbes_de_feu",
-      "ventrus",
-      "poignes_de_fer",
-      "barbes_raides",
-      "pieds_de_pierre",
-      "cheveux_noirs",
-      "hobbits",
-      "lossoth",
-      "mixte",
-      "inconnu"
-    ],
     "bonus_special": [
       "ancien_bonus_empire_desert_glace",
       "ancien_bonus_empire_montagne"
@@ -144,18 +106,6 @@
       "fort",
       "domaine",
       "ruine"
-    ],
-    "visibilite": [
-      "publique",
-      "staff",
-      "secrete",
-      "incertaine"
-    ],
-    "statut_note": [
-      "brouillon",
-      "a_valider",
-      "valide",
-      "archive"
     ],
     "faction": [
       "royaume_des_hommes",

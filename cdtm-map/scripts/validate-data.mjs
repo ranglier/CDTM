@@ -26,8 +26,6 @@ const fallbackReservedBusinessFields = [
   "empl_max",
   "controleur",
   "controle_type",
-  "note_publique",
-  "note_staff",
 ];
 
 const coreFields = ["id_case", "region", "sous_region", "cote", "lac_majeur", "cours_eau_majeur"];

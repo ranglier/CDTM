@@ -61,7 +61,6 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const payload = ensurePlainObject(value);
   const emptyDraft = createEmptyAdminCaseDraft();
   const publicFields = ensurePlainObject(payload.public ?? emptyDraft.public);
-  const notes = ensurePlainObject(payload.notes ?? emptyDraft.notes);
   const terrain = ensurePlainObject(payload.terrain ?? emptyDraft.terrain);
   const control = ensurePlainObject(payload.control ?? emptyDraft.control);
   const dynamicSections = payload.dynamic ? ensurePlainObject(payload.dynamic) : {};
@@ -74,10 +73,6 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
       cote: normalizeBooleanDraftValue(publicFields.cote),
       lac_majeur: normalizeBooleanDraftValue(publicFields.lac_majeur),
       cours_eau_majeur: normalizeBooleanDraftValue(publicFields.cours_eau_majeur),
-    },
-    notes: {
-      note_publique: normalizeText(notes.note_publique),
-      note_staff: normalizeText(notes.note_staff),
     },
     terrain: {
       terrain_cat: normalizeText(terrain.terrain_cat),
@@ -118,7 +113,6 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
   const payload = ensurePlainObject(value);
   const patch = ensurePlainObject(payload.patch ?? payload);
   const publicFields = patch.public ? ensurePlainObject(patch.public) : null;
-  const notes = patch.notes ? ensurePlainObject(patch.notes) : null;
   const terrain = patch.terrain ? ensurePlainObject(patch.terrain) : null;
   const control = patch.control ? ensurePlainObject(patch.control) : null;
   const result: AdminBulkPatch = {};
@@ -148,22 +142,6 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
 
     if (Object.keys(publicPatch).length > 0) {
       result.public = publicPatch;
-    }
-  }
-
-  if (notes) {
-    const notesPatch: NonNullable<AdminBulkPatch["notes"]> = {};
-
-    if (hasOwnProperty(notes, "note_publique")) {
-      notesPatch.note_publique = normalizeNullableText(notes.note_publique);
-    }
-
-    if (hasOwnProperty(notes, "note_staff")) {
-      notesPatch.note_staff = normalizeNullableText(notes.note_staff);
-    }
-
-    if (Object.keys(notesPatch).length > 0) {
-      result.notes = notesPatch;
     }
   }
 

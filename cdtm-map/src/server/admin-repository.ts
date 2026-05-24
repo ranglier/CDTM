@@ -31,10 +31,6 @@ type CaseLookupRow = {
   cours_eau_majeur: boolean | null;
   public_updated_at: string | null;
   public_updated_by: string | null;
-  note_publique: string | null;
-  note_staff: string | null;
-  notes_updated_at: string | null;
-  notes_updated_by: string | null;
   terrain_cat: string | null;
   terrain_type: string | null;
   relief: string | null;
@@ -139,11 +135,6 @@ async function createEmptyAdminRecord(
       controle_type: null,
       meta: createEmptyPublicMeta(),
     },
-    notes: {
-      note_publique: draft.notes.note_publique || null,
-      note_staff: draft.notes.note_staff || null,
-      meta: createEmptyPublicMeta(),
-    },
     terrain: {
       terrain_cat: draft.terrain.terrain_cat || null,
       terrain_type: draft.terrain.terrain_type || null,
@@ -190,14 +181,6 @@ async function mapCaseLookupRow(
       meta: {
         updated_at: toIsoStringOrNull(row.public_updated_at),
         updated_by: row.public_updated_by,
-      },
-    },
-    notes: {
-      note_publique: row.note_publique,
-      note_staff: row.note_staff,
-      meta: {
-        updated_at: toIsoStringOrNull(row.notes_updated_at),
-        updated_by: row.notes_updated_by,
       },
     },
     terrain: {
@@ -261,7 +244,6 @@ async function applyCurrentSectionPatch(
   client: PoolClient,
   tableName:
     | "case_public_current"
-    | "case_notes_current"
     | "case_terrain_current"
     | "case_control_current",
   idCase: string,
@@ -313,10 +295,6 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
         public_current.cours_eau_majeur,
         public_current.updated_at AS public_updated_at,
         public_user.username AS public_updated_by,
-        notes.note_publique,
-        notes.note_staff,
-        notes.updated_at AS notes_updated_at,
-        notes_user.username AS notes_updated_by,
         terrain.terrain_cat,
         terrain.terrain_type,
         terrain.relief,
@@ -330,8 +308,6 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
       FROM case_registry AS registry
       LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
       LEFT JOIN staff_users AS public_user ON public_user.id = public_current.updated_by_user_id
-      LEFT JOIN case_notes_current AS notes ON notes.id_case = registry.id_case
-      LEFT JOIN staff_users AS notes_user ON notes_user.id = notes.updated_by_user_id
       LEFT JOIN case_terrain_current AS terrain ON terrain.id_case = registry.id_case
       LEFT JOIN staff_users AS terrain_user ON terrain_user.id = terrain.updated_by_user_id
       LEFT JOIN case_control_current AS control_current ON control_current.id_case = registry.id_case
@@ -395,17 +371,6 @@ export async function saveAdminCaseRecord(
           draft.public.cours_eau_majeur.length > 0
             ? draft.public.cours_eau_majeur === "true"
             : null,
-      },
-      userId,
-    );
-
-    await applyCurrentSectionPatch(
-      client,
-      "case_notes_current",
-      idCase,
-      {
-        note_publique: normalizeNullableField(draft.notes.note_publique),
-        note_staff: normalizeNullableField(draft.notes.note_staff),
       },
       userId,
     );
@@ -485,10 +450,6 @@ export async function saveAdminCaseBulkPatch(
     for (const idCase of uniqueIds) {
       if (patch.public) {
         await applyCurrentSectionPatch(client, "case_public_current", idCase, patch.public, userId);
-      }
-
-      if (patch.notes) {
-        await applyCurrentSectionPatch(client, "case_notes_current", idCase, patch.notes, userId);
       }
 
       if (patch.terrain) {

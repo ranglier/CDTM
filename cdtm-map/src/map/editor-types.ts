@@ -1,6 +1,3 @@
-export const MAP_OBJECT_FAMILIES = ["locality", "landmark", "force"] as const;
-export type MapObjectFamily = (typeof MAP_OBJECT_FAMILIES)[number];
-
 export const MAP_OBJECT_STATUSES = ["draft", "published", "archived"] as const;
 export type MapObjectStatus = (typeof MAP_OBJECT_STATUSES)[number];
 
@@ -19,9 +16,8 @@ export type MapIcon = {
   updated_at: string;
 };
 
-export type MapPointType = {
+export type LocalityType = {
   type_key: string;
-  object_family: MapObjectFamily;
   label: string;
   description: string | null;
   default_icon_key: string | null;
@@ -33,11 +29,30 @@ export type MapPointType = {
   updated_at: string;
 };
 
-export type MapPoint = {
-  id_point: string;
-  name: string;
-  object_family: MapObjectFamily;
+export type LandmarkType = {
   type_key: string;
+  label: string;
+  description: string | null;
+  default_icon_key: string | null;
+  is_active: boolean;
+  updated_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ForceType = {
+  type_key: string;
+  label: string;
+  description: string | null;
+  default_icon_key: string | null;
+  is_active: boolean;
+  updated_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type MapObjectCommon = {
+  name: string;
   icon_key: string | null;
   x: number;
   y: number;
@@ -45,11 +60,26 @@ export type MapPoint = {
   faction: string | null;
   controleur: string | null;
   status: MapObjectStatus;
-  depends_on_point_id: string | null;
   description: string | null;
   updated_by_user_id: number | null;
   created_at: string;
   updated_at: string;
+};
+
+export type MapLocality = MapObjectCommon & {
+  id_locality: string;
+  type_key: string;
+  depends_on_locality_id: string | null;
+};
+
+export type MapLandmark = MapObjectCommon & {
+  id_landmark: string;
+  type_key: string;
+};
+
+export type MapForce = MapObjectCommon & {
+  id_force: string;
+  type_key: string;
 };
 
 export type MapRoutePoint = {

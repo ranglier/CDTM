@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import type { StableCaseProperties } from "@/map/types";
 
 type AdminPanelMode = "read" | "edit";
-type StaticAdminDraftSection = "public" | "notes" | "terrain" | "control";
+type StaticAdminDraftSection = "public" | "terrain" | "control";
 
 type CaseInfoPanelProps = {
   activeCase: StableCaseProperties | null;
