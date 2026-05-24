@@ -472,7 +472,7 @@ function buildReferenceTableQuery(
   limit: number,
   groupKey: string | null = null,
 ): { sql: string; values: Array<string | number> } {
-  const columns = definition.fields.map((field) => field.name).join(", ");
+  const columns = definition.fields.map((field) => `ref.${field.name}`).join(", ");
   const searchColumns = getSearchColumns(definition);
   const normalizedGroupKey =
     definition.key === "nomenclatures" ? normalizeNullableText(groupKey) : null;
@@ -480,9 +480,10 @@ function buildReferenceTableQuery(
   if ((!search || searchColumns.length === 0) && !normalizedGroupKey) {
     return {
       sql: `
-        SELECT ${columns}
-        FROM ${definition.physical_name}
-        ORDER BY ${definition.primary_key} DESC
+        SELECT ${columns}, staff_users.username AS updated_by_username
+        FROM ${definition.physical_name} AS ref
+        LEFT JOIN staff_users ON staff_users.id = ref.updated_by_user_id
+        ORDER BY ref.${definition.primary_key} DESC
         LIMIT $1
       `,
       values: [limit],
@@ -494,7 +495,7 @@ function buildReferenceTableQuery(
 
   if (normalizedGroupKey) {
     values.push(normalizedGroupKey);
-    whereClauses.push(`group_key = $${values.length}`);
+    whereClauses.push(`ref.group_key = $${values.length}`);
   }
 
   if (search && searchColumns.length > 0) {
@@ -503,17 +504,18 @@ function buildReferenceTableQuery(
     values.push(...searchColumns.map(() => likeValue));
     whereClauses.push(
       `(${searchColumns
-        .map((columnName, index) => `COALESCE(${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
+        .map((columnName, index) => `COALESCE(ref.${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
         .join(" OR ")})`,
     );
   }
 
   return {
     sql: `
-      SELECT ${columns}
-      FROM ${definition.physical_name}
+      SELECT ${columns}, staff_users.username AS updated_by_username
+      FROM ${definition.physical_name} AS ref
+      LEFT JOIN staff_users ON staff_users.id = ref.updated_by_user_id
       WHERE ${whereClauses.join(" AND ")}
-      ORDER BY ${definition.primary_key} DESC
+      ORDER BY ref.${definition.primary_key} DESC
       LIMIT $${values.length + 1}
     `,
     values: [...values, limit],
@@ -1136,8 +1138,22 @@ export async function saveReferenceTableRow(
       [...insertValues, userId],
     );
 
+    const savedRow = mapReferenceRow(definition, result.rows[0]);
+    const userResult = await client.query<{ username: string | null }>(
+      `
+        SELECT username
+        FROM staff_users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+
     await client.query("COMMIT");
-    return mapReferenceRow(definition, result.rows[0]);
+    return {
+      ...savedRow,
+      updated_by_username: userResult.rows[0]?.username ?? null,
+    };
   } catch (error) {
     await client.query("ROLLBACK");
 

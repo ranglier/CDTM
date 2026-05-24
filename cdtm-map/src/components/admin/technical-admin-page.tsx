@@ -344,10 +344,17 @@ function createEmptyRowValues(definition: ReferenceTableDefinition): Record<stri
 }
 
 function toEditableRow(definition: ReferenceTableDefinition, row: ReferenceTableRow): EditableRow {
+  const updatedByUsername = row["updated_by_username"];
+
   return {
     localId: `${definition.key}:${row[definition.primary_key] ?? crypto.randomUUID()}`,
     values: Object.fromEntries(
-      definition.fields.map((field) => [field.name, rowValueToInputValue(row[field.name] ?? null)]),
+      definition.fields.map((field) => [
+        field.name,
+        field.name === "updated_by_user_id" && typeof updatedByUsername === "string"
+          ? updatedByUsername
+          : rowValueToInputValue(row[field.name] ?? null),
+      ]),
     ),
     originalPrimaryKey: rowValueToInputValue(row[definition.primary_key] ?? null),
     saving: false,
