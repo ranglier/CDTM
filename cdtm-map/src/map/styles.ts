@@ -268,12 +268,7 @@ export function getCaseStyle({
   const strokeWidth =
     selectionState === "active" ? 2.2 : selectionState === "selected" ? 1.9 : DEFAULT_STROKE_WIDTH;
 
-  const fillColorWithSelection: string | CanvasPattern =
-    selectionState === "active"
-      ? "rgba(33, 30, 26, 0.34)"
-      : selectionState === "selected"
-        ? "rgba(94, 82, 57, 0.18)"
-        : buildBaseFill(displayMode, resolved);
+  const fillColorWithSelection: string | CanvasPattern = buildBaseFill(displayMode, resolved);
 
   const zIndex = selectionState === "active" ? 10 : selectionState === "selected" ? 8 : 1;
   const cacheKey = buildCacheKey(displayMode, selectionState, resolved, strokeColor, strokeWidth, zIndex);
