@@ -37,6 +37,51 @@ type EditableRow = {
   isNew: boolean;
 };
 
+type ReferenceView = {
+  id: string;
+  tableKey: ReferenceTableKey;
+  title: string;
+  groupKey: string | null;
+  rowCount: number | null;
+  supportsTerrainParentSelect?: boolean;
+};
+
+type ReferenceViewSection = {
+  id: string;
+  title: string;
+  views: ReferenceView[];
+};
+
+const FEATURED_NOMENCLATURE_GROUPS = new Set([
+  "terrain_cat",
+  "terrain_type",
+  "relief",
+  "controle_type",
+  "peuple_majoritaire",
+]);
+
+const NOMENCLATURE_LABELS: Record<string, string> = {
+  terrain_cat: "Categories de terrain",
+  terrain_type: "Types de terrain",
+  relief: "Reliefs",
+  controle_type: "Types de controle",
+  peuple_majoritaire: "Peuples majoritaires",
+};
+
+function formatNomenclatureGroupLabel(groupKey: string): string {
+  const predefined = NOMENCLATURE_LABELS[groupKey];
+
+  if (predefined) {
+    return predefined;
+  }
+
+  return groupKey
+    .split("_")
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
@@ -252,7 +297,7 @@ export function TechnicalAdminPage() {
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   const [referenceStatuses, setReferenceStatuses] = useState<ReferenceTableStatus[]>([]);
-  const [activeReferenceKey, setActiveReferenceKey] = useState<ReferenceTableKey | null>(null);
+  const [activeReferenceViewId, setActiveReferenceViewId] = useState<string | null>(null);
   const [referenceRows, setReferenceRows] = useState<EditableRow[]>([]);
   const [selectedReferenceRowId, setSelectedReferenceRowId] = useState<string | null>(null);
   const [referenceSearchInput, setReferenceSearchInput] = useState("");
@@ -260,6 +305,7 @@ export function TechnicalAdminPage() {
   const [referencesLoading, setReferencesLoading] = useState(false);
   const [referenceRowsLoading, setReferenceRowsLoading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [terrainCategoryOptions, setTerrainCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const [schemaSummaries, setSchemaSummaries] = useState<DynamicCaseTableSummary[]>([]);
   const [activeSchemaKey, setActiveSchemaKey] = useState<string | null>(null);
@@ -313,9 +359,130 @@ export function TechnicalAdminPage() {
   const [accountUpdateError, setAccountUpdateError] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
 
+  const nomenclatureStatus = useMemo(
+    () => referenceStatuses.find((table) => table.definition.key === "nomenclatures") ?? null,
+    [referenceStatuses],
+  );
+  const nomenclatureGroupCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        (nomenclatureStatus?.group_counts ?? []).map((group) => [group.group_key, group.row_count]),
+      ),
+    [nomenclatureStatus],
+  );
+  const referenceViewSections = useMemo<ReferenceViewSection[]>(() => {
+    const sections: ReferenceViewSection[] = [];
+    const addSection = (section: ReferenceViewSection) => {
+      if (section.views.length > 0) {
+        sections.push(section);
+      }
+    };
+
+    addSection({
+      id: "terrains",
+      title: "Terrains",
+      views: [
+        {
+          id: "nomenclatures:terrain_cat",
+          tableKey: "nomenclatures",
+          title: "Categories de terrain",
+          groupKey: "terrain_cat",
+          rowCount: nomenclatureGroupCounts.terrain_cat ?? 0,
+        },
+        {
+          id: "nomenclatures:terrain_type",
+          tableKey: "nomenclatures",
+          title: "Types de terrain",
+          groupKey: "terrain_type",
+          rowCount: nomenclatureGroupCounts.terrain_type ?? 0,
+          supportsTerrainParentSelect: true,
+        },
+        {
+          id: "nomenclatures:relief",
+          tableKey: "nomenclatures",
+          title: "Reliefs",
+          groupKey: "relief",
+          rowCount: nomenclatureGroupCounts.relief ?? 0,
+        },
+      ],
+    });
+
+    addSection({
+      id: "controle",
+      title: "Controle",
+      views: [
+        {
+          id: "nomenclatures:controle_type",
+          tableKey: "nomenclatures",
+          title: "Types de controle",
+          groupKey: "controle_type",
+          rowCount: nomenclatureGroupCounts.controle_type ?? 0,
+        },
+      ],
+    });
+
+    addSection({
+      id: "peuples",
+      title: "Peuples",
+      views: [
+        {
+          id: "nomenclatures:peuple_majoritaire",
+          tableKey: "nomenclatures",
+          title: "Peuples majoritaires",
+          groupKey: "peuple_majoritaire",
+          rowCount: nomenclatureGroupCounts.peuple_majoritaire ?? 0,
+        },
+      ],
+    });
+
+    const otherNomenclatureViews = Object.keys(nomenclatureGroupCounts)
+      .filter((groupKey) => !FEATURED_NOMENCLATURE_GROUPS.has(groupKey))
+      .sort()
+      .map<ReferenceView>((groupKey) => ({
+        id: `nomenclatures:${groupKey}`,
+        tableKey: "nomenclatures",
+        title: formatNomenclatureGroupLabel(groupKey),
+        groupKey,
+        rowCount: nomenclatureGroupCounts[groupKey] ?? 0,
+      }));
+
+    addSection({
+      id: "autres-listes",
+      title: "Autres listes",
+      views: otherNomenclatureViews,
+    });
+
+    const otherTables = referenceStatuses
+      .filter((table) => table.definition.key !== "nomenclatures")
+      .map<ReferenceView>((table) => ({
+        id: table.definition.key,
+        tableKey: table.definition.key,
+        title: table.definition.title,
+        groupKey: null,
+        rowCount: table.row_count,
+      }));
+
+    addSection({
+      id: "autres-referentiels",
+      title: "Autres referentiels",
+      views: otherTables,
+    });
+
+    return sections;
+  }, [nomenclatureGroupCounts, referenceStatuses]);
+  const activeReferenceView = useMemo(
+    () =>
+      referenceViewSections
+        .flatMap((section) => section.views)
+        .find((view) => view.id === activeReferenceViewId) ?? null,
+    [activeReferenceViewId, referenceViewSections],
+  );
   const activeReference = useMemo(
-    () => referenceStatuses.find((table) => table.definition.key === activeReferenceKey) ?? null,
-    [activeReferenceKey, referenceStatuses],
+    () =>
+      activeReferenceView
+        ? referenceStatuses.find((table) => table.definition.key === activeReferenceView.tableKey) ?? null
+        : null,
+    [activeReferenceView, referenceStatuses],
   );
   const selectedReferenceStatus = useMemo(
     () =>
@@ -338,6 +505,13 @@ export function TechnicalAdminPage() {
     () => staffAccounts.find((account) => account.id === activeAccountId) ?? null,
     [activeAccountId, staffAccounts],
   );
+  const terrainCategoryLabelByKey = useMemo(
+    () =>
+      Object.fromEntries(
+        terrainCategoryOptions.map((option) => [option.value, option.label]),
+      ),
+    [terrainCategoryOptions],
+  );
 
   const hydrateSession = useCallback(async () => {
     try {
@@ -358,7 +532,9 @@ export function TechnicalAdminPage() {
     try {
       const nextStatuses = await fetchJson<ReferenceTableStatus[]>("/api/admin/tech/references");
       setReferenceStatuses(nextStatuses);
-      setActiveReferenceKey((current) => current ?? nextStatuses[0]?.definition.key ?? null);
+      const nomenclatureGroups =
+        nextStatuses.find((table) => table.definition.key === "nomenclatures")?.group_counts ?? [];
+      setNomenclatureGroups(nomenclatureGroups.map((group) => group.group_key).sort());
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : "Chargement des referentiels impossible.");
     } finally {
@@ -367,7 +543,7 @@ export function TechnicalAdminPage() {
   }, []);
 
   const loadReferenceRows = useCallback(
-    async (tableKey: ReferenceTableKey, search: string) => {
+    async (tableKey: ReferenceTableKey, search: string, groupKey: string | null = null) => {
       setReferenceRowsLoading(true);
       setReferenceError(null);
 
@@ -376,6 +552,10 @@ export function TechnicalAdminPage() {
 
         if (search.trim().length > 0) {
           params.set("search", search.trim());
+        }
+
+        if (groupKey) {
+          params.set("group", groupKey);
         }
 
         const response = await fetchJson<ReferenceTableRowsResponse>(
@@ -388,16 +568,6 @@ export function TechnicalAdminPage() {
             ? current
             : nextRows[0]?.localId ?? null,
         );
-        if (tableKey === "nomenclatures") {
-          const nextGroups = Array.from(
-            new Set(
-              response.rows
-                .map((row) => (typeof row.group_key === "string" ? row.group_key : ""))
-                .filter((value) => value.length > 0),
-            ),
-          ).sort();
-          setNomenclatureGroups(nextGroups);
-        }
       } catch (error) {
         setReferenceError(error instanceof Error ? error.message : "Chargement des lignes impossible.");
         setReferenceRows([]);
@@ -408,6 +578,26 @@ export function TechnicalAdminPage() {
     },
     [],
   );
+
+  const loadTerrainCategoryOptions = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({
+        limit: "250",
+        group: "terrain_cat",
+      });
+      const response = await fetchJson<ReferenceTableRowsResponse>(
+        `/api/admin/tech/references/nomenclatures?${params.toString()}`,
+      );
+      setTerrainCategoryOptions(
+        response.rows.map((row) => ({
+          value: rowValueToInputValue(row.entry_key ?? ""),
+          label: rowValueToInputValue(row.label ?? row.entry_key ?? ""),
+        })),
+      );
+    } catch {
+      setTerrainCategoryOptions([]);
+    }
+  }, []);
 
   const loadSchemaSummaries = useCallback(async () => {
     setSchemaLoading(true);
@@ -486,17 +676,41 @@ export function TechnicalAdminPage() {
     }
 
     void loadReferenceStatuses();
+    void loadTerrainCategoryOptions();
     void loadSchemaSummaries();
     void loadStaffAccounts();
-  }, [loadReferenceStatuses, loadSchemaSummaries, loadStaffAccounts, session?.is_tech_admin]);
+  }, [
+    loadReferenceStatuses,
+    loadSchemaSummaries,
+    loadStaffAccounts,
+    loadTerrainCategoryOptions,
+    session?.is_tech_admin,
+  ]);
 
   useEffect(() => {
-    if (!session?.is_tech_admin || !activeReferenceKey) {
+    if (!session?.is_tech_admin || !activeReferenceView) {
       return;
     }
 
-    void loadReferenceRows(activeReferenceKey, referenceSearch);
-  }, [activeReferenceKey, loadReferenceRows, referenceSearch, session?.is_tech_admin]);
+    void loadReferenceRows(activeReferenceView.tableKey, referenceSearch, activeReferenceView.groupKey);
+  }, [activeReferenceView, loadReferenceRows, referenceSearch, session?.is_tech_admin]);
+
+  useEffect(() => {
+    const firstViewId = referenceViewSections[0]?.views[0]?.id ?? null;
+
+    setActiveReferenceViewId((current) => {
+      if (current && referenceViewSections.some((section) => section.views.some((view) => view.id === current))) {
+        return current;
+      }
+
+      return firstViewId;
+    });
+  }, [referenceViewSections]);
+
+  useEffect(() => {
+    setReferenceSearch("");
+    setReferenceSearchInput("");
+  }, [activeReferenceViewId]);
 
   useEffect(() => {
     if (!session?.is_tech_admin || !activeSchemaKey) {
@@ -572,7 +786,7 @@ export function TechnicalAdminPage() {
   }, []);
 
   const handleAddReferenceRow = useCallback(() => {
-    if (!activeReference) {
+    if (!activeReference || !activeReferenceView) {
       return;
     }
 
@@ -580,7 +794,10 @@ export function TechnicalAdminPage() {
     setReferenceRows((current) => [
       {
         localId,
-        values: createEmptyRowValues(activeReference.definition),
+        values: {
+          ...createEmptyRowValues(activeReference.definition),
+          ...(activeReferenceView.groupKey ? { group_key: activeReferenceView.groupKey } : {}),
+        },
         originalPrimaryKey: "",
         saving: false,
         error: null,
@@ -589,7 +806,7 @@ export function TechnicalAdminPage() {
       ...current,
     ]);
     setSelectedReferenceRowId(localId);
-  }, [activeReference]);
+  }, [activeReference, activeReferenceView]);
 
   const handleSaveReferenceRow = useCallback(
     async (row: EditableRow) => {
@@ -619,7 +836,10 @@ export function TechnicalAdminPage() {
           current.map((item) => (item.localId === row.localId ? nextRow : item)),
         );
         setSelectedReferenceRowId(nextRow.localId);
-        await loadReferenceStatuses();
+        await Promise.all([
+          loadReferenceStatuses(),
+          activeReferenceView?.groupKey === "terrain_cat" ? loadTerrainCategoryOptions() : Promise.resolve(),
+        ]);
       } catch (error) {
         setReferenceRows((current) =>
           current.map((item) =>
@@ -634,7 +854,7 @@ export function TechnicalAdminPage() {
         );
       }
     },
-    [activeReference, loadReferenceStatuses],
+    [activeReference, activeReferenceView?.groupKey, loadReferenceStatuses, loadTerrainCategoryOptions],
   );
 
   const handleDeleteReferenceRow = useCallback(
@@ -664,7 +884,10 @@ export function TechnicalAdminPage() {
         );
         setReferenceRows((current) => current.filter((item) => item.localId !== row.localId));
         setSelectedReferenceRowId((current) => (current === row.localId ? null : current));
-        await loadReferenceStatuses();
+        await Promise.all([
+          loadReferenceStatuses(),
+          activeReferenceView?.groupKey === "terrain_cat" ? loadTerrainCategoryOptions() : Promise.resolve(),
+        ]);
       } catch (error) {
         setReferenceRows((current) =>
           current.map((item) =>
@@ -678,7 +901,7 @@ export function TechnicalAdminPage() {
         );
       }
     },
-    [activeReference, loadReferenceStatuses],
+    [activeReference, activeReferenceView?.groupKey, loadReferenceStatuses, loadTerrainCategoryOptions],
   );
 
   const handleCreateSchemaTable = useCallback(async () => {
@@ -929,11 +1152,12 @@ export function TechnicalAdminPage() {
             Administration
           </h1>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 grid gap-3">
             <Button
               type="button"
               variant={activeTab === "references" ? "secondary" : "outline"}
               size="sm"
+              className="w-full"
               onClick={() => setActiveTab("references")}
             >
               Listes de valeurs
@@ -942,6 +1166,7 @@ export function TechnicalAdminPage() {
               type="button"
               variant={activeTab === "schema" ? "secondary" : "outline"}
               size="sm"
+              className="w-full"
               onClick={() => setActiveTab("schema")}
             >
               Champs personnalises
@@ -950,6 +1175,7 @@ export function TechnicalAdminPage() {
               type="button"
               variant={activeTab === "accounts" ? "secondary" : "outline"}
               size="sm"
+              className="w-full"
               onClick={() => setActiveTab("accounts")}
             >
               Comptes staff
@@ -959,33 +1185,43 @@ export function TechnicalAdminPage() {
           {globalError ? <p className="mt-4 text-sm text-destructive">{globalError}</p> : null}
 
           {activeTab === "references" ? (
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 space-y-4">
               <div className="flex justify-end">
                 <Button
                   type="button"
                   onClick={handleAddReferenceRow}
+                  disabled={!activeReferenceView}
                 >
                   Ajouter une valeur
                 </Button>
               </div>
-              {referenceStatuses.map((table) => (
-                <button
-                  key={table.definition.key}
-                  type="button"
-                  className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
-                    table.definition.key === activeReferenceKey
-                      ? "border-primary/45 bg-primary/10"
-                      : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
-                  }`}
-                  onClick={() => setActiveReferenceKey(table.definition.key)}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">{table.definition.title}</p>
-                    <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      {table.row_count}
-                    </span>
-                  </div>
-                </button>
+              {referenceViewSections.map((section) => (
+                <div key={section.id} className="space-y-2">
+                  <p className="px-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    {section.title}
+                  </p>
+                  {section.views.map((view) => (
+                    <button
+                      key={view.id}
+                      type="button"
+                      className={`w-full rounded-[18px] border px-4 py-4 text-left transition ${
+                        view.id === activeReferenceViewId
+                          ? "border-primary/45 bg-primary/10"
+                          : "border-border/70 bg-background/35 hover:border-primary/25 hover:bg-background/50"
+                      }`}
+                      onClick={() => setActiveReferenceViewId(view.id)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">{view.title}</p>
+                        {view.rowCount !== null ? (
+                          <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                            {view.rowCount}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           ) : activeTab === "schema" ? (
@@ -1207,7 +1443,7 @@ export function TechnicalAdminPage() {
               <>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <h2 className="text-2xl font-semibold text-foreground">
-                    {activeReference.definition.title}
+                    {activeReferenceView?.title ?? activeReference.definition.title}
                   </h2>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -1262,13 +1498,24 @@ export function TechnicalAdminPage() {
                             >
                               <div className="text-left">
                                 <p className="text-sm font-semibold text-foreground">
-                                  {row.values[activeReference.definition.primary_key] || "Nouvelle ligne"}
+                                  {row.values.label ||
+                                    row.values.entry_key ||
+                                    row.values[activeReference.definition.primary_key] ||
+                                    "Nouvelle ligne"}
                                 </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                  {activeReference.definition.fields
-                                    .filter((field) => field.name !== activeReference.definition.primary_key)
-                                    .map((field) => row.values[field.name])
-                                    .find((value) => value && value.trim().length > 0) || "Aucun detail visible"}
+                                  {activeReferenceView?.groupKey === "terrain_type"
+                                    ? terrainCategoryLabelByKey[row.values.parent_entry_key] ||
+                                      row.values.parent_entry_key ||
+                                      "Type sans categorie parente"
+                                    : activeReference.definition.fields
+                                        .filter(
+                                          (field) =>
+                                            field.name !== activeReference.definition.primary_key &&
+                                            field.name !== "group_key",
+                                        )
+                                        .map((field) => row.values[field.name])
+                                        .find((value) => value && value.trim().length > 0) || "Aucun detail visible"}
                                 </p>
                               </div>
                               <div className="flex gap-3">
@@ -1299,14 +1546,37 @@ export function TechnicalAdminPage() {
                                   <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                     {getFriendlyFieldLabel(field.label)}
                                   </p>
-                                  <FieldEditor
-                                    field={field}
-                                    value={row.values[field.name] ?? ""}
-                                    disabled={row.saving}
-                                    onChange={(value) =>
-                                      handleReferenceRowValueChange(row.localId, field.name, value)
-                                    }
-                                  />
+                                  {activeReferenceView?.supportsTerrainParentSelect &&
+                                  field.name === "parent_entry_key" ? (
+                                    <select
+                                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                                      value={row.values[field.name] ?? ""}
+                                      disabled={row.saving}
+                                      onChange={(event) =>
+                                        handleReferenceRowValueChange(
+                                          row.localId,
+                                          field.name,
+                                          event.target.value,
+                                        )
+                                      }
+                                    >
+                                      <option value="">Aucune categorie parente</option>
+                                      {terrainCategoryOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <FieldEditor
+                                      field={field}
+                                      value={row.values[field.name] ?? ""}
+                                      disabled={row.saving}
+                                      onChange={(value) =>
+                                        handleReferenceRowValueChange(row.localId, field.name, value)
+                                      }
+                                    />
+                                  )}
                                 </div>
                               ))}
                             </div>

@@ -47,6 +47,10 @@ export type ReferenceTableRow = Record<string, ReferenceTableRowValue>;
 export type ReferenceTableStatus = {
   definition: ReferenceTableDefinition;
   row_count: number;
+  group_counts?: Array<{
+    group_key: string;
+    row_count: number;
+  }>;
 };
 
 export type ReferenceTableRowsResponse = {

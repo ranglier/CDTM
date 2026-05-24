@@ -216,10 +216,13 @@ async function queryReferenceTableCount(
   client: PoolClient,
   definition: ReferenceTableDefinition,
   search: string,
+  groupKey: string | null = null,
 ): Promise<number> {
   const searchColumns = getSearchColumns(definition);
+  const normalizedGroupKey =
+    definition.key === "nomenclatures" ? normalizeNullableText(groupKey) : null;
 
-  if (!search || searchColumns.length === 0) {
+  if ((!search || searchColumns.length === 0) && !normalizedGroupKey) {
     const result = await client.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM ${definition.physical_name}`,
     );
@@ -227,17 +230,32 @@ async function queryReferenceTableCount(
     return Number.parseInt(result.rows[0]?.count ?? "0", 10);
   }
 
-  const likeValue = `%${search}%`;
-  const searchClauses = searchColumns.map(
-    (columnName, index) => `COALESCE(${columnName}::text, '') ILIKE $${index + 1}`,
-  );
+  const whereClauses: string[] = [];
+  const values: Array<string | number> = [];
+
+  if (normalizedGroupKey) {
+    values.push(normalizedGroupKey);
+    whereClauses.push(`group_key = $${values.length}`);
+  }
+
+  if (search && searchColumns.length > 0) {
+    const likeValue = `%${search}%`;
+    const searchValueIndexes = searchColumns.map((_, index) => `$${values.length + index + 1}`);
+    values.push(...searchColumns.map(() => likeValue));
+    whereClauses.push(
+      `(${searchColumns
+        .map((columnName, index) => `COALESCE(${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
+        .join(" OR ")})`,
+    );
+  }
+
   const result = await client.query<{ count: string }>(
     `
       SELECT COUNT(*)::text AS count
       FROM ${definition.physical_name}
-      WHERE ${searchClauses.join(" OR ")}
+      WHERE ${whereClauses.join(" AND ")}
     `,
-    searchColumns.map(() => likeValue),
+    values,
   );
 
   return Number.parseInt(result.rows[0]?.count ?? "0", 10);
@@ -247,11 +265,14 @@ function buildReferenceTableQuery(
   definition: ReferenceTableDefinition,
   search: string,
   limit: number,
+  groupKey: string | null = null,
 ): { sql: string; values: Array<string | number> } {
   const columns = definition.fields.map((field) => field.name).join(", ");
   const searchColumns = getSearchColumns(definition);
+  const normalizedGroupKey =
+    definition.key === "nomenclatures" ? normalizeNullableText(groupKey) : null;
 
-  if (!search || searchColumns.length === 0) {
+  if ((!search || searchColumns.length === 0) && !normalizedGroupKey) {
     return {
       sql: `
         SELECT ${columns}
@@ -263,20 +284,34 @@ function buildReferenceTableQuery(
     };
   }
 
-  const likeValue = `%${search}%`;
-  const searchClauses = searchColumns.map(
-    (columnName, index) => `COALESCE(${columnName}::text, '') ILIKE $${index + 1}`,
-  );
+  const whereClauses: string[] = [];
+  const values: Array<string | number> = [];
+
+  if (normalizedGroupKey) {
+    values.push(normalizedGroupKey);
+    whereClauses.push(`group_key = $${values.length}`);
+  }
+
+  if (search && searchColumns.length > 0) {
+    const likeValue = `%${search}%`;
+    const searchValueIndexes = searchColumns.map((_, index) => `$${values.length + index + 1}`);
+    values.push(...searchColumns.map(() => likeValue));
+    whereClauses.push(
+      `(${searchColumns
+        .map((columnName, index) => `COALESCE(${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
+        .join(" OR ")})`,
+    );
+  }
 
   return {
     sql: `
       SELECT ${columns}
       FROM ${definition.physical_name}
-      WHERE ${searchClauses.join(" OR ")}
+      WHERE ${whereClauses.join(" AND ")}
       ORDER BY ${definition.primary_key} DESC
-      LIMIT $${searchColumns.length + 1}
+      LIMIT $${values.length + 1}
     `,
-    values: [...searchColumns.map(() => likeValue), limit],
+    values: [...values, limit],
   };
 }
 
@@ -625,10 +660,28 @@ export async function listReferenceTableStatuses(): Promise<ReferenceTableStatus
         `SELECT COUNT(*)::text AS count FROM ${definition.physical_name}`,
       );
 
-      statuses.push({
+      const baseStatus: ReferenceTableStatus = {
         definition,
         row_count: Number.parseInt(result.rows[0]?.count ?? "0", 10),
-      });
+      };
+
+      if (definition.key === "nomenclatures") {
+        const groupsResult = await client.query<{ group_key: string; row_count: string }>(
+          `
+            SELECT group_key, COUNT(*)::text AS row_count
+            FROM reference_nomenclature_values
+            GROUP BY group_key
+            ORDER BY group_key ASC
+          `,
+        );
+
+        baseStatus.group_counts = groupsResult.rows.map((row) => ({
+          group_key: row.group_key,
+          row_count: Number.parseInt(row.row_count, 10),
+        }));
+      }
+
+      statuses.push(baseStatus);
     }
 
     return statuses;
@@ -639,7 +692,7 @@ export async function listReferenceTableStatuses(): Promise<ReferenceTableStatus
 
 export async function listReferenceTableRows(
   tableKey: ReferenceTableKey,
-  options?: { search?: string; limit?: number },
+  options?: { search?: string; limit?: number; groupKey?: string | null },
 ): Promise<ReferenceTableRowsResponse> {
   const hasDatabase = await ensureDatabaseReady();
 
@@ -650,11 +703,12 @@ export async function listReferenceTableRows(
   const definition = assertReferenceTableDefinition(tableKey);
   const search = options?.search?.trim() ?? "";
   const limit = normalizeLimit(options?.limit);
+  const groupKey = definition.key === "nomenclatures" ? normalizeNullableText(options?.groupKey) : null;
   const client = await getPool().connect();
 
   try {
-    const totalCount = await queryReferenceTableCount(client, definition, search);
-    const { sql, values } = buildReferenceTableQuery(definition, search, limit);
+    const totalCount = await queryReferenceTableCount(client, definition, search, groupKey);
+    const { sql, values } = buildReferenceTableQuery(definition, search, limit, groupKey);
     const result = await client.query(sql, values);
 
     return {

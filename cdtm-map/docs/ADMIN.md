@@ -74,6 +74,23 @@ On y trouve deux espaces :
 - `Listes de valeurs` : listes de choix reutilisees dans les formulaires, par exemple les terrains, factions, types de controle ou styles ;
 - `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases.
 
+Certaines listes partagees passent techniquement par la meme table `reference_nomenclature_values`, mais l'interface les separe en vues metier distinctes.
+
+Par exemple, l'espace `Listes de valeurs` presente directement des groupes comme :
+
+- `Terrains`
+- `Controle`
+- `Peuples`
+- `Autres listes`
+
+Le groupe fonctionnel `Terrains` rassemble notamment :
+
+- `terrain_cat`
+- `terrain_type`
+- `relief`
+
+Les reliefs restent donc affiches comme une composante du bloc `Terrains`, meme si les donnees restent stockees dans la table technique commune.
+
 Une section `Comptes staff` permet aussi de :
 
 - lister les comptes existants ;

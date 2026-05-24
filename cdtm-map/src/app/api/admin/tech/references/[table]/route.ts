@@ -72,6 +72,7 @@ export async function GET(
     const rows = await listReferenceTableRows(tableKey, {
       search: request.nextUrl.searchParams.get("search") ?? "",
       limit: Number.isNaN(limitValue) ? 100 : limitValue,
+      groupKey: request.nextUrl.searchParams.get("group"),
     });
 
     return NextResponse.json(rows, {
