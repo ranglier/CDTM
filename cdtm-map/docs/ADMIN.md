@@ -72,6 +72,7 @@ L'admin technique sert a maintenir les structures partagees par toutes les cases
 On y trouve notamment :
 
 - `Listes de valeurs` : listes de choix reutilisees dans les formulaires, par exemple les terrains, factions, types de controle ou styles ;
+- `Icones de carte`, `Types de points`, `Races` et `Peuples` pour preparer l'editeur cartographique ;
 - `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases ;
 - `Comptes staff` : gestion des comptes `staff` et `tech_admin`.
 
@@ -136,26 +137,14 @@ Les objets ponctuels utiliseront exclusivement des icones Game-icons. Les icones
 - auteur ;
 - licence ;
 - categorie ;
+- URL image ;
+- texte alternatif ;
 - statut actif/inactif.
 
-Catalogue initial valide :
+Le catalogue Game-icons doit rester vide par defaut.
 
-| Usage | Icone Game-icons |
-| --- | --- |
-| Fort | `stone-tower` |
-| Ruines | `tower-fall` |
-| Ville fortifiee | `castle` |
-| Ville non fortifiee | `medieval-village-01` |
-| Avant-poste | `watchtower` |
-| Port | `anchor` |
-| Pont | `stone-bridge` |
-| Mine | `bridge` |
-| Barad-Dur | `evil-tower` |
-| Moria | `arabic-door` |
-| Hobbit bourg | `hobbit-dwelling` |
-| Hauts-des-Galgals | `tumulus` |
-| Armee | `rally-the-troops` |
-| Flotte | `caravel` |
+Aucune icone n'est seedee automatiquement dans cette fondation de l'editeur.
+Les icones seront ajoutees manuellement plus tard depuis l'admin technique, avec `image_url` optionnelle pour l'aperçu et `image_alt` pour l'accessibilite.
 
 Les types d'objets doivent rester separes des icones : un type pointe vers une icone par defaut, mais un objet cartographique peut eventuellement surcharger son icone.
 

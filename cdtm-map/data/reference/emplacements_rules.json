@@ -5,5 +5,5 @@
     "min": 1,
     "max": 5
   },
-  "calculation_note": "Futur calcul métier envisagé : empl_base = base_by_terrain_type + relief_modifiers ; empl_max = clamp(empl_base + bonus_by_people + bonus_by_special, bounds.min, bounds.max). Ces champs ne doivent pas être stockés dans la couche stable cases."
+  "calculation_note": "Futur calcul métier envisagé : empl_max = terrain_type + bonus_race + bonus_contextuel, borne entre bounds.min et bounds.max. Si un terrain_type ne porte pas sa propre valeur, il herite de sa categorie parente. Les champs calcules ne doivent pas etre stockes dans la couche stable cases."
 }

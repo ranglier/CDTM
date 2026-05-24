@@ -181,26 +181,11 @@ Chaque icone doit conserver ses informations de credit :
 
 Licence cible : Creative Commons BY 3.0, avec attribution.
 
-Seeds initiaux valides :
+Le catalogue runtime doit rester vide par defaut. Aucune icone Game-icons n'est seedee automatiquement.
 
-| Usage | `icon_key` | Auteur | Source |
-| --- | --- | --- | --- |
-| Fort | `stone-tower` | Lorc | https://game-icons.net/1x1/lorc/stone-tower.html |
-| Ruines | `tower-fall` | Delapouite | https://game-icons.net/1x1/delapouite/tower-fall.html |
-| Ville fortifiee | `castle` | Delapouite | https://game-icons.net/1x1/delapouite/castle.html |
-| Ville non fortifiee | `medieval-village-01` | Delapouite | https://game-icons.net/1x1/delapouite/medieval-village-01.html |
-| Avant-poste | `watchtower` | Delapouite | https://game-icons.net/1x1/delapouite/watchtower.html |
-| Port | `anchor` | Lorc | https://game-icons.net/1x1/lorc/anchor.html |
-| Pont | `stone-bridge` | Delapouite | https://game-icons.net/1x1/delapouite/stone-bridge.html |
-| Mine | `bridge` | Lorc | https://game-icons.net/1x1/lorc/bridge.html |
-| Barad-Dur | `evil-tower` | Delapouite | https://game-icons.net/1x1/delapouite/evil-tower.html |
-| Moria | `arabic-door` | Delapouite | https://game-icons.net/1x1/delapouite/arabic-door.html |
-| Hobbit bourg | `hobbit-dwelling` | Delapouite | https://game-icons.net/1x1/delapouite/hobbit-dwelling.html |
-| Hauts-des-Galgals | `tumulus` | Cathelineau | https://game-icons.net/1x1/cathelineau/tumulus.html |
-| Armee | `rally-the-troops` | Lorc | https://game-icons.net/1x1/lorc/rally-the-troops.html |
-| Flotte | `caravel` | Delapouite | https://game-icons.net/1x1/delapouite/caravel.html |
+Les icones doivent etre ajoutees manuellement depuis l'admin technique avec leurs credits, leur URL source et, si besoin, une `image_url` publique pour l'aperçu.
 
-Les icones doivent etre gerees comme un catalogue. Les types de lieux ou de forces pointent vers une icone par defaut, mais un point de carte peut eventuellement surcharger son icone.
+Les types de lieux ou de forces pointent vers une icone par defaut seulement si elle est definie plus tard. `default_icon_key` doit accepter `NULL`.
 
 ## Types de localites et objets ponctuels
 
@@ -211,6 +196,19 @@ Tables cibles possibles :
 ### `reference_map_icons`
 
 Catalogue des icones disponibles.
+
+Champs cibles :
+
+- `icon_key`
+- `label`
+- `source_url`
+- `author`
+- `license`
+- `category`
+- `image_url`
+- `image_alt`
+- `is_active`
+- `sort_order`
 
 ### `reference_map_point_types`
 
@@ -425,6 +423,5 @@ Decision actuelle :
 - Definir si les booleens d'eau sont calcules automatiquement depuis QGIS ou saisis manuellement.
 - Ajouter des migrations schema avant toute suppression de table ou colonne.
 - Ajouter des tests sur le contrat public `GET /api/cases/public-index`.
-- Implementer la page `/editeur` pour points libres et routes.
-- Implementer les tables `reference_races`, `reference_peuples`, `reference_map_icons`, `reference_map_point_types`, `map_points` et `map_routes`.
+- Etendre la page `/editeur` au-dela du squelette courant.
 - Implementer le calcul des emplacements a partir de `terrain_type`, des races/peuples et des bonus contextuels.

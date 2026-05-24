@@ -10,6 +10,7 @@ import type {
   DynamicCaseTableDefinition,
   DynamicCaseTableFieldCreateInput,
   DynamicCaseTableFieldType,
+  ReferenceOption,
   ReferenceStyleValue,
   DynamicCaseTableSummary,
   DynamicCaseTableUpdateInput,
@@ -97,6 +98,10 @@ const REFERENCE_TECHNICAL_FIELDS = new Set([
   "id_entry",
   "id_faction",
   "id_controleur",
+  "icon_key",
+  "type_key",
+  "race_key",
+  "peuple_key",
   "updated_by_user_id",
   "created_at",
   "updated_at",
@@ -217,6 +222,38 @@ function StylePreview({
         borderColor: preview.stroke,
       }}
       aria-hidden="true"
+    />
+  );
+}
+
+function isPreviewImageUrl(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("/");
+}
+
+function ImagePreview({ imageUrl, imageAlt }: { imageUrl: string; imageAlt: string }) {
+  const [hasError, setHasError] = useState(false);
+  const trimmedUrl = imageUrl.trim();
+
+  if (!trimmedUrl) {
+    return <p className="text-sm text-muted-foreground">Aucune image renseignee.</p>;
+  }
+
+  if (!isPreviewImageUrl(trimmedUrl)) {
+    return <p className="text-sm text-muted-foreground">URL d’image invalide ou non prise en charge.</p>;
+  }
+
+  if (hasError) {
+    return <p className="text-sm text-muted-foreground">Impossible de charger l’image pour l’instant.</p>;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={trimmedUrl}
+      alt={imageAlt.trim() || "Apercu de l’icone"}
+      className="max-h-28 max-w-full rounded-[14px] border border-border/60 bg-background/35 p-2"
+      onError={() => setHasError(true)}
     />
   );
 }
@@ -395,11 +432,13 @@ function FieldEditor({
   field,
   value,
   disabled,
+  options,
   onChange,
 }: {
   field: TechFieldDefinition;
   value: string;
   disabled: boolean;
+  options?: ReferenceOption[];
   onChange: (value: string) => void;
 }) {
   const className =
@@ -410,6 +449,40 @@ function FieldEditor({
       <div className="rounded-[14px] border border-border/60 bg-background/35 px-3 py-2 text-sm text-muted-foreground">
         {value || "—"}
       </div>
+    );
+  }
+
+  if (field.reference_table_key && options !== undefined) {
+    return (
+      <select
+        className={className}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Non renseigne</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field.name === "object_family") {
+    return (
+      <select
+        className={className}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Non renseigne</option>
+        <option value="locality">locality</option>
+        <option value="landmark">landmark</option>
+        <option value="force">force</option>
+      </select>
     );
   }
 
@@ -546,6 +619,54 @@ function applyReferenceAutoFill(
     }
   }
 
+  if (tableKey === "map_icons") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.icon_key ?? "", previousSuggestion)
+    ) {
+      nextValues.icon_key = nextSuggestion;
+    }
+  }
+
+  if (tableKey === "map_point_types") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.type_key ?? "", previousSuggestion)
+    ) {
+      nextValues.type_key = nextSuggestion;
+    }
+  }
+
+  if (tableKey === "races") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.race_key ?? "", previousSuggestion)
+    ) {
+      nextValues.race_key = nextSuggestion;
+    }
+  }
+
+  if (tableKey === "peuples") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.peuple_key ?? "", previousSuggestion)
+    ) {
+      nextValues.peuple_key = nextSuggestion;
+    }
+  }
+
   return nextValues;
 }
 
@@ -585,9 +706,43 @@ function getFriendlyFieldLabel(fieldName: string): string {
       return "Valeur texte";
     case "value_integer":
       return "Valeur numerique";
+    case "icon_key":
+      return "Cle icone";
+    case "source_url":
+      return "URL source";
+    case "author":
+      return "Auteur";
+    case "license":
+      return "Licence";
+    case "category":
+      return "Categorie";
+    case "image_url":
+      return "URL image";
+    case "image_alt":
+      return "Texte alternatif";
+    case "is_active":
+      return "Actif";
+    case "type_key":
+      return "Identifiant type";
+    case "object_family":
+      return "Famille d'objet";
+    case "default_icon_key":
+      return "Icone par defaut";
+    case "consumes_slot":
+      return "Consomme un emplacement";
+    case "slot_weight":
+      return "Poids d'emplacement";
+    case "race_key":
+      return "Race";
+    case "peuple_key":
+      return "Identifiant peuple";
     default:
       return fieldName;
   }
+}
+
+function getOptionLabel(options: ReferenceOption[] | undefined, value: string): string {
+  return options?.find((option) => option.value === value)?.label ?? value;
 }
 
 export function TechnicalAdminPage() {
@@ -604,6 +759,7 @@ export function TechnicalAdminPage() {
   const [referencesLoading, setReferencesLoading] = useState(false);
   const [referenceRowsLoading, setReferenceRowsLoading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [referenceFieldOptions, setReferenceFieldOptions] = useState<Record<string, ReferenceOption[]>>({});
   const [terrainCategoryOptions, setTerrainCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const [schemaSummaries, setSchemaSummaries] = useState<DynamicCaseTableSummary[]>([]);
@@ -736,6 +892,45 @@ export function TechnicalAdminPage() {
       ],
     });
 
+    addSection({
+      id: "editeur-cartographique",
+      title: "Editeur cartographique",
+      views: [
+        {
+          id: "map_icons",
+          tableKey: "map_icons",
+          title: "Icones de carte",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "map_icons")?.row_count ?? 0,
+        },
+        {
+          id: "map_point_types",
+          tableKey: "map_point_types",
+          title: "Types de points",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "map_point_types")?.row_count ?? 0,
+        },
+        {
+          id: "races",
+          tableKey: "races",
+          title: "Races",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "races")?.row_count ?? 0,
+        },
+        {
+          id: "peuples-reference",
+          tableKey: "peuples",
+          title: "Peuples",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "peuples")?.row_count ?? 0,
+        },
+      ],
+    });
+
     const otherNomenclatureViews = Object.keys(nomenclatureGroupCounts)
       .filter((groupKey) => !FEATURED_NOMENCLATURE_GROUPS.has(groupKey))
       .sort()
@@ -754,7 +949,17 @@ export function TechnicalAdminPage() {
     });
 
     const otherTables = referenceStatuses
-      .filter((table) => table.definition.key !== "nomenclatures" && table.definition.key !== "styles")
+      .filter(
+        (table) =>
+          ![
+            "nomenclatures",
+            "styles",
+            "map_icons",
+            "map_point_types",
+            "races",
+            "peuples",
+          ].includes(table.definition.key),
+      )
       .map<ReferenceView>((table) => ({
         id: table.definition.key,
         tableKey: table.definition.key,
@@ -877,10 +1082,12 @@ export function TechnicalAdminPage() {
           withStyleValues(toEditableRow(response.definition, row), view, response.styles),
         );
         setReferenceRows(nextRows);
+        setReferenceFieldOptions(response.field_options ?? {});
         setSelectedReferenceRowId(null);
       } catch (error) {
         setReferenceError(error instanceof Error ? error.message : "Chargement des lignes impossible.");
         setReferenceRows([]);
+        setReferenceFieldOptions({});
         setSelectedReferenceRowId(null);
       } finally {
         setReferenceRowsLoading(false);
@@ -1593,6 +1800,7 @@ export function TechnicalAdminPage() {
         adminModeEnabled
         navigationItems={[
           { href: "/?admin=1", label: "Carte" },
+          ...(session.is_tech_admin ? [{ href: "/editeur", label: "Editeur" }] : []),
           ...(session.is_tech_admin ? [{ href: "/admin/tech", label: "Administration", current: true }] : []),
         ]}
         showAdminAction={false}
@@ -1949,6 +2157,28 @@ export function TechnicalAdminPage() {
                             row.values.parent_entry_key ||
                             "Type sans categorie parente";
                           const showStyles = Boolean(activeReferenceView?.styleTargetType);
+                          const hasImageFields =
+                            activeReference.definition.fields.some((field) => field.name === "image_url") &&
+                            activeReference.definition.fields.some((field) => field.name === "image_alt");
+                          const previewAlt =
+                            row.values.image_alt ||
+                            row.values.label ||
+                            row.values.nom ||
+                            row.values.icon_key ||
+                            "Apercu";
+                          const summaryText =
+                            activeReference.definition.key === "peuples"
+                              ? row.values.race_key
+                                ? getOptionLabel(referenceFieldOptions.race_key, row.values.race_key)
+                                : "Race non renseignee"
+                              : activeReference.definition.key === "map_point_types"
+                                ? row.values.object_family || "Famille non renseignee"
+                                : activeReferenceView?.groupKey === "terrain_type"
+                                  ? terrainParentLabel
+                                  : displayFields
+                                      .map((field) => row.values[field.name])
+                                      .find((value) => value && value.trim().length > 0) ||
+                                    "Aucun detail visible";
 
                           return (
                             <details
@@ -1983,12 +2213,7 @@ export function TechnicalAdminPage() {
                                         "Nouvelle ligne"}
                                     </p>
                                     <p className="mt-1 text-sm text-muted-foreground">
-                                      {activeReferenceView?.groupKey === "terrain_type"
-                                        ? terrainParentLabel
-                                        : displayFields
-                                            .map((field) => row.values[field.name])
-                                            .find((value) => value && value.trim().length > 0) ||
-                                          "Aucun detail visible"}
+                                      {summaryText}
                                     </p>
                                   </div>
                                 </div>
@@ -2046,6 +2271,7 @@ export function TechnicalAdminPage() {
                                         field={field}
                                         value={row.values[field.name] ?? ""}
                                         disabled={row.saving}
+                                        options={referenceFieldOptions[field.name]}
                                         onChange={(value) =>
                                           handleReferenceRowValueChange(row.localId, field.name, value)
                                         }
@@ -2053,6 +2279,19 @@ export function TechnicalAdminPage() {
                                     )}
                                   </div>
                                 ))}
+
+                                {hasImageFields ? (
+                                  <div className="lg:col-span-2">
+                                    <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                      Apercu image
+                                    </p>
+                                    <ImagePreview
+                                      key={`${row.localId}:${row.values.image_url ?? ""}`}
+                                      imageUrl={row.values.image_url ?? ""}
+                                      imageAlt={previewAlt}
+                                    />
+                                  </div>
+                                ) : null}
 
                                 {showStyles ? (
                                   <>
@@ -2225,6 +2464,7 @@ export function TechnicalAdminPage() {
                                             field={field}
                                             value={row.values[field.name] ?? ""}
                                             disabled={row.saving}
+                                            options={referenceFieldOptions[field.name]}
                                             onChange={(value) =>
                                               handleReferenceRowValueChange(row.localId, field.name, value)
                                             }

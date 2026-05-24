@@ -70,6 +70,30 @@ async function seedReferenceCatalog(client: PoolClient): Promise<void> {
 }
 
 async function seedNomenclatures(client: PoolClient): Promise<void> {
+  await client.query(
+    `
+      UPDATE reference_nomenclature_values
+      SET
+        entry_key = 'terres_gelees',
+        label = 'terres_gelees',
+        id_entry = CASE
+          WHEN group_key = 'terrain_type' THEN 'terrain_type:terres_gelees'
+          ELSE id_entry
+        END,
+        updated_at = NOW()
+      WHERE group_key = 'terrain_type'
+        AND entry_key = 'desert_glace'
+    `,
+  );
+
+  await client.query(
+    `
+      UPDATE reference_nomenclature_values
+      SET parent_entry_key = 'terres_gelees', updated_at = NOW()
+      WHERE parent_entry_key = 'desert_glace'
+    `,
+  );
+
   const countResult = await client.query<{ count: string }>(
     "SELECT COUNT(*)::text AS count FROM reference_nomenclature_values",
   );
@@ -116,7 +140,8 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
 
         for (const entry of values) {
           if (typeof entry === "string") {
-            await insertRow("terrain_type", entry, entry, categoryKey);
+            const normalizedEntry = entry === "desert_glace" ? "terres_gelees" : entry;
+            await insertRow("terrain_type", normalizedEntry, normalizedEntry, categoryKey);
           }
         }
       }
@@ -130,7 +155,9 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
 
     for (const entry of rawValue) {
       if (typeof entry === "string") {
-        await insertRow(groupKey, entry, entry);
+        const normalizedEntry =
+          groupKey === "terrain_type" && entry === "desert_glace" ? "terres_gelees" : entry;
+        await insertRow(groupKey, normalizedEntry, normalizedEntry);
       }
     }
   }
@@ -258,12 +285,121 @@ async function seedEmplacementsRules(client: PoolClient): Promise<void> {
   }
 }
 
+async function seedReferenceRaces(client: PoolClient): Promise<void> {
+  const races = [
+    "nains",
+    "orques",
+    "elfes",
+    "hommes",
+    "hobbits",
+  ] as const;
+
+  for (const [index, raceKey] of races.entries()) {
+    await client.query(
+      `
+        INSERT INTO reference_races (race_key, label, sort_order)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (race_key) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = NOW()
+      `,
+      [raceKey, raceKey, index],
+    );
+  }
+}
+
+async function seedReferencePeuples(client: PoolClient): Promise<void> {
+  const peuples = [
+    ["nandor", "elfes"],
+    ["noldor", "elfes"],
+    ["sindar", "elfes"],
+    ["avari", "elfes"],
+    ["lossoths", "hommes"],
+    ["enedwaithrim", "hommes"],
+    ["druedain", "hommes"],
+    ["haradrim", "hommes"],
+    ["heritiers_numenor", "hommes"],
+    ["umbareens", "hommes"],
+    ["hommes_vertbois", "hommes"],
+    ["nains", "nains"],
+    ["orques", "orques"],
+    ["hobbits", "hobbits"],
+  ] as const;
+
+  for (const [index, [peupleKey, raceKey]] of peuples.entries()) {
+    await client.query(
+      `
+        INSERT INTO reference_peuples (peuple_key, race_key, label, sort_order)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (peuple_key) DO UPDATE
+        SET
+          race_key = EXCLUDED.race_key,
+          label = EXCLUDED.label,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = NOW()
+      `,
+      [peupleKey, raceKey, peupleKey, index],
+    );
+  }
+}
+
+async function seedMapPointTypes(client: PoolClient): Promise<void> {
+  const pointTypes = [
+    ["fort", "locality", true],
+    ["ruines", "landmark", false],
+    ["ville_fortifiee", "locality", true],
+    ["ville_non_fortifiee", "locality", true],
+    ["avant_poste", "locality", true],
+    ["port", "landmark", false],
+    ["pont", "landmark", false],
+    ["mine", "landmark", false],
+    ["barad_dur", "landmark", false],
+    ["moria", "landmark", false],
+    ["hobbit_bourg", "locality", true],
+    ["hauts_des_galgals", "landmark", false],
+    ["armee", "force", false],
+    ["flotte", "force", false],
+    ["dependance", "locality", false],
+  ] as const;
+
+  for (const [index, [typeKey, objectFamily, consumesSlot]] of pointTypes.entries()) {
+    await client.query(
+      `
+        INSERT INTO reference_map_point_types (
+          type_key,
+          object_family,
+          label,
+          default_icon_key,
+          consumes_slot,
+          slot_weight,
+          sort_order
+        )
+        VALUES ($1, $2, $3, NULL, $4, $5, $6)
+        ON CONFLICT (type_key) DO UPDATE
+        SET
+          object_family = EXCLUDED.object_family,
+          label = EXCLUDED.label,
+          consumes_slot = EXCLUDED.consumes_slot,
+          slot_weight = EXCLUDED.slot_weight,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = NOW()
+      `,
+      [typeKey, objectFamily, typeKey, consumesSlot, 0, index],
+    );
+  }
+}
+
 async function seedReferenceTables(client: PoolClient): Promise<void> {
   await seedReferenceCatalog(client);
   await seedNomenclatures(client);
   await seedFactions(client);
   await seedControleurs(client);
   await seedEmplacementsRules(client);
+  await seedReferenceRaces(client);
+  await seedReferencePeuples(client);
+  await seedMapPointTypes(client);
 }
 
 async function syncCaseRegistry(pool: Pool): Promise<void> {
@@ -587,6 +723,99 @@ async function initializeDatabase(): Promise<boolean> {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS reference_map_icons (
+        icon_key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        source_url TEXT NOT NULL,
+        author TEXT NOT NULL,
+        license TEXT NOT NULL DEFAULT 'CC BY 3.0',
+        category TEXT,
+        image_url TEXT,
+        image_alt TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reference_map_point_types (
+        type_key TEXT PRIMARY KEY,
+        object_family TEXT NOT NULL CHECK (object_family IN ('locality', 'landmark', 'force')),
+        label TEXT NOT NULL,
+        description TEXT,
+        default_icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
+        consumes_slot BOOLEAN NOT NULL DEFAULT FALSE,
+        slot_weight INTEGER NOT NULL DEFAULT 0 CHECK (slot_weight >= 0),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS map_points (
+        id_point TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        object_family TEXT NOT NULL CHECK (object_family IN ('locality', 'landmark', 'force')),
+        type_key TEXT NOT NULL REFERENCES reference_map_point_types(type_key) ON DELETE RESTRICT,
+        icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
+        x DOUBLE PRECISION NOT NULL,
+        y DOUBLE PRECISION NOT NULL,
+        id_case_detected TEXT REFERENCES case_registry(id_case) ON DELETE SET NULL,
+        faction TEXT,
+        controleur TEXT,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+        depends_on_point_id TEXT REFERENCES map_points(id_point) ON DELETE SET NULL,
+        description TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS map_routes (
+        id_route TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        route_type TEXT NOT NULL,
+        points_json JSONB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+        faction TEXT,
+        controleur TEXT,
+        description TEXT,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reference_races (
+        race_key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        description TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reference_peuples (
+        peuple_key TEXT PRIMARY KEY,
+        race_key TEXT NOT NULL REFERENCES reference_races(race_key) ON DELETE RESTRICT,
+        label TEXT NOT NULL,
+        description TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS dynamic_case_tables (
         table_key TEXT PRIMARY KEY,
         physical_name TEXT NOT NULL UNIQUE,
@@ -635,6 +864,26 @@ async function initializeDatabase(): Promise<boolean> {
     await client.query(`
       CREATE INDEX IF NOT EXISTS dynamic_case_fields_table_idx
       ON dynamic_case_table_fields(table_key, sort_order, field_key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS reference_map_icons_active_idx
+      ON reference_map_icons(is_active, sort_order, icon_key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS reference_map_point_types_family_idx
+      ON reference_map_point_types(object_family, sort_order, type_key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS reference_peuples_race_idx
+      ON reference_peuples(race_key, sort_order, peuple_key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS map_points_status_idx
+      ON map_points(status, object_family, type_key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS map_routes_status_idx
+      ON map_routes(status, route_type)
     `);
     await seedReferenceTables(client);
     await client.query("COMMIT");

@@ -44,7 +44,7 @@
         "toundra"
       ],
       "desert": [
-        "desert_glace",
+        "terres_gelees",
         "desert_sable",
         "terre_desolee"
       ],
@@ -69,7 +69,7 @@
       "plaine_aride",
       "plaine_boisee",
       "toundra",
-      "desert_glace",
+      "terres_gelees",
       "desert_sable",
       "terre_desolee",
       "marais",

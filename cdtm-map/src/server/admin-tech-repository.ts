@@ -340,7 +340,29 @@ function normalizeDateTime(value: unknown): string | null {
   return parsed.toISOString();
 }
 
+function normalizeImageUrl(value: unknown): string | null {
+  const normalized = normalizeNullableText(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("/")
+  ) {
+    return normalized;
+  }
+
+  throw new Error("URL d'image invalide.");
+}
+
 function normalizeFieldValue(field: TechFieldDefinition, value: unknown): ReferenceTableRowValue {
+  if (field.name === "image_url") {
+    return normalizeImageUrl(value);
+  }
+
   switch (field.type) {
     case "integer":
       return normalizeInteger(value);
@@ -776,9 +798,89 @@ async function listReferenceOptionsInternal(
         label: row.rule_label?.trim().length ? row.rule_label : row.rule_key,
       }));
     }
+    case "map_icons": {
+      const result = await client.query<{ icon_key: string; label: string | null }>(
+        `
+          SELECT icon_key, label
+          FROM reference_map_icons
+          WHERE is_active = TRUE
+          ORDER BY sort_order ASC, icon_key ASC
+        `,
+      );
+
+      return result.rows.map((row) => ({
+        value: row.icon_key,
+        label: row.label?.trim().length ? row.label : row.icon_key,
+      }));
+    }
+    case "map_point_types": {
+      const result = await client.query<{ type_key: string; label: string | null }>(
+        `
+          SELECT type_key, label
+          FROM reference_map_point_types
+          WHERE is_active = TRUE
+          ORDER BY sort_order ASC, type_key ASC
+        `,
+      );
+
+      return result.rows.map((row) => ({
+        value: row.type_key,
+        label: row.label?.trim().length ? row.label : row.type_key,
+      }));
+    }
+    case "races": {
+      const result = await client.query<{ race_key: string; label: string | null }>(
+        `
+          SELECT race_key, label
+          FROM reference_races
+          WHERE is_active = TRUE
+          ORDER BY sort_order ASC, race_key ASC
+        `,
+      );
+
+      return result.rows.map((row) => ({
+        value: row.race_key,
+        label: row.label?.trim().length ? row.label : row.race_key,
+      }));
+    }
+    case "peuples": {
+      const result = await client.query<{ peuple_key: string; label: string | null }>(
+        `
+          SELECT peuple_key, label
+          FROM reference_peuples
+          WHERE is_active = TRUE
+          ORDER BY sort_order ASC, peuple_key ASC
+        `,
+      );
+
+      return result.rows.map((row) => ({
+        value: row.peuple_key,
+        label: row.label?.trim().length ? row.label : row.peuple_key,
+      }));
+    }
     default:
       return [];
   }
+}
+
+async function getReferenceFieldOptions(
+  client: PoolClient,
+  definition: ReferenceTableDefinition,
+): Promise<Record<string, ReferenceOption[]>> {
+  const entries = await Promise.all(
+    definition.fields
+      .filter((field) => field.reference_table_key)
+      .map(async (field) => [
+        field.name,
+        await listReferenceOptionsInternal(
+          client,
+          field.reference_table_key as ReferenceTableKey,
+          field.reference_group_key ?? null,
+        ),
+      ] as const),
+  );
+
+  return Object.fromEntries(entries);
 }
 
 function isAllowedOption(options: ReferenceOption[], value: string | null): boolean {
@@ -948,6 +1050,7 @@ export async function listReferenceTableRows(
               .filter((value): value is string => Boolean(value)),
           )
         : undefined;
+    const fieldOptions = await getReferenceFieldOptions(client, definition);
 
     return {
       definition,
@@ -955,6 +1058,7 @@ export async function listReferenceTableRows(
       total_count: totalCount,
       returned_count: result.rowCount ?? 0,
       search,
+      field_options: fieldOptions,
       style_target_type: styleTargetType,
       styles,
     };

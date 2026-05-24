@@ -31,7 +31,11 @@ export type ReferenceTableKey =
   | "factions"
   | "controleurs"
   | "styles"
-  | "emplacements_rules";
+  | "emplacements_rules"
+  | "map_icons"
+  | "map_point_types"
+  | "races"
+  | "peuples";
 
 export type ReferenceTableDefinition = {
   key: ReferenceTableKey;
@@ -60,6 +64,7 @@ export type ReferenceTableRowsResponse = {
   total_count: number;
   returned_count: number;
   search: string;
+  field_options?: Record<string, ReferenceOption[]>;
   style_target_type?: MapStyleTargetType | null;
   styles?: Record<string, Pick<MapStyleRecord, "fill" | "stroke" | "pattern_type" | "pattern_color">>;
 };
@@ -245,6 +250,96 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "value_text", label: "value_text", type: "textarea", searchable: true },
       { name: "value_integer", label: "value_integer", type: "integer" },
       { name: "description", label: "description", type: "textarea", searchable: true },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "map_icons",
+    title: "Icones de carte",
+    description: "Catalogue vide par defaut des icones Game-icons utilisables sur la carte.",
+    physical_name: "reference_map_icons",
+    primary_key: "icon_key",
+    fields: [
+      { name: "icon_key", label: "icon_key", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "source_url", label: "source_url", type: "text", required: true, searchable: true },
+      { name: "author", label: "author", type: "text", required: true, searchable: true },
+      { name: "license", label: "license", type: "text", searchable: true },
+      { name: "category", label: "category", type: "text", searchable: true },
+      { name: "image_url", label: "image_url", type: "text", searchable: true },
+      { name: "image_alt", label: "image_alt", type: "text", searchable: true },
+      { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "sort_order", label: "sort_order", type: "integer" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "map_point_types",
+    title: "Types de points",
+    description: "Types d'objets ponctuels libres, separes des icones de carte.",
+    physical_name: "reference_map_point_types",
+    primary_key: "type_key",
+    fields: [
+      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
+      { name: "object_family", label: "object_family", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "default_icon_key",
+        label: "default_icon_key",
+        type: "reference",
+        reference_table_key: "map_icons",
+      },
+      { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
+      { name: "slot_weight", label: "slot_weight", type: "integer" },
+      { name: "sort_order", label: "sort_order", type: "integer" },
+      { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "races",
+    title: "Races",
+    description: "Grandes races auxquelles sont rattaches les peuples.",
+    physical_name: "reference_races",
+    primary_key: "race_key",
+    fields: [
+      { name: "race_key", label: "race_key", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      { name: "sort_order", label: "sort_order", type: "integer" },
+      { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "peuples",
+    title: "Peuples",
+    description: "Peuples rattaches a une race parente.",
+    physical_name: "reference_peuples",
+    primary_key: "peuple_key",
+    fields: [
+      { name: "peuple_key", label: "peuple_key", type: "text", required: true, searchable: true },
+      {
+        name: "race_key",
+        label: "race_key",
+        type: "reference",
+        required: true,
+        searchable: true,
+        reference_table_key: "races",
+      },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      { name: "sort_order", label: "sort_order", type: "integer" },
+      { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },

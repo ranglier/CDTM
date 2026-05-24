@@ -1056,6 +1056,9 @@ export default function HomePage() {
         navigationItems={[
           { href: "#carte", label: "Carte", current: true },
           ...(adminSession.is_tech_admin
+            ? [{ href: "/editeur", label: "Editeur" }]
+            : []),
+          ...(adminSession.is_tech_admin
             ? [{ href: "/admin/tech", label: "Administration" }]
             : []),
         ]}
