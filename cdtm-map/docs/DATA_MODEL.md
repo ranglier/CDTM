@@ -10,6 +10,7 @@
 - Les modifications de donnees de case sont reservees au staff authentifie.
 - Les valeurs techniques sont ecrites en minuscules, sans accents et sans espaces.
 - Les champs de notes ne font plus partie du contrat applicatif courant.
+- Les listes de valeurs et referentiels ne portent pas d'ordre d'affichage manuel. L'interface trie les valeurs alphabetiquement par libelle, puis par cle technique si necessaire.
 
 ## Lecture publique et ecriture staff
 
@@ -49,7 +50,7 @@ Ne pas ajouter dans `cases.geojson` :
 - `relief`
 - `terrain_secondaire`
 - `faction`
-- `peuple_majoritaire`
+- `peuple`
 - `bonus_speciaux`
 - `empl_base`
 - `empl_max`
@@ -163,13 +164,19 @@ Champs possibles :
 
 - `id_route`
 - `id_case`
-- `sort_order`
+- `path_order`
+
+`path_order` sert a l'ordre geometrique d'une route, pas a l'ordre d'affichage d'une liste de valeurs.
 
 ## Catalogue d'icones Game-icons
 
 Le projet utilise uniquement des icones issues de Game-icons pour les objets cartographiques.
 
-Chaque icone doit conserver ses informations de credit :
+Le catalogue runtime doit rester vide par defaut. Aucune icone Game-icons n'est seedee automatiquement.
+
+Les icones doivent etre ajoutees manuellement depuis l'admin technique avec leurs credits et une image uploadee localement dans l'application.
+
+Chaque icone doit conserver ses informations de credit et d'image :
 
 - `icon_key`
 - `label`
@@ -177,15 +184,18 @@ Chaque icone doit conserver ses informations de credit :
 - `author`
 - `license`
 - `category`
+- `image_path`
+- `image_original_name`
+- `image_mime_type`
+- `image_size_bytes`
+- `image_alt`
 - `is_active`
 
 Licence cible : Creative Commons BY 3.0, avec attribution.
 
-Le catalogue runtime doit rester vide par defaut. Aucune icone Game-icons n'est seedee automatiquement.
-
-Les icones doivent etre ajoutees manuellement depuis l'admin technique avec leurs credits, leur URL source et, si besoin, une `image_url` publique pour l'aperçu.
-
 Les types de lieux ou de forces pointent vers une icone par defaut seulement si elle est definie plus tard. `default_icon_key` doit accepter `NULL`.
+
+Les images d'icones sont stockees localement dans un volume persistant. La base ne stocke ni BLOB ni base64, seulement le chemin local public et les metadonnees.
 
 ## Types de localites et objets ponctuels
 
@@ -196,19 +206,6 @@ Tables cibles possibles :
 ### `reference_map_icons`
 
 Catalogue des icones disponibles.
-
-Champs cibles :
-
-- `icon_key`
-- `label`
-- `source_url`
-- `author`
-- `license`
-- `category`
-- `image_url`
-- `image_alt`
-- `is_active`
-- `sort_order`
 
 ### `reference_map_point_types`
 
@@ -223,7 +220,6 @@ Champs cibles :
 - `default_icon_key`
 - `consumes_slot`
 - `slot_weight`
-- `sort_order`
 - `is_active`
 
 Familles de points :
@@ -232,7 +228,7 @@ Familles de points :
 - `landmark`
 - `force`
 
-Types initiaux recommandes :
+Types initiaux recommandes, sans icone par defaut :
 
 - `fort`
 - `ruines`
@@ -270,7 +266,6 @@ Champs cibles :
 - `race_key`
 - `label`
 - `description`
-- `sort_order`
 - `is_active`
 
 Une table `reference_peuples` doit rattacher les peuples a une race.
@@ -281,8 +276,9 @@ Champs cibles :
 - `race_key`
 - `label`
 - `description`
-- `sort_order`
 - `is_active`
+
+`peuple` est la notion canonique. Ne pas creer ou maintenir une notion concurrente `peuple_majoritaire` pour les nouveaux developpements.
 
 Races initiales :
 
@@ -396,9 +392,13 @@ Stocke le controle courant :
 
 ### `case_emplacements_current`
 
-Prepare les futurs calculs ou validations d'emplacements :
+Prepare les futurs calculs ou validations d'emplacements.
 
-- `peuple_majoritaire`
+Le champ fonctionnel attendu est `peuple`. Les anciennes mentions de `peuple_majoritaire` sont a considerer comme heritage a migrer.
+
+Champs cibles :
+
+- `peuple`
 - `bonus_speciaux`
 - `empl_base`
 - `empl_max`
