@@ -85,14 +85,17 @@ function buildHoverRows(displayMode: MapDisplayMode, properties: StableCasePrope
   }
 
   if (displayMode === "political") {
-    return properties.controleur
-      ? [{ label: "Controleur", value: properties.controleur }]
-      : [];
+    if (properties.controleur) {
+      return [{ label: "Controleur", value: properties.controleur }];
+    }
+
+    return properties.faction ? [{ label: "Faction", value: properties.faction }] : [];
   }
 
   return [
     properties.terrain_cat ? { label: "Categorie", value: properties.terrain_cat } : null,
     properties.terrain_type ? { label: "Terrain", value: properties.terrain_type } : null,
+    properties.relief ? { label: "Relief", value: properties.relief } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
@@ -195,9 +198,39 @@ export function CasesMap({
   }, [displayMode]);
 
   useEffect(() => {
+    const previousActiveCaseId = activeCaseIdRef.current;
     activeCaseIdRef.current = activeCaseId;
-    selectedCaseIdsRef.current = new Set(selectedCaseIds);
-    layerRef.current?.changed();
+    const previousSelectedIds = selectedCaseIdsRef.current;
+    const nextSelectedIds = new Set(selectedCaseIds);
+    selectedCaseIdsRef.current = nextSelectedIds;
+
+    const source = sourceRef.current;
+
+    if (!source) {
+      return;
+    }
+
+    const changedIds = new Set<string>();
+
+    if (activeCaseId) {
+      changedIds.add(activeCaseId);
+    }
+
+    if (previousActiveCaseId) {
+      changedIds.add(previousActiveCaseId);
+    }
+
+    for (const idCase of previousSelectedIds) {
+      changedIds.add(idCase);
+    }
+
+    for (const idCase of nextSelectedIds) {
+      changedIds.add(idCase);
+    }
+
+    for (const idCase of changedIds) {
+      source.getFeatureById(idCase)?.changed();
+    }
   }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
