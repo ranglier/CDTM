@@ -104,6 +104,257 @@ Priorites d'affichage :
 
 L'opacite ne fait plus partie du modele. Une couleur renseignee est rendue pleinement. Une couleur absente signifie absence de fond ou de contour.
 
+## Objets cartographiques libres
+
+Les objets cartographiques libres ne doivent pas etre modelises comme des champs de case.
+
+Ils sont positionnes avec des coordonnees libres dans la projection pixel de la carte, puis relies aux cases par detection ou calcul.
+
+Trois familles sont prevues :
+
+- points de carte : localites, landmarks, forces ;
+- routes : objets lineaires composes de plusieurs points ;
+- relations de dependance : un lieu peut dependre d'un autre lieu, meme s'il est positionne sur une case voisine.
+
+### Points de carte
+
+Table cible proposee : `map_points`.
+
+Champs cibles :
+
+- `id_point`
+- `name`
+- `object_family` : `locality`, `landmark`, `force`
+- `type_key`
+- `icon_key`
+- `x`
+- `y`
+- `id_case_detected`
+- `faction`
+- `controleur`
+- `status` : `draft`, `published`, `archived`
+- `depends_on_point_id`
+- `description`
+
+La position `x/y` fait foi pour l'affichage. `id_case_detected` sert aux regles, validations et filtres, mais ne doit pas forcer la position au centre de la case.
+
+Le type `dependance` sert aux lieux dependant d'une cite ou localite voisine. La dependance doit etre portee par `depends_on_point_id`.
+
+### Routes
+
+Table cible proposee : `map_routes`.
+
+Champs cibles :
+
+- `id_route`
+- `name`
+- `route_type`
+- `points_json`
+- `status` : `draft`, `published`, `archived`
+- `faction`
+- `controleur`
+- `description`
+
+Une route est une polyligne libre. Les cases traversees doivent etre calculees par intersection avec les polygones de cases, puis stockees ou exposees via une table de relation si necessaire.
+
+Table de relation future possible : `map_route_cases`.
+
+Champs possibles :
+
+- `id_route`
+- `id_case`
+- `sort_order`
+
+## Catalogue d'icones Game-icons
+
+Le projet utilise uniquement des icones issues de Game-icons pour les objets cartographiques.
+
+Chaque icone doit conserver ses informations de credit :
+
+- `icon_key`
+- `label`
+- `source_url`
+- `author`
+- `license`
+- `category`
+- `is_active`
+
+Licence cible : Creative Commons BY 3.0, avec attribution.
+
+Seeds initiaux valides :
+
+| Usage | `icon_key` | Auteur | Source |
+| --- | --- | --- | --- |
+| Fort | `stone-tower` | Lorc | https://game-icons.net/1x1/lorc/stone-tower.html |
+| Ruines | `tower-fall` | Delapouite | https://game-icons.net/1x1/delapouite/tower-fall.html |
+| Ville fortifiee | `castle` | Delapouite | https://game-icons.net/1x1/delapouite/castle.html |
+| Ville non fortifiee | `medieval-village-01` | Delapouite | https://game-icons.net/1x1/delapouite/medieval-village-01.html |
+| Avant-poste | `watchtower` | Delapouite | https://game-icons.net/1x1/delapouite/watchtower.html |
+| Port | `anchor` | Lorc | https://game-icons.net/1x1/lorc/anchor.html |
+| Pont | `stone-bridge` | Delapouite | https://game-icons.net/1x1/delapouite/stone-bridge.html |
+| Mine | `bridge` | Lorc | https://game-icons.net/1x1/lorc/bridge.html |
+| Barad-Dur | `evil-tower` | Delapouite | https://game-icons.net/1x1/delapouite/evil-tower.html |
+| Moria | `arabic-door` | Delapouite | https://game-icons.net/1x1/delapouite/arabic-door.html |
+| Hobbit bourg | `hobbit-dwelling` | Delapouite | https://game-icons.net/1x1/delapouite/hobbit-dwelling.html |
+| Hauts-des-Galgals | `tumulus` | Cathelineau | https://game-icons.net/1x1/cathelineau/tumulus.html |
+| Armee | `rally-the-troops` | Lorc | https://game-icons.net/1x1/lorc/rally-the-troops.html |
+| Flotte | `caravel` | Delapouite | https://game-icons.net/1x1/delapouite/caravel.html |
+
+Les icones doivent etre gerees comme un catalogue. Les types de lieux ou de forces pointent vers une icone par defaut, mais un point de carte peut eventuellement surcharger son icone.
+
+## Types de localites et objets ponctuels
+
+Les types d'objets doivent rester separes des icones.
+
+Tables cibles possibles :
+
+### `reference_map_icons`
+
+Catalogue des icones disponibles.
+
+### `reference_map_point_types`
+
+Types de points affichables sur la carte.
+
+Champs cibles :
+
+- `type_key`
+- `object_family`
+- `label`
+- `description`
+- `default_icon_key`
+- `consumes_slot`
+- `slot_weight`
+- `sort_order`
+- `is_active`
+
+Familles de points :
+
+- `locality`
+- `landmark`
+- `force`
+
+Types initiaux recommandes :
+
+- `fort`
+- `ruines`
+- `ville_fortifiee`
+- `ville_non_fortifiee`
+- `avant_poste`
+- `port`
+- `pont`
+- `mine`
+- `barad_dur`
+- `moria`
+- `hobbit_bourg`
+- `hauts_des_galgals`
+- `armee`
+- `flotte`
+- `dependance`
+
+## Races, peuples et emplacements
+
+Les emplacements sont calcules depuis le sous-type de terrain, pas depuis la categorie seule.
+
+La categorie sert de parent et de valeur de secours si un sous-type de terrain ne definit pas explicitement sa propre valeur.
+
+Renommage valide :
+
+- ne plus utiliser `desert_gele` ;
+- utiliser `terres_gelees`.
+
+### Races et peuples
+
+Une table `reference_races` doit etre introduite pour regrouper les peuples.
+
+Champs cibles :
+
+- `race_key`
+- `label`
+- `description`
+- `sort_order`
+- `is_active`
+
+Une table `reference_peuples` doit rattacher les peuples a une race.
+
+Champs cibles :
+
+- `peuple_key`
+- `race_key`
+- `label`
+- `description`
+- `sort_order`
+- `is_active`
+
+Races initiales :
+
+- `nains`
+- `orques`
+- `elfes`
+- `hommes`
+- `hobbits`
+
+Peuples initiaux connus :
+
+- `nandor`, `noldor`, `sindar`, `avari` -> `elfes`
+- `lossoths`, `enedwaithrim`, `druedain`, `haradrim`, `heritiers_numenor`, `umbareens`, `hommes_vertbois` -> `hommes`
+- `nains` -> `nains`
+- `orques` -> `orques`
+- `hobbits` -> `hobbits`
+
+### Valeurs d'emplacements
+
+Formule valide :
+
+```text
+empl_max = sous_type_terrain + bonus_race + bonus_contextuel
+empl_max = min(5, max(1, empl_max))
+```
+
+Regles :
+
+- aucune valeur finale ne peut depasser 5 ;
+- aucune valeur finale ne peut descendre sous 1 ;
+- aucun depassement d'occupation n'est autorise ;
+- si les objets occupant une case excedent `empl_max`, la publication doit etre refusee ;
+- si aucun chiffre n'est precise pour un sous-type de terrain, il herite de la valeur de sa categorie parente.
+
+Base issue de la reunion staff :
+
+- Plaines : 5
+  - prairies / plaines temperees : herite 5
+  - plaines arides : herite 5
+  - plaines arborees / boisees : 4
+  - toundras : 3
+- Forets : 3
+  - taigas : herite 3
+  - forets luxuriantes / denses : 2
+- Montagnes : 2
+  - montagnes riches : herite 2
+- Marais : 2
+- Deserts : 1
+  - terres gelees : herite 1
+  - sable : herite 1
+  - rocheux / terres desolees : herite 1
+- Collines : modificateur de relief `-1`, puis cap final entre 1 et 5.
+
+Bonus de peuple/race connus :
+
+- Nains : montagnes +3 ; collines +1
+- Orques : montagnes +2 ; deserts rocheux / terres desolees +4
+- Nandor : forets +2
+- Noldor : montagnes +1 ; collines +1 ; forets +1
+- Sindar : cotes / lacs / cours d'eau majeur +1 ; forets +1
+- Avari : forets +2
+- Lossoths : terres gelees +2
+- Enedwaithrim : collines +1 ; forets +1
+- Druedain : forets +2
+- Haradrim : deserts sableux +2
+- Heritiers de Numenor : collines +1 ; cotes / lacs / cours d'eau majeur +1
+- Umbareens : cotes / lacs / cours d'eau majeur +1
+- Hommes de Vertbois : forets +1
+- Hobbits : collines +2 ; marais +1
+
 ## Donnees staff
 
 Les routes admin servent a modifier les donnees publiques de case et les donnees metier associees. Elles restent reservees a une session staff.
@@ -174,4 +425,6 @@ Decision actuelle :
 - Definir si les booleens d'eau sont calcules automatiquement depuis QGIS ou saisis manuellement.
 - Ajouter des migrations schema avant toute suppression de table ou colonne.
 - Ajouter des tests sur le contrat public `GET /api/cases/public-index`.
-- Brancher les styles cartographiques sur les donnees publiques terrain/controle.
+- Implementer la page `/editeur` pour points libres et routes.
+- Implementer les tables `reference_races`, `reference_peuples`, `reference_map_icons`, `reference_map_point_types`, `map_points` et `map_routes`.
+- Implementer le calcul des emplacements a partir de `terrain_type`, des races/peuples et des bonus contextuels.
