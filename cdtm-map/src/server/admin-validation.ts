@@ -41,6 +41,18 @@ function parseNullableBooleanFromDraft(value: string | null): boolean | null {
   return value === "true";
 }
 
+function parseNullableBooleanPatchValue(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return parseNullableBooleanFromDraft(normalizeBooleanDraftValue(value));
+}
+
 function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -123,21 +135,15 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     }
 
     if (hasOwnProperty(publicFields, "cote")) {
-      publicPatch.cote = parseNullableBooleanFromDraft(
-        normalizeBooleanDraftValue(publicFields.cote),
-      );
+      publicPatch.cote = parseNullableBooleanPatchValue(publicFields.cote);
     }
 
     if (hasOwnProperty(publicFields, "lac_majeur")) {
-      publicPatch.lac_majeur = parseNullableBooleanFromDraft(
-        normalizeBooleanDraftValue(publicFields.lac_majeur),
-      );
+      publicPatch.lac_majeur = parseNullableBooleanPatchValue(publicFields.lac_majeur);
     }
 
     if (hasOwnProperty(publicFields, "cours_eau_majeur")) {
-      publicPatch.cours_eau_majeur = parseNullableBooleanFromDraft(
-        normalizeBooleanDraftValue(publicFields.cours_eau_majeur),
-      );
+      publicPatch.cours_eau_majeur = parseNullableBooleanPatchValue(publicFields.cours_eau_majeur);
     }
 
     if (Object.keys(publicPatch).length > 0) {
