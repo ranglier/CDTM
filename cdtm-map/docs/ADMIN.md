@@ -76,6 +76,8 @@ On y trouve notamment :
 - `Champs personnalises` : categories d'informations supplementaires qui peuvent apparaitre sur toutes les cases ;
 - `Comptes staff` : gestion des comptes `staff` et `tech_admin`.
 
+Les listes et referentiels sont tries automatiquement par ordre alphabetique de libelle. Il ne faut plus renseigner d'ordre d'affichage manuel dans les tables.
+
 Certaines listes partagees passent techniquement par la meme table `reference_nomenclature_values`, mais l'interface les separe en vues metier distinctes.
 
 Par exemple, l'espace `Listes de valeurs` presente directement des groupes comme :
@@ -137,14 +139,14 @@ Les objets ponctuels utiliseront exclusivement des icones Game-icons. Les icones
 - auteur ;
 - licence ;
 - categorie ;
-- URL image ;
+- image uploadee localement ;
 - texte alternatif ;
 - statut actif/inactif.
 
 Le catalogue Game-icons doit rester vide par defaut.
 
 Aucune icone n'est seedee automatiquement dans cette fondation de l'editeur.
-Les icones seront ajoutees manuellement plus tard depuis l'admin technique, avec `image_url` optionnelle pour l'aperçu et `image_alt` pour l'accessibilite.
+Les icones seront ajoutees manuellement plus tard depuis l'admin technique. Les images doivent etre uploadees et stockees localement dans l'application, pas referencees comme dependance externe principale.
 
 Les types d'objets doivent rester separes des icones : un type pointe vers une icone par defaut, mais un objet cartographique peut eventuellement surcharger son icone.
 
@@ -170,6 +172,8 @@ Une table `reference_races` doit regrouper les peuples par grande race :
 - `hobbits`
 
 Une table `reference_peuples` doit rattacher chaque peuple a une race.
+
+`peuple` est la notion canonique. L'interface ne doit pas maintenir une liste separee `Peuples majoritaires`.
 
 Formule valide :
 
