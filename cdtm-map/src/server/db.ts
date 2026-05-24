@@ -605,6 +605,10 @@ async function initializeDatabase(): Promise<boolean> {
       )
     `);
     await client.query(`
+      ALTER TABLE case_emplacements_current
+      ADD COLUMN IF NOT EXISTS peuple TEXT
+    `);
+    await client.query(`
       UPDATE case_emplacements_current
       SET peuple = COALESCE(peuple, peuple_majoritaire)
       WHERE peuple IS NULL
