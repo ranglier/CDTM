@@ -7,8 +7,6 @@ export type MapObjectStatus = (typeof MAP_OBJECT_STATUSES)[number];
 export type MapIcon = {
   icon_key: string;
   label: string;
-  source_url: string;
-  author: string;
   license: string;
   category: string | null;
   image_path: string | null;

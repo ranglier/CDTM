@@ -24,6 +24,7 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+RUN mkdir -p /app/uploads/map-icons && chown -R nextjs:nodejs /app/uploads
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

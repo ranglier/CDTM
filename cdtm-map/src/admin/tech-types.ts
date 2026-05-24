@@ -271,8 +271,6 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     fields: [
       { name: "icon_key", label: "icon_key", type: "text", required: true, searchable: true },
       { name: "label", label: "label", type: "text", required: true, searchable: true },
-      { name: "source_url", label: "source_url", type: "text", required: true, searchable: true },
-      { name: "author", label: "author", type: "text", required: true, searchable: true },
       { name: "license", label: "license", type: "text", searchable: true },
       { name: "category", label: "category", type: "text", searchable: true },
       { name: "image_path", label: "image_path", type: "text", searchable: true },

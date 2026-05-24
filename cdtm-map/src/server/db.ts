@@ -744,8 +744,8 @@ async function initializeDatabase(): Promise<boolean> {
       CREATE TABLE IF NOT EXISTS reference_map_icons (
         icon_key TEXT PRIMARY KEY,
         label TEXT NOT NULL,
-        source_url TEXT NOT NULL,
-        author TEXT NOT NULL,
+        source_url TEXT,
+        author TEXT,
         license TEXT NOT NULL DEFAULT 'CC BY 3.0',
         category TEXT,
         image_path TEXT,
@@ -758,6 +758,14 @@ async function initializeDatabase(): Promise<boolean> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ALTER COLUMN source_url DROP NOT NULL
+    `);
+    await client.query(`
+      ALTER TABLE reference_map_icons
+      ALTER COLUMN author DROP NOT NULL
     `);
     await client.query(`
       ALTER TABLE reference_map_icons

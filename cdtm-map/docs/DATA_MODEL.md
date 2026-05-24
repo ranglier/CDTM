@@ -180,8 +180,6 @@ Chaque icone doit conserver ses informations de credit et d'image :
 
 - `icon_key`
 - `label`
-- `source_url`
-- `author`
 - `license`
 - `category`
 - `image_path`
