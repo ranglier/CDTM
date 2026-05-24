@@ -3,6 +3,7 @@ import type {
   ReferenceOption,
 } from "@/admin/tech-types";
 import type { AdminRole } from "@/admin/roles";
+import type { PublicMapStyles } from "@/map/types";
 
 export type PublicCaseProperties = {
   registry_id_case: string;
@@ -18,6 +19,11 @@ export type PublicCaseProperties = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+};
+
+export type PublicCaseIndexResponse = {
+  cases: PublicCaseProperties[];
+  styles: PublicMapStyles;
 };
 
 export type AdminBlockMeta = {

@@ -1,4 +1,5 @@
-import type { PublicCaseProperties } from "@/admin/types";
+import type { PublicCaseIndexResponse, PublicCaseProperties } from "@/admin/types";
+import { listPublicMapStyles } from "@/server/admin-tech-repository";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import { loadStableCaseIndex } from "@/server/stable-case-source";
 
@@ -124,4 +125,13 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
 
     return mergePublicCase(row, fallback);
   });
+}
+
+export async function getPublicCaseIndexResponse(): Promise<PublicCaseIndexResponse> {
+  const [cases, styles] = await Promise.all([getPublicCaseIndex(), listPublicMapStyles()]);
+
+  return {
+    cases,
+    styles,
+  };
 }

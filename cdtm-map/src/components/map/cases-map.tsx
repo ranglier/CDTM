@@ -27,8 +27,11 @@ import {
 import { getCaseStyle } from "@/map/styles";
 import {
   type CaseSelectionIntent,
+  type MapDisplayMode,
+  type PublicMapStyles,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
+  createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
   toStableCaseProperties,
 } from "@/map/types";
@@ -38,10 +41,13 @@ type CasesMapProps = {
   activeCaseId: string | null;
   selectedCaseIds: string[];
   casePropertiesById: Record<string, StableCaseProperties>;
+  publicMapStyles: PublicMapStyles;
+  displayMode: MapDisplayMode;
   focusCaseId: string | null;
   focusRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
+  onDisplayModeChange: (mode: MapDisplayMode) => void;
   onCaseSelectionChange: (
     selectedCase: StableCaseProperties | null,
     intent: CaseSelectionIntent,
@@ -66,10 +72,13 @@ export function CasesMap({
   activeCaseId,
   selectedCaseIds,
   casePropertiesById,
+  publicMapStyles,
+  displayMode,
   focusCaseId,
   focusRequest,
   casesVisible,
   panelVisible,
+  onDisplayModeChange,
   onCaseSelectionChange,
   onCasesVisibilityChange,
   onPanelVisibilityChange,
@@ -83,6 +92,8 @@ export function CasesMap({
   const activeCaseIdRef = useRef<string | null>(activeCaseId);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
   const casePropertiesByIdRef = useRef(casePropertiesById);
+  const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
+  const displayModeRef = useRef<MapDisplayMode>(displayMode);
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
 
   const view = useMemo(
@@ -142,6 +153,16 @@ export function CasesMap({
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
   }, [casePropertiesById]);
+
+  useEffect(() => {
+    publicMapStylesRef.current = publicMapStyles;
+    layerRef.current?.changed();
+  }, [publicMapStyles]);
+
+  useEffect(() => {
+    displayModeRef.current = displayMode;
+    layerRef.current?.changed();
+  }, [displayMode]);
 
   useEffect(() => {
     activeCaseIdRef.current = activeCaseId;
@@ -208,8 +229,17 @@ export function CasesMap({
             : selectedCaseIdsRef.current.has(idCase)
               ? "selected"
               : "default";
+        const caseProperties =
+          (typeof idCase === "string" ? casePropertiesByIdRef.current[idCase] : null) ??
+          toStableCaseProperties(feature.getProperties()) ??
+          null;
 
-        return getCaseStyle(selectionState);
+        return getCaseStyle({
+          selectionState,
+          displayMode: displayModeRef.current,
+          properties: caseProperties,
+          styles: publicMapStylesRef.current ?? createEmptyPublicMapStyles(),
+        });
       },
     });
 
@@ -344,12 +374,14 @@ export function CasesMap({
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
         <div className="pointer-events-auto">
-          <MapToolbar
-            casesVisible={casesVisible}
-            panelVisible={panelVisible}
-            onToggleCases={() => onCasesVisibilityChange(!casesVisible)}
-            onTogglePanel={() => onPanelVisibilityChange(!panelVisible)}
-          />
+      <MapToolbar
+        casesVisible={casesVisible}
+        panelVisible={panelVisible}
+        displayMode={displayMode}
+        onDisplayModeChange={onDisplayModeChange}
+        onToggleCases={() => onCasesVisibilityChange(!casesVisible)}
+        onTogglePanel={() => onPanelVisibilityChange(!panelVisible)}
+      />
         </div>
       </div>
       <div

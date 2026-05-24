@@ -91,6 +91,24 @@ Le groupe fonctionnel `Terrains` rassemble notamment :
 
 Les reliefs restent donc affiches comme une composante du bloc `Terrains`, meme si les donnees restent stockees dans la table technique commune.
 
+Les couleurs de carte ne sont pas stockees dans les tables metier `factions`, `controleurs` ou `nomenclatures`.
+
+Elles restent dans `reference_styles`, mais l'interface les affiche directement :
+
+- dans `Factions` pour modifier la couleur d'une faction ;
+- dans `Controleurs` pour modifier la couleur d'un controleur ;
+- dans `Terrains` pour modifier la couleur d'une categorie, d'un type ou d'un relief.
+
+Pour chaque entree concernee, l'admin technique permet de renseigner :
+
+- la couleur de fond ;
+- la couleur de contour ;
+- l'opacite ;
+- un apercu visuel.
+
+Les reliefs restent modifies depuis le groupe fonctionnel `Terrains`.
+Les details techniques restent rattaches a `reference_styles`, mais ce n'est plus l'entree principale pour modifier les couleurs.
+
 Une section `Comptes staff` permet aussi de :
 
 - lister les comptes existants ;

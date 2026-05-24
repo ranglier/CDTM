@@ -14,6 +14,68 @@ export type StableCaseProperties = {
   controle_type?: string | null;
 };
 
+export type MapStyleTargetType =
+  | "faction"
+  | "controleur"
+  | "terrain_cat"
+  | "terrain_type"
+  | "relief";
+
+export type MapDisplayMode = "neutral" | "political" | "topographic";
+
+export type MapStyleRecord = {
+  target_type: MapStyleTargetType;
+  target_id: string;
+  fill: string | null;
+  stroke: string | null;
+  opacity: number | null;
+};
+
+export type PublicMapStyles = Record<MapStyleTargetType, Record<string, MapStyleRecord>>;
+
+export function createEmptyPublicMapStyles(): PublicMapStyles {
+  return {
+    faction: {},
+    controleur: {},
+    terrain_cat: {},
+    terrain_type: {},
+    relief: {},
+  };
+}
+
+export function normalizeHexColor(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(normalized)) {
+    return normalized;
+  }
+
+  return null;
+}
+
+export function normalizeOpacityValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value.trim())
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return null;
+  }
+
+  return Number(parsed.toFixed(3));
+}
+
 export type StableCaseGeometry =
   | {
       type: "Polygon";

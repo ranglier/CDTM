@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AdminRole } from "@/admin/roles";
 import type {
+  AdminStyleUpsertInput,
   DynamicCaseTableCreateInput,
   DynamicCaseTableDefinition,
   DynamicCaseTableFieldCreateInput,
   DynamicCaseTableFieldType,
+  ReferenceStyleValue,
   DynamicCaseTableSummary,
   DynamicCaseTableUpdateInput,
   ReferenceTableDefinition,
@@ -25,6 +27,11 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
+import {
+  normalizeHexColor,
+  normalizeOpacityValue,
+  type MapStyleTargetType,
+} from "@/map/types";
 
 type TabKey = "references" | "schema" | "accounts";
 
@@ -43,6 +50,7 @@ type ReferenceView = {
   title: string;
   groupKey: string | null;
   rowCount: number | null;
+  styleTargetType?: MapStyleTargetType | null;
   supportsTerrainParentSelect?: boolean;
 };
 
@@ -67,6 +75,107 @@ const NOMENCLATURE_LABELS: Record<string, string> = {
   controle_type: "Types de controle",
   peuple_majoritaire: "Peuples majoritaires",
 };
+
+const STYLE_FIELDS = ["fill", "stroke", "opacity"] as const;
+type StyleFieldName = (typeof STYLE_FIELDS)[number];
+const REFERENCE_TECHNICAL_FIELDS = new Set([
+  "group_key",
+  "entry_key",
+  "id_entry",
+  "id_faction",
+  "id_controleur",
+  "updated_by_user_id",
+  "created_at",
+  "updated_at",
+]);
+
+function getStyleTargetIdForRow(view: ReferenceView | null, values: Record<string, string>): string | null {
+  if (!view?.styleTargetType) {
+    return null;
+  }
+
+  if (view.tableKey === "factions") {
+    return values.id_faction?.trim() || null;
+  }
+
+  if (view.tableKey === "controleurs") {
+    return values.id_controleur?.trim() || null;
+  }
+
+  if (view.tableKey === "nomenclatures") {
+    return values.entry_key?.trim() || null;
+  }
+
+  return null;
+}
+
+function formatOpacityValue(value: number | null | undefined): string {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function createStylePreview(fill: string, stroke: string, opacity: string) {
+  const normalizedFill = normalizeHexColor(fill);
+  const normalizedStroke = normalizeHexColor(stroke) ?? "#1f2937";
+  const normalizedOpacity = normalizeOpacityValue(opacity);
+
+  return {
+    fill: normalizedFill ?? "#5f6b7a",
+    stroke: normalizedStroke,
+    opacity: normalizedOpacity ?? 1,
+  };
+}
+
+function isHexColorInputValid(value: string): boolean {
+  return value.trim().length === 0 || normalizeHexColor(value) !== null;
+}
+
+function isOpacityInputValid(value: string): boolean {
+  return value.trim().length === 0 || normalizeOpacityValue(value) !== null;
+}
+
+function StylePreview({
+  fill,
+  stroke,
+  opacity,
+}: {
+  fill: string;
+  stroke: string;
+  opacity: string;
+}) {
+  const preview = createStylePreview(fill, stroke, opacity);
+
+  return (
+    <div
+      className="h-10 w-16 rounded-[12px] border"
+      style={{
+        backgroundColor: preview.fill,
+        borderColor: preview.stroke,
+        opacity: preview.opacity,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
+function buildStylePayload(
+  view: ReferenceView | null,
+  values: Record<string, string>,
+): AdminStyleUpsertInput | null {
+  const targetType = view?.styleTargetType ?? null;
+  const targetId = getStyleTargetIdForRow(view, values);
+
+  if (!targetType || !targetId) {
+    return null;
+  }
+
+  return {
+    target_type: targetType,
+    target_id: targetId,
+    fill: values.fill?.trim() || null,
+    stroke: values.stroke?.trim() || null,
+    opacity: values.opacity?.trim() || null,
+  };
+}
 
 function formatNomenclatureGroupLabel(groupKey: string): string {
   const predefined = NOMENCLATURE_LABELS[groupKey];
@@ -158,6 +267,25 @@ function toEditableRow(definition: ReferenceTableDefinition, row: ReferenceTable
     saving: false,
     error: null,
     isNew: false,
+  };
+}
+
+function withStyleValues(
+  row: EditableRow,
+  view: ReferenceView | null,
+  styles?: Record<string, ReferenceStyleValue>,
+): EditableRow {
+  const targetId = getStyleTargetIdForRow(view, row.values);
+  const style = targetId && styles ? styles[targetId] : null;
+
+  return {
+    ...row,
+    values: {
+      ...row.values,
+      fill: style?.fill ?? "",
+      stroke: style?.stroke ?? "",
+      opacity: formatOpacityValue(style?.opacity),
+    },
   };
 }
 
@@ -388,6 +516,7 @@ export function TechnicalAdminPage() {
           title: "Categories de terrain",
           groupKey: "terrain_cat",
           rowCount: nomenclatureGroupCounts.terrain_cat ?? 0,
+          styleTargetType: "terrain_cat",
         },
         {
           id: "nomenclatures:terrain_type",
@@ -395,6 +524,7 @@ export function TechnicalAdminPage() {
           title: "Types de terrain",
           groupKey: "terrain_type",
           rowCount: nomenclatureGroupCounts.terrain_type ?? 0,
+          styleTargetType: "terrain_type",
           supportsTerrainParentSelect: true,
         },
         {
@@ -403,6 +533,7 @@ export function TechnicalAdminPage() {
           title: "Reliefs",
           groupKey: "relief",
           rowCount: nomenclatureGroupCounts.relief ?? 0,
+          styleTargetType: "relief",
         },
       ],
     });
@@ -453,13 +584,19 @@ export function TechnicalAdminPage() {
     });
 
     const otherTables = referenceStatuses
-      .filter((table) => table.definition.key !== "nomenclatures")
+      .filter((table) => table.definition.key !== "nomenclatures" && table.definition.key !== "styles")
       .map<ReferenceView>((table) => ({
         id: table.definition.key,
         tableKey: table.definition.key,
         title: table.definition.title,
         groupKey: null,
         rowCount: table.row_count,
+        styleTargetType:
+          table.definition.key === "factions"
+            ? "faction"
+            : table.definition.key === "controleurs"
+              ? "controleur"
+              : null,
       }));
 
     addSection({
@@ -543,7 +680,12 @@ export function TechnicalAdminPage() {
   }, []);
 
   const loadReferenceRows = useCallback(
-    async (tableKey: ReferenceTableKey, search: string, groupKey: string | null = null) => {
+    async (
+      tableKey: ReferenceTableKey,
+      search: string,
+      groupKey: string | null = null,
+      view: ReferenceView | null = null,
+    ) => {
       setReferenceRowsLoading(true);
       setReferenceError(null);
 
@@ -561,7 +703,9 @@ export function TechnicalAdminPage() {
         const response = await fetchJson<ReferenceTableRowsResponse>(
           `/api/admin/tech/references/${tableKey}?${params.toString()}`,
         );
-        const nextRows = response.rows.map((row) => toEditableRow(response.definition, row));
+        const nextRows = response.rows.map((row) =>
+          withStyleValues(toEditableRow(response.definition, row), view, response.styles),
+        );
         setReferenceRows(nextRows);
         setSelectedReferenceRowId((current) =>
           current && nextRows.some((row) => row.localId === current)
@@ -692,7 +836,12 @@ export function TechnicalAdminPage() {
       return;
     }
 
-    void loadReferenceRows(activeReferenceView.tableKey, referenceSearch, activeReferenceView.groupKey);
+    void loadReferenceRows(
+      activeReferenceView.tableKey,
+      referenceSearch,
+      activeReferenceView.groupKey,
+      activeReferenceView,
+    );
   }, [activeReferenceView, loadReferenceRows, referenceSearch, session?.is_tech_admin]);
 
   useEffect(() => {
@@ -814,6 +963,39 @@ export function TechnicalAdminPage() {
         return;
       }
 
+      if (!isHexColorInputValid(row.values.fill ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Couleur de fond invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      if (!isHexColorInputValid(row.values.stroke ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Couleur de contour invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      if (!isOpacityInputValid(row.values.opacity ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Opacite invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
       setReferenceRows((current) =>
         current.map((item) =>
           item.localId === row.localId ? { ...item, saving: true, error: null } : item,
@@ -831,7 +1013,25 @@ export function TechnicalAdminPage() {
           },
         );
 
-        const nextRow = toEditableRow(activeReference.definition, savedRow);
+        const nextBaseRow = {
+          ...toEditableRow(activeReference.definition, savedRow),
+          values: {
+            ...toEditableRow(activeReference.definition, savedRow).values,
+            fill: row.values.fill ?? "",
+            stroke: row.values.stroke ?? "",
+            opacity: row.values.opacity ?? "",
+          },
+        };
+        const stylePayload = buildStylePayload(activeReferenceView ?? null, nextBaseRow.values);
+
+        if (stylePayload) {
+          await fetchJson("/api/admin/tech/styles", {
+            method: "POST",
+            body: JSON.stringify(stylePayload),
+          });
+        }
+
+        const nextRow = nextBaseRow;
         setReferenceRows((current) =>
           current.map((item) => (item.localId === row.localId ? nextRow : item)),
         );
@@ -854,7 +1054,12 @@ export function TechnicalAdminPage() {
         );
       }
     },
-    [activeReference, activeReferenceView?.groupKey, loadReferenceStatuses, loadTerrainCategoryOptions],
+    [
+      activeReference,
+      activeReferenceView,
+      loadReferenceStatuses,
+      loadTerrainCategoryOptions,
+    ],
   );
 
   const handleDeleteReferenceRow = useCallback(
@@ -874,6 +1079,7 @@ export function TechnicalAdminPage() {
       }
 
       try {
+        const stylePayload = buildStylePayload(activeReferenceView ?? null, row.values);
         await fetchJson(
           `/api/admin/tech/references/${activeReference.definition.key}?pk=${encodeURIComponent(
             row.originalPrimaryKey,
@@ -882,6 +1088,17 @@ export function TechnicalAdminPage() {
             method: "DELETE",
           },
         );
+        if (stylePayload) {
+          await fetchJson("/api/admin/tech/styles", {
+            method: "POST",
+            body: JSON.stringify({
+              ...stylePayload,
+              fill: null,
+              stroke: null,
+              opacity: null,
+            }),
+          });
+        }
         setReferenceRows((current) => current.filter((item) => item.localId !== row.localId));
         setSelectedReferenceRowId((current) => (current === row.localId ? null : current));
         await Promise.all([
@@ -901,7 +1118,12 @@ export function TechnicalAdminPage() {
         );
       }
     },
-    [activeReference, activeReferenceView?.groupKey, loadReferenceStatuses, loadTerrainCategoryOptions],
+    [
+      activeReference,
+      activeReferenceView,
+      loadReferenceStatuses,
+      loadTerrainCategoryOptions,
+    ],
   );
 
   const handleCreateSchemaTable = useCallback(async () => {
@@ -1481,136 +1703,302 @@ export function TechnicalAdminPage() {
                         <p className="text-sm text-muted-foreground">{referenceRows.length} ligne(s)</p>
                       </div>
                       <div className="mt-4 space-y-3">
-                        {referenceRows.map((row) => (
-                          <details
-                            key={row.localId}
-                            open={selectedReferenceRowId === row.localId}
-                            className="rounded-[16px] border border-border/60 bg-background/30 px-4 py-3"
-                          >
-                            <summary
-                              className="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                setSelectedReferenceRowId((current) =>
-                                  current === row.localId ? null : row.localId,
-                                );
-                              }}
+                        {referenceRows.map((row) => {
+                          const displayFields = activeReference.definition.fields.filter(
+                            (field) =>
+                              !REFERENCE_TECHNICAL_FIELDS.has(field.name) &&
+                              !STYLE_FIELDS.includes(field.name as StyleFieldName),
+                          );
+                          const technicalFields = activeReference.definition.fields.filter((field) =>
+                            REFERENCE_TECHNICAL_FIELDS.has(field.name),
+                          );
+                          const terrainParentLabel =
+                            terrainCategoryLabelByKey[row.values.parent_entry_key] ||
+                            row.values.parent_entry_key ||
+                            "Type sans categorie parente";
+                          const showStyles = Boolean(activeReferenceView?.styleTargetType);
+
+                          return (
+                            <details
+                              key={row.localId}
+                              open={selectedReferenceRowId === row.localId}
+                              className="rounded-[16px] border border-border/60 bg-background/30 px-4 py-3"
                             >
-                              <div className="text-left">
-                                <p className="text-sm font-semibold text-foreground">
-                                  {row.values.label ||
-                                    row.values.entry_key ||
-                                    row.values[activeReference.definition.primary_key] ||
-                                    "Nouvelle ligne"}
-                                </p>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                  {activeReferenceView?.groupKey === "terrain_type"
-                                    ? terrainCategoryLabelByKey[row.values.parent_entry_key] ||
-                                      row.values.parent_entry_key ||
-                                      "Type sans categorie parente"
-                                    : activeReference.definition.fields
-                                        .filter(
-                                          (field) =>
-                                            field.name !== activeReference.definition.primary_key &&
-                                            field.name !== "group_key",
-                                        )
-                                        .map((field) => row.values[field.name])
-                                        .find((value) => value && value.trim().length > 0) || "Aucun detail visible"}
-                                </p>
+                              <summary
+                                className="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setSelectedReferenceRowId((current) =>
+                                    current === row.localId ? null : row.localId,
+                                  );
+                                }}
+                              >
+                                <div className="flex items-center gap-4 text-left">
+                                  {showStyles ? (
+                                    <StylePreview
+                                      fill={row.values.fill ?? ""}
+                                      stroke={row.values.stroke ?? ""}
+                                      opacity={row.values.opacity ?? ""}
+                                    />
+                                  ) : null}
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {row.values.label ||
+                                        row.values.nom ||
+                                        row.values.entry_key ||
+                                        row.values[activeReference.definition.primary_key] ||
+                                        "Nouvelle ligne"}
+                                    </p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      {activeReferenceView?.groupKey === "terrain_type"
+                                        ? terrainParentLabel
+                                        : displayFields
+                                            .map((field) => row.values[field.name])
+                                            .find((value) => value && value.trim().length > 0) ||
+                                          "Aucun detail visible"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={row.saving}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      void handleDeleteReferenceRow(row);
+                                    }}
+                                  >
+                                    Supprimer
+                                  </Button>
+                                  <Button type="button" size="sm" disabled={row.saving}>
+                                    Modifier
+                                  </Button>
+                                </div>
+                              </summary>
+
+                              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                {displayFields.map((field) => (
+                                  <div
+                                    key={`${row.localId}:${field.name}`}
+                                    className={field.type === "textarea" ? "lg:col-span-2" : ""}
+                                  >
+                                    <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                      {getFriendlyFieldLabel(field.label)}
+                                    </p>
+                                    {activeReferenceView?.supportsTerrainParentSelect &&
+                                    field.name === "parent_entry_key" ? (
+                                      <select
+                                        className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                                        value={row.values[field.name] ?? ""}
+                                        disabled={row.saving}
+                                        onChange={(event) =>
+                                          handleReferenceRowValueChange(
+                                            row.localId,
+                                            field.name,
+                                            event.target.value,
+                                          )
+                                        }
+                                      >
+                                        <option value="">Aucune categorie parente</option>
+                                        {terrainCategoryOptions.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <FieldEditor
+                                        field={field}
+                                        value={row.values[field.name] ?? ""}
+                                        disabled={row.saving}
+                                        onChange={(value) =>
+                                          handleReferenceRowValueChange(row.localId, field.name, value)
+                                        }
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+
+                                {showStyles ? (
+                                  <>
+                                    <div className="lg:col-span-2">
+                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Apercu
+                                      </p>
+                                      <StylePreview
+                                        fill={row.values.fill ?? ""}
+                                        stroke={row.values.stroke ?? ""}
+                                        opacity={row.values.opacity ?? ""}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Couleur de fond
+                                      </p>
+                                      <div className="flex gap-3">
+                                        <input
+                                          className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                            isHexColorInputValid(row.values.fill ?? "")
+                                              ? "border-border/70"
+                                              : "border-destructive/70"
+                                          }`}
+                                          value={row.values.fill ?? ""}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "fill", event.target.value)
+                                          }
+                                        />
+                                        <input
+                                          type="color"
+                                          className="h-11 w-16 rounded-[14px] border border-border/70 bg-background/55 p-1"
+                                          value={normalizeHexColor(row.values.fill ?? "") ?? "#5f6b7a"}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "fill", event.target.value)
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Couleur de contour
+                                      </p>
+                                      <div className="flex gap-3">
+                                        <input
+                                          className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                            isHexColorInputValid(row.values.stroke ?? "")
+                                              ? "border-border/70"
+                                              : "border-destructive/70"
+                                          }`}
+                                          value={row.values.stroke ?? ""}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "stroke", event.target.value)
+                                          }
+                                        />
+                                        <input
+                                          type="color"
+                                          className="h-11 w-16 rounded-[14px] border border-border/70 bg-background/55 p-1"
+                                          value={normalizeHexColor(row.values.stroke ?? "") ?? "#1f2937"}
+                                          disabled={row.saving}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(row.localId, "stroke", event.target.value)
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Opacite
+                                      </p>
+                                      <input
+                                        className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                          isOpacityInputValid(row.values.opacity ?? "")
+                                            ? "border-border/70"
+                                            : "border-destructive/70"
+                                        }`}
+                                        type="number"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={row.values.opacity ?? ""}
+                                        disabled={row.saving}
+                                        onChange={(event) =>
+                                          handleReferenceRowValueChange(row.localId, "opacity", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                  </>
+                                ) : null}
                               </div>
-                              <div className="flex gap-3">
+
+                              {technicalFields.length > 0 ? (
+                                <details className="mt-4 rounded-[14px] border border-border/60 bg-background/25 px-4 py-3">
+                                  <summary className="cursor-pointer text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                    Details techniques
+                                  </summary>
+                                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                    {technicalFields.map((field) => (
+                                      <div
+                                        key={`${row.localId}:tech:${field.name}`}
+                                        className={field.type === "textarea" ? "lg:col-span-2" : ""}
+                                      >
+                                        <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                          {getFriendlyFieldLabel(field.label)}
+                                        </p>
+                                        {activeReferenceView?.supportsTerrainParentSelect &&
+                                        field.name === "parent_entry_key" ? (
+                                          <select
+                                            className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
+                                            value={row.values[field.name] ?? ""}
+                                            disabled={row.saving}
+                                            onChange={(event) =>
+                                              handleReferenceRowValueChange(
+                                                row.localId,
+                                                field.name,
+                                                event.target.value,
+                                              )
+                                            }
+                                          >
+                                            <option value="">Aucune categorie parente</option>
+                                            {terrainCategoryOptions.map((option) => (
+                                              <option key={option.value} value={option.value}>
+                                                {option.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        ) : (
+                                          <FieldEditor
+                                            field={field}
+                                            value={row.values[field.name] ?? ""}
+                                            disabled={row.saving}
+                                            onChange={(value) =>
+                                              handleReferenceRowValueChange(row.localId, field.name, value)
+                                            }
+                                          />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              ) : null}
+
+                              {row.error ? <p className="mt-4 text-sm text-destructive">{row.error}</p> : null}
+
+                              <div className="mt-4 flex justify-end gap-3">
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="sm"
                                   disabled={row.saving}
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    void handleDeleteReferenceRow(row);
+                                  onClick={() => {
+                                    if (row.isNew) {
+                                      void handleDeleteReferenceRow(row);
+                                      return;
+                                    }
+
+                                    setSelectedReferenceRowId(null);
                                   }}
                                 >
-                                  Supprimer
+                                  Annuler
                                 </Button>
-                                <Button type="button" size="sm" disabled={row.saving}>
-                                  Modifier
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={row.saving}
+                                  onClick={() => void handleSaveReferenceRow(row)}
+                                >
+                                  {row.saving ? "Enregistrement..." : "Enregistrer"}
                                 </Button>
                               </div>
-                            </summary>
-
-                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                              {activeReference.definition.fields.map((field) => (
-                                <div
-                                  key={`${row.localId}:${field.name}`}
-                                  className={field.type === "textarea" ? "lg:col-span-2" : ""}
-                                >
-                                  <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                                    {getFriendlyFieldLabel(field.label)}
-                                  </p>
-                                  {activeReferenceView?.supportsTerrainParentSelect &&
-                                  field.name === "parent_entry_key" ? (
-                                    <select
-                                      className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
-                                      value={row.values[field.name] ?? ""}
-                                      disabled={row.saving}
-                                      onChange={(event) =>
-                                        handleReferenceRowValueChange(
-                                          row.localId,
-                                          field.name,
-                                          event.target.value,
-                                        )
-                                      }
-                                    >
-                                      <option value="">Aucune categorie parente</option>
-                                      {terrainCategoryOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                          {option.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <FieldEditor
-                                      field={field}
-                                      value={row.values[field.name] ?? ""}
-                                      disabled={row.saving}
-                                      onChange={(value) =>
-                                        handleReferenceRowValueChange(row.localId, field.name, value)
-                                      }
-                                    />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-
-                            {row.error ? <p className="mt-4 text-sm text-destructive">{row.error}</p> : null}
-
-                            <div className="mt-4 flex justify-end gap-3">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={row.saving}
-                              onClick={() => {
-                                if (row.isNew) {
-                                  void handleDeleteReferenceRow(row);
-                                  return;
-                                }
-
-                                setSelectedReferenceRowId(null);
-                              }}
-                              >
-                                Annuler
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                disabled={row.saving}
-                                onClick={() => void handleSaveReferenceRow(row)}
-                              >
-                                {row.saving ? "Enregistrement..." : "Enregistrer"}
-                              </Button>
-                            </div>
-                          </details>
-                        ))}
+                            </details>
+                          );
+                        })}
                       </div>
                     </section>
                   )}

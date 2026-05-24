@@ -1,4 +1,5 @@
 import type { AdminRole } from "@/admin/roles";
+import type { MapStyleRecord, MapStyleTargetType } from "@/map/types";
 
 export type TechFieldType =
   | "text"
@@ -59,6 +60,18 @@ export type ReferenceTableRowsResponse = {
   total_count: number;
   returned_count: number;
   search: string;
+  style_target_type?: MapStyleTargetType | null;
+  styles?: Record<string, Pick<MapStyleRecord, "fill" | "stroke" | "opacity">>;
+};
+
+export type ReferenceStyleValue = Pick<MapStyleRecord, "fill" | "stroke" | "opacity">;
+
+export type AdminStyleUpsertInput = {
+  target_type: MapStyleTargetType;
+  target_id: string;
+  fill?: string | null;
+  stroke?: string | null;
+  opacity?: number | string | null;
 };
 
 export type DynamicCaseTableFieldType =

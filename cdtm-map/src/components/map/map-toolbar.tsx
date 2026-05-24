@@ -2,10 +2,13 @@ import { Eye, EyeOff, PanelRightClose, PanelRightOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { MapDisplayMode } from "@/map/types";
 
 type MapToolbarProps = {
   casesVisible: boolean;
   panelVisible: boolean;
+  displayMode: MapDisplayMode;
+  onDisplayModeChange: (mode: MapDisplayMode) => void;
   onToggleCases: () => void;
   onTogglePanel: () => void;
 };
@@ -13,6 +16,8 @@ type MapToolbarProps = {
 export function MapToolbar({
   casesVisible,
   panelVisible,
+  displayMode,
+  onDisplayModeChange,
   onToggleCases,
   onTogglePanel,
 }: MapToolbarProps) {
@@ -28,6 +33,33 @@ export function MapToolbar({
         {casesVisible ? <EyeOff /> : <Eye />}
         {casesVisible ? "Masquer les cases" : "Afficher les cases"}
       </Button>
+      <Separator orientation="vertical" className="mx-1 h-6" />
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant={displayMode === "neutral" ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => onDisplayModeChange("neutral")}
+        >
+          Neutre
+        </Button>
+        <Button
+          type="button"
+          variant={displayMode === "political" ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => onDisplayModeChange("political")}
+        >
+          Politique
+        </Button>
+        <Button
+          type="button"
+          variant={displayMode === "topographic" ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => onDisplayModeChange("topographic")}
+        >
+          Topo
+        </Button>
+      </div>
       <Separator orientation="vertical" className="mx-1 h-6" />
       <Button
         type="button"

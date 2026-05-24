@@ -11,6 +11,7 @@ import type {
 import {
   getReferenceTableDefinition,
   referenceTableDefinitions,
+  type AdminStyleUpsertInput,
   type DynamicCaseTableCreateInput,
   type DynamicCaseTableCreateResult,
   type DynamicCaseTableDefinition,
@@ -26,13 +27,29 @@ import {
   type ReferenceTableRowValue,
   type ReferenceTableRowsResponse,
   type ReferenceTableStatus,
+  type ReferenceStyleValue,
   type TechFieldDefinition,
 } from "@/admin/tech-types";
+import {
+  createEmptyPublicMapStyles,
+  normalizeHexColor,
+  normalizeOpacityValue,
+  type MapStyleRecord,
+  type MapStyleTargetType,
+  type PublicMapStyles,
+} from "@/map/types";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 
 const DEFAULT_TABLE_LIMIT = 100;
 const MAX_TABLE_LIMIT = 250;
 const DYNAMIC_TABLE_PREFIX = "case_dynamic_";
+const MAP_STYLE_TARGET_TYPES: MapStyleTargetType[] = [
+  "faction",
+  "controleur",
+  "terrain_cat",
+  "terrain_type",
+  "relief",
+];
 
 function assertSafeSqlIdentifier(identifier: string): string {
   if (!/^[a-z][a-z0-9_]*$/.test(identifier)) {
@@ -57,6 +74,182 @@ function normalizeText(value: unknown): string {
 function normalizeNullableText(value: unknown): string | null {
   const normalized = normalizeText(value);
   return normalized.length > 0 ? normalized : null;
+}
+
+function isMapStyleTargetType(value: string): value is MapStyleTargetType {
+  return MAP_STYLE_TARGET_TYPES.includes(value as MapStyleTargetType);
+}
+
+function normalizeMapStyleTargetType(value: unknown): MapStyleTargetType {
+  const normalized = normalizeText(value);
+
+  if (!isMapStyleTargetType(normalized)) {
+    throw new Error("Type de cible de style invalide.");
+  }
+
+  return normalized;
+}
+
+function normalizeMapStyleTargetId(value: unknown): string {
+  const normalized = normalizeText(value);
+
+  if (!normalized) {
+    throw new Error("Identifiant de cible de style obligatoire.");
+  }
+
+  return normalized;
+}
+
+function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
+  targetType: MapStyleTargetType;
+  targetId: string;
+  fill: string | null;
+  stroke: string | null;
+  opacity: number | null;
+} {
+  const targetType = normalizeMapStyleTargetType(input.target_type);
+  const targetId = normalizeMapStyleTargetId(input.target_id);
+  const fillRaw = normalizeNullableText(input.fill);
+  const strokeRaw = normalizeNullableText(input.stroke);
+  const opacityRaw = normalizeOpacityValue(input.opacity);
+
+  if (input.fill !== undefined && input.fill !== null && input.fill !== "" && fillRaw === null) {
+    throw new Error("Couleur de fond invalide.");
+  }
+
+  if (input.stroke !== undefined && input.stroke !== null && input.stroke !== "" && strokeRaw === null) {
+    throw new Error("Couleur de contour invalide.");
+  }
+
+  if (input.opacity !== undefined && input.opacity !== null && input.opacity !== "" && opacityRaw === null) {
+    throw new Error("Opacite invalide.");
+  }
+
+  const fill = fillRaw ? normalizeHexColor(fillRaw) : null;
+  const stroke = strokeRaw ? normalizeHexColor(strokeRaw) : null;
+
+  if (fillRaw && !fill) {
+    throw new Error("Couleur de fond invalide.");
+  }
+
+  if (strokeRaw && !stroke) {
+    throw new Error("Couleur de contour invalide.");
+  }
+
+  return {
+    targetType,
+    targetId,
+    fill,
+    stroke,
+    opacity: opacityRaw,
+  };
+}
+
+function sanitizeMapStyleRow(row: {
+  cible_type: string | null;
+  cible_id: string | null;
+  fill: string | null;
+  stroke: string | null;
+  opacity: number | null;
+}): MapStyleRecord | null {
+  if (!row.cible_type || !row.cible_id || !isMapStyleTargetType(row.cible_type)) {
+    return null;
+  }
+
+  const fill = row.fill ? normalizeHexColor(row.fill) : null;
+  const stroke = row.stroke ? normalizeHexColor(row.stroke) : null;
+  const opacity = normalizeOpacityValue(row.opacity);
+
+  if (!fill && !stroke && opacity === null) {
+    return null;
+  }
+
+  return {
+    target_type: row.cible_type,
+    target_id: row.cible_id,
+    fill,
+    stroke,
+    opacity,
+  };
+}
+
+function buildStyleId(targetType: MapStyleTargetType, targetId: string): string {
+  return `${targetType}:${targetId}`;
+}
+
+function getReferenceStyleTargetType(
+  definition: ReferenceTableDefinition,
+  groupKey: string | null = null,
+): MapStyleTargetType | null {
+  if (definition.key === "factions") {
+    return "faction";
+  }
+
+  if (definition.key === "controleurs") {
+    return "controleur";
+  }
+
+  if (definition.key === "nomenclatures") {
+    const normalizedGroupKey = normalizeText(groupKey);
+
+    if (
+      normalizedGroupKey === "terrain_cat" ||
+      normalizedGroupKey === "terrain_type" ||
+      normalizedGroupKey === "relief"
+    ) {
+      return normalizedGroupKey;
+    }
+  }
+
+  return null;
+}
+
+async function listStylesForTargets(
+  client: PoolClient,
+  targetType: MapStyleTargetType,
+  targetIds: string[],
+): Promise<Record<string, ReferenceStyleValue>> {
+  const uniqueTargetIds = Array.from(new Set(targetIds.filter((value) => value.trim().length > 0)));
+
+  if (uniqueTargetIds.length === 0) {
+    return {};
+  }
+
+  const result = await client.query<{
+    cible_type: string | null;
+    cible_id: string | null;
+    fill: string | null;
+    stroke: string | null;
+    opacity: number | null;
+  }>(
+    `
+      SELECT DISTINCT ON (cible_type, cible_id)
+        cible_type,
+        cible_id,
+        fill,
+        stroke,
+        opacity
+      FROM reference_styles
+      WHERE cible_type = $1
+        AND cible_id = ANY($2::text[])
+      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC
+    `,
+    [targetType, uniqueTargetIds],
+  );
+
+  return Object.fromEntries(
+    result.rows
+      .map((row) => sanitizeMapStyleRow(row))
+      .filter((row): row is MapStyleRecord => row !== null)
+      .map((row) => [
+        row.target_id,
+        {
+          fill: row.fill,
+          stroke: row.stroke,
+          opacity: row.opacity,
+        },
+      ]),
+  );
 }
 
 function normalizeInteger(value: unknown): number | null {
@@ -710,6 +903,28 @@ export async function listReferenceTableRows(
     const totalCount = await queryReferenceTableCount(client, definition, search, groupKey);
     const { sql, values } = buildReferenceTableQuery(definition, search, limit, groupKey);
     const result = await client.query(sql, values);
+    const styleTargetType = getReferenceStyleTargetType(definition, groupKey);
+    const styleTargetIdField =
+      styleTargetType === "faction"
+        ? "id_faction"
+        : styleTargetType === "controleur"
+          ? "id_controleur"
+          : styleTargetType
+            ? "entry_key"
+            : null;
+    const styles =
+      styleTargetType && styleTargetIdField
+        ? await listStylesForTargets(
+            client,
+            styleTargetType,
+            result.rows
+              .map((row) => {
+                const value = row[styleTargetIdField];
+                return typeof value === "string" ? value : null;
+              })
+              .filter((value): value is string => Boolean(value)),
+          )
+        : undefined;
 
     return {
       definition,
@@ -717,10 +932,140 @@ export async function listReferenceTableRows(
       total_count: totalCount,
       returned_count: result.rowCount ?? 0,
       search,
+      style_target_type: styleTargetType,
+      styles,
     };
   } finally {
     client.release();
   }
+}
+
+export async function saveMapStyle(
+  input: AdminStyleUpsertInput,
+  userId: number,
+): Promise<MapStyleRecord | null> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    throw new Error("La base de donnees n'est pas configuree.");
+  }
+
+  const normalized = normalizeMapStylePayload(input);
+  const client = await getPool().connect();
+
+  try {
+    if (!normalized.fill && !normalized.stroke && normalized.opacity === null) {
+      await client.query(
+        `
+          DELETE FROM reference_styles
+          WHERE cible_type = $1
+            AND cible_id = $2
+        `,
+        [normalized.targetType, normalized.targetId],
+      );
+
+      return null;
+    }
+
+    const stableStyleId = buildStyleId(normalized.targetType, normalized.targetId);
+
+    await client.query(
+      `
+        DELETE FROM reference_styles
+        WHERE cible_type = $1
+          AND cible_id = $2
+          AND id_style <> $3
+      `,
+      [normalized.targetType, normalized.targetId, stableStyleId],
+    );
+
+    const result = await client.query<{
+      cible_type: string | null;
+      cible_id: string | null;
+      fill: string | null;
+      stroke: string | null;
+      opacity: number | null;
+    }>(
+      `
+        INSERT INTO reference_styles (
+          id_style,
+          cible_type,
+          cible_id,
+          fill,
+          stroke,
+          opacity,
+          updated_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id_style) DO UPDATE
+        SET
+          cible_type = EXCLUDED.cible_type,
+          cible_id = EXCLUDED.cible_id,
+          fill = EXCLUDED.fill,
+          stroke = EXCLUDED.stroke,
+          opacity = EXCLUDED.opacity,
+          updated_by_user_id = EXCLUDED.updated_by_user_id,
+          updated_at = NOW()
+        RETURNING cible_type, cible_id, fill, stroke, opacity
+      `,
+      [
+        stableStyleId,
+        normalized.targetType,
+        normalized.targetId,
+        normalized.fill,
+        normalized.stroke,
+        normalized.opacity,
+        userId,
+      ],
+    );
+
+    return sanitizeMapStyleRow(result.rows[0]);
+  } finally {
+    client.release();
+  }
+}
+
+export async function listPublicMapStyles(): Promise<PublicMapStyles> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return createEmptyPublicMapStyles();
+  }
+
+  const result = await getPool().query<{
+    cible_type: string | null;
+    cible_id: string | null;
+    fill: string | null;
+    stroke: string | null;
+    opacity: number | null;
+  }>(
+    `
+      SELECT DISTINCT ON (cible_type, cible_id)
+        cible_type,
+        cible_id,
+        fill,
+        stroke,
+        opacity
+      FROM reference_styles
+      WHERE cible_type = ANY($1::text[])
+      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC
+    `,
+    [MAP_STYLE_TARGET_TYPES],
+  );
+
+  const styles = createEmptyPublicMapStyles();
+
+  for (const row of result.rows) {
+    const sanitized = sanitizeMapStyleRow(row);
+
+    if (!sanitized) {
+      continue;
+    }
+
+    styles[sanitized.target_type][sanitized.target_id] = sanitized;
+  }
+
+  return styles;
 }
 
 export async function saveReferenceTableRow(

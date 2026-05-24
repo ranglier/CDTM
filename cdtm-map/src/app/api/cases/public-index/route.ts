@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { getPublicCaseIndex } from "@/server/public-repository";
+import { getPublicCaseIndexResponse } from "@/server/public-repository";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const records = await getPublicCaseIndex();
+    const records = await getPublicCaseIndexResponse();
 
     return NextResponse.json(records, {
       status: 200,

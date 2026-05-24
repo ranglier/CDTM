@@ -17,12 +17,16 @@ import {
   type AdminCaseDraft,
   type AdminCaseRecord,
   type AdminSession,
+  type PublicCaseIndexResponse,
   type PublicCaseProperties,
 } from "@/admin/types";
 import { loadJsonData } from "@/data/loaders";
 import { getBaseLayers } from "@/map/layers";
 import {
   type CaseSelectionIntent,
+  createEmptyPublicMapStyles,
+  type MapDisplayMode,
+  type PublicMapStyles,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
   isStableCaseFeatureCollection,
@@ -379,6 +383,8 @@ export default function HomePage() {
   const [casesVisible, setCasesVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
+  const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(createEmptyPublicMapStyles());
+  const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>("neutral");
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [searchValue, setSearchValue] = useState("");
@@ -912,7 +918,10 @@ export default function HomePage() {
       try {
         const [collection, publicCases] = await Promise.all([
           loadJsonData<StableCaseFeatureCollection>(casesLayer.sourcePath),
-          fetchJson<PublicCaseProperties[]>("/api/cases/public-index").catch(() => []),
+          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(() => ({
+            cases: [] as PublicCaseProperties[],
+            styles: createEmptyPublicMapStyles(),
+          })),
         ]);
 
         if (!isStableCaseFeatureCollection(collection)) {
@@ -925,7 +934,8 @@ export default function HomePage() {
             registry_id_case: feature.properties.id_case,
           }));
 
-          setStableCases(mergeStableCases(baseCases, publicCases));
+          setStableCases(mergeStableCases(baseCases, publicCases.cases));
+          setPublicMapStyles(publicCases.styles);
         }
       } catch (error) {
         if (!cancelled) {
@@ -1056,10 +1066,13 @@ export default function HomePage() {
           activeCaseId={activeCaseId}
           selectedCaseIds={selectedCaseIds}
           casePropertiesById={stableCasesByRegistryId}
+          publicMapStyles={publicMapStyles}
+          displayMode={mapDisplayMode}
           focusCaseId={focusCaseId}
           focusRequest={focusRequest}
           casesVisible={casesVisible}
           panelVisible={panelVisible}
+          onDisplayModeChange={setMapDisplayMode}
           onCaseSelectionChange={handleCaseSelectionChange}
           onCasesVisibilityChange={handleCasesVisibilityChange}
           onPanelVisibilityChange={setPanelVisible}

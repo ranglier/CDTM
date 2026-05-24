@@ -71,7 +71,34 @@ Il expose l'index public des cases, compose depuis :
 - les donnees de terrain de `case_terrain_current` ;
 - les donnees de controle de `case_control_current`.
 
+Il expose aussi les styles publics de carte utilises pour l'affichage, sans melanger ces informations avec les tables metier de case.
+
 Les routes publiques ne doivent pas exposer de notes.
+
+## Styles cartographiques
+
+Les styles de carte sont separes des donnees metier.
+
+Ils sont stockes dans `reference_styles`, avec une cible fonctionnelle :
+
+- `faction`
+- `controleur`
+- `terrain_cat`
+- `terrain_type`
+- `relief`
+
+Chaque style peut definir :
+
+- `fill`
+- `stroke`
+- `opacity`
+
+Les couleurs sont administrees dans l'admin technique, mais restent lisibles publiquement pour permettre le rendu de la carte.
+
+Priorites d'affichage :
+
+- mode politique : `controleur` > `faction` > style neutre ;
+- mode topographique : `terrain_type` > `terrain_cat` > `relief` eventuel > style neutre.
 
 ## Donnees staff
 
