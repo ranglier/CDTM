@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Lock, Shield } from "lucide-react";
+import { Eye, Lock, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +26,13 @@ export function SiteHeader({
   navigationItems = [{ href: "#carte", label: "Carte", current: true }],
   showAdminAction = true,
 }: SiteHeaderProps) {
+  const adminActionIcon = !adminAuthenticated ? <Lock /> : adminModeEnabled ? <Shield /> : <Eye />;
+  const adminActionLabel = !adminAuthenticated
+    ? "Connexion admin"
+    : adminModeEnabled
+      ? "Vue admin"
+      : "Passer en admin";
+
   return (
     <header
       id="top"
@@ -65,8 +72,8 @@ export function SiteHeader({
               onClick={onAdminAction}
               aria-pressed={adminModeEnabled}
             >
-              {adminAuthenticated ? <Shield /> : <Lock />}
-              Admin
+              {adminActionIcon}
+              {adminActionLabel}
             </Button>
           ) : null}
 
