@@ -555,11 +555,24 @@ async function initializeDatabase(): Promise<boolean> {
         cible_id TEXT,
         fill TEXT,
         stroke TEXT,
-        opacity DOUBLE PRECISION,
+        pattern_type TEXT,
+        pattern_color TEXT,
         updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE reference_styles
+      ADD COLUMN IF NOT EXISTS pattern_type TEXT
+    `);
+    await client.query(`
+      ALTER TABLE reference_styles
+      ADD COLUMN IF NOT EXISTS pattern_color TEXT
+    `);
+    await client.query(`
+      ALTER TABLE reference_styles
+      DROP COLUMN IF EXISTS opacity
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS reference_emplacements_rules (

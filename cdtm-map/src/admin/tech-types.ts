@@ -1,5 +1,5 @@
 import type { AdminRole } from "@/admin/roles";
-import type { MapStyleRecord, MapStyleTargetType } from "@/map/types";
+import type { MapPatternType, MapStyleRecord, MapStyleTargetType } from "@/map/types";
 
 export type TechFieldType =
   | "text"
@@ -61,17 +61,21 @@ export type ReferenceTableRowsResponse = {
   returned_count: number;
   search: string;
   style_target_type?: MapStyleTargetType | null;
-  styles?: Record<string, Pick<MapStyleRecord, "fill" | "stroke" | "opacity">>;
+  styles?: Record<string, Pick<MapStyleRecord, "fill" | "stroke" | "pattern_type" | "pattern_color">>;
 };
 
-export type ReferenceStyleValue = Pick<MapStyleRecord, "fill" | "stroke" | "opacity">;
+export type ReferenceStyleValue = Pick<
+  MapStyleRecord,
+  "fill" | "stroke" | "pattern_type" | "pattern_color"
+>;
 
 export type AdminStyleUpsertInput = {
   target_type: MapStyleTargetType;
   target_id: string;
   fill?: string | null;
   stroke?: string | null;
-  opacity?: number | string | null;
+  pattern_type?: MapPatternType | "none" | null;
+  pattern_color?: string | null;
 };
 
 export type DynamicCaseTableFieldType =
@@ -222,7 +226,8 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "cible_id", label: "cible_id", type: "text", searchable: true },
       { name: "fill", label: "fill", type: "text", searchable: true },
       { name: "stroke", label: "stroke", type: "text", searchable: true },
-      { name: "opacity", label: "opacity", type: "number" },
+      { name: "pattern_type", label: "pattern_type", type: "text", searchable: true },
+      { name: "pattern_color", label: "pattern_color", type: "text", searchable: true },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
 import GeoJSON from "ol/format/GeoJSON";
@@ -14,6 +14,8 @@ import ImageStatic from "ol/source/ImageStatic";
 import VectorSource from "ol/source/Vector";
 import View from "ol/View";
 import { defaults as defaultControls } from "ol/control/defaults";
+import type MapBrowserEvent from "ol/MapBrowserEvent";
+import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
@@ -57,6 +59,16 @@ type CasesMapProps = {
   onFeaturesLoad?: (count: number) => void;
 };
 
+type HoverInfo = {
+  x: number;
+  y: number;
+  title: string;
+  rows: Array<{
+    label: string;
+    value: string;
+  }>;
+};
+
 const casesProjection = new Projection({
   code: MAP_PROJECTION_CODE,
   extent: MAP_EXTENT,
@@ -66,6 +78,23 @@ const casesProjection = new Projection({
 addProjection(casesProjection);
 
 const geoJsonFormat = new GeoJSON();
+
+function buildHoverRows(displayMode: MapDisplayMode, properties: StableCaseProperties | null) {
+  if (!properties || displayMode === "neutral") {
+    return [];
+  }
+
+  if (displayMode === "political") {
+    return properties.controleur
+      ? [{ label: "Controleur", value: properties.controleur }]
+      : [];
+  }
+
+  return [
+    properties.terrain_cat ? { label: "Categorie", value: properties.terrain_cat } : null,
+    properties.terrain_type ? { label: "Terrain", value: properties.terrain_type } : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
+}
 
 export function CasesMap({
   dataUrl,
@@ -95,6 +124,7 @@ export function CasesMap({
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
   const displayModeRef = useRef<MapDisplayMode>(displayMode);
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(
     () =>
@@ -184,9 +214,16 @@ export function CasesMap({
     layerRef.current?.changed();
 
     if (!casesVisible) {
+      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
       onCaseSelectionChangeRef.current(null, "replace");
     }
   }, [casesVisible]);
+
+  useEffect(() => {
+    if (displayMode === "neutral") {
+      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+    }
+  }, [displayMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -253,7 +290,9 @@ export function CasesMap({
       view,
     });
 
-    map.on("singleclick", (event) => {
+    const singleClickHandler = (rawEvent: unknown) => {
+      const event = rawEvent as MapBrowserEvent<PointerEvent>;
+
       if (!casesVisibleRef.current) {
         return;
       }
@@ -293,7 +332,64 @@ export function CasesMap({
         (registryId ? casePropertiesByIdRef.current[registryId] : null) ?? featureProperties ?? null;
 
       onCaseSelectionChangeRef.current(resolvedCase, isToggleSelection ? "toggle" : "replace");
-    });
+    };
+
+    const pointerMoveHandler = (rawEvent: unknown) => {
+      const event = rawEvent as MapBrowserEvent<PointerEvent>;
+      const target = map.getTargetElement();
+
+      if (!casesVisibleRef.current || displayModeRef.current === "neutral") {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
+      const feature = map.forEachFeatureAtPixel(
+        event.pixel,
+        (candidate) => {
+          if (candidate instanceof Feature) {
+            return candidate as Feature<Geometry>;
+          }
+
+          return null;
+        },
+        {
+          layerFilter: (candidateLayer) => candidateLayer === layer,
+        },
+      );
+
+      if (!feature) {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
+      const featureProperties = toStableCaseProperties(feature.getProperties());
+      const registryId =
+        typeof feature.getId() === "string"
+          ? feature.getId()
+          : featureProperties?.registry_id_case ?? featureProperties?.id_case ?? null;
+      const resolvedCase =
+        (registryId ? casePropertiesByIdRef.current[registryId] : null) ?? featureProperties ?? null;
+      const rows = buildHoverRows(displayModeRef.current, resolvedCase);
+
+      if (rows.length === 0) {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
+      target.style.cursor = "pointer";
+      setHoverInfo({
+        x: event.pixel[0] + 18,
+        y: event.pixel[1] + 18,
+        title: resolvedCase?.id_case ?? "Case",
+        rows,
+      });
+    };
+
+    const singleClickKey = map.on("singleclick", singleClickHandler);
+    const pointerMoveKey = map.on("pointermove", pointerMoveHandler);
 
     sourceRef.current = source;
     layerRef.current = layer;
@@ -306,6 +402,9 @@ export function CasesMap({
 
     return () => {
       resizeObserver.disconnect();
+      unByKey(singleClickKey);
+      unByKey(pointerMoveKey);
+      map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
       sourceRef.current = null;
       layerRef.current = null;
@@ -389,6 +488,28 @@ export function CasesMap({
         className="h-[calc(100svh-2rem)] w-full xl:h-full"
         aria-label="Carte des cases publiques"
       />
+      {hoverInfo && casesVisible && displayMode !== "neutral" ? (
+        <div
+          className="pointer-events-none absolute z-30 min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
+          style={{
+            left: hoverInfo.x,
+            top: hoverInfo.y,
+            transform: "translate3d(0, 0, 0)",
+          }}
+        >
+          <p className="text-sm font-semibold text-foreground">{hoverInfo.title}</p>
+          <div className="mt-2 space-y-1.5">
+            {hoverInfo.rows.map((row) => (
+              <div key={row.label} className="flex items-start justify-between gap-3">
+                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {row.label}
+                </span>
+                <span className="text-right text-sm text-foreground">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

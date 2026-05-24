@@ -29,7 +29,8 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 import {
   normalizeHexColor,
-  normalizeOpacityValue,
+  normalizePatternType,
+  type MapPatternType,
   type MapStyleTargetType,
 } from "@/map/types";
 
@@ -76,9 +77,20 @@ const NOMENCLATURE_LABELS: Record<string, string> = {
   peuple_majoritaire: "Peuples majoritaires",
 };
 
-const STYLE_FIELDS = ["fill", "stroke", "opacity"] as const;
+const STYLE_FIELDS = ["fill", "stroke", "pattern_type", "pattern_color"] as const;
 type StyleFieldName = (typeof STYLE_FIELDS)[number];
 const DEFAULT_STYLE_STROKE = "#000000";
+const DEFAULT_PATTERN_COLOR = "#000000";
+const PATTERN_TYPE_OPTIONS: Array<{ value: "none" | MapPatternType; label: string }> = [
+  { value: "none", label: "Aucun" },
+  { value: "diagonal", label: "Hachures diagonales" },
+  { value: "diagonal_reverse", label: "Hachures diagonales inversees" },
+  { value: "crosshatch", label: "Hachures croisees" },
+  { value: "horizontal", label: "Lignes horizontales" },
+  { value: "vertical", label: "Lignes verticales" },
+  { value: "dots", label: "Points" },
+  { value: "grid", label: "Grille" },
+];
 const REFERENCE_TECHNICAL_FIELDS = new Set([
   "group_key",
   "entry_key",
@@ -110,20 +122,67 @@ function getStyleTargetIdForRow(view: ReferenceView | null, values: Record<strin
   return null;
 }
 
-function formatOpacityValue(value: number | null | undefined): string {
-  return value === null || value === undefined ? "" : String(value);
+function getPatternCss(
+  patternType: MapPatternType | null,
+  patternColor: string,
+) {
+  switch (patternType) {
+    case "diagonal":
+      return {
+        backgroundImage: `repeating-linear-gradient(135deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+      };
+    case "diagonal_reverse":
+      return {
+        backgroundImage: `repeating-linear-gradient(45deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+      };
+    case "crosshatch":
+      return {
+        backgroundImage: [
+          `repeating-linear-gradient(135deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+          `repeating-linear-gradient(45deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        ].join(", "),
+      };
+    case "horizontal":
+      return {
+        backgroundImage: `repeating-linear-gradient(0deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+      };
+    case "vertical":
+      return {
+        backgroundImage: `repeating-linear-gradient(90deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+      };
+    case "dots":
+      return {
+        backgroundImage: `radial-gradient(circle at 3px 3px, ${patternColor} 0 1.6px, transparent 1.8px)`,
+        backgroundSize: "10px 10px",
+      };
+    case "grid":
+      return {
+        backgroundImage: [
+          `repeating-linear-gradient(0deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+          `repeating-linear-gradient(90deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        ].join(", "),
+      };
+    default:
+      return {};
+  }
 }
 
-function createStylePreview(fill: string, stroke: string, opacity: string) {
+function createStylePreview(
+  fill: string,
+  stroke: string,
+  patternType: string,
+  patternColor: string,
+) {
   const normalizedFill = normalizeHexColor(fill);
   const normalizedStroke = normalizeHexColor(stroke) ?? DEFAULT_STYLE_STROKE;
-  const normalizedOpacity = normalizeOpacityValue(opacity);
-  const effectiveOpacity = normalizedOpacity ?? (normalizedFill ? 1 : 0);
+  const normalizedPatternType = normalizePatternType(patternType);
+  const normalizedPatternColor = normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
 
   return {
     fill: normalizedFill ?? "#5f6b7a",
     stroke: normalizedStroke,
-    opacity: effectiveOpacity,
+    patternType: normalizedPatternType,
+    patternColor: normalizedPatternColor,
   };
 }
 
@@ -131,30 +190,30 @@ function isHexColorInputValid(value: string): boolean {
   return value.trim().length === 0 || normalizeHexColor(value) !== null;
 }
 
-function isOpacityInputValid(value: string): boolean {
-  return value.trim().length === 0 || normalizeOpacityValue(value) !== null;
+function isPatternTypeInputValid(value: string): boolean {
+  return value.trim().length === 0 || value === "none" || normalizePatternType(value) !== null;
 }
 
 function StylePreview({
   fill,
   stroke,
-  opacity,
+  patternType,
+  patternColor,
 }: {
   fill: string;
   stroke: string;
-  opacity: string;
+  patternType: string;
+  patternColor: string;
 }) {
-  const preview = createStylePreview(fill, stroke, opacity);
+  const preview = createStylePreview(fill, stroke, patternType, patternColor);
+  const patternCss = getPatternCss(preview.patternType, preview.patternColor);
 
   return (
     <div
       className="h-10 w-16 rounded-[12px] border"
       style={{
-        backgroundColor: normalizeHexColor(fill)
-          ? `${preview.fill}${Math.round(preview.opacity * 255)
-              .toString(16)
-              .padStart(2, "0")}`
-          : "transparent",
+        backgroundColor: normalizeHexColor(fill) ? preview.fill : "transparent",
+        ...patternCss,
         borderColor: preview.stroke,
       }}
       aria-hidden="true"
@@ -175,12 +234,21 @@ function buildStylePayload(
 
   const normalizedFill = values.fill?.trim() || "";
   const normalizedStroke = values.stroke?.trim() || "";
-  const normalizedOpacity = values.opacity?.trim() || "";
+  const normalizedPatternType = values.pattern_type?.trim() || "";
+  const normalizedPatternColor =
+    normalizedPatternType.length > 0 && normalizedPatternType !== "none"
+      ? values.pattern_color?.trim() || ""
+      : "";
+  const parsedPatternType =
+    normalizedPatternType.length > 0 && normalizedPatternType !== "none"
+      ? normalizePatternType(normalizedPatternType)
+      : null;
 
   if (
     normalizedFill.length === 0 &&
     (normalizedStroke.length === 0 || normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
-    (normalizedOpacity.length === 0 || normalizedOpacity === "0")
+    (normalizedPatternType.length === 0 || normalizedPatternType === "none") &&
+    normalizedPatternColor.length === 0
   ) {
     return null;
   }
@@ -190,7 +258,8 @@ function buildStylePayload(
     target_id: targetId,
     fill: normalizedFill || null,
     stroke: normalizedStroke || null,
-    opacity: normalizedOpacity || null,
+    pattern_type: parsedPatternType,
+    pattern_color: normalizedPatternColor || null,
   };
 }
 
@@ -301,11 +370,8 @@ function withStyleValues(
       ...row.values,
       fill: style?.fill ?? "",
       stroke: style?.stroke ?? DEFAULT_STYLE_STROKE,
-      opacity: style?.opacity !== null && style?.opacity !== undefined
-        ? formatOpacityValue(style.opacity)
-        : style?.fill
-          ? "1"
-          : "0",
+      pattern_type: style?.pattern_type ?? "none",
+      pattern_color: style?.pattern_color ?? "",
     },
   };
 }
@@ -947,17 +1013,16 @@ export function TechnicalAdminPage() {
                 [fieldName]: value,
               };
 
-              if (fieldName === "fill" || fieldName === "stroke") {
-                const hasChosenColor =
-                  nextValues.fill.trim().length > 0 ||
-                  (nextValues.stroke.trim().length > 0 &&
-                    nextValues.stroke.trim().toLowerCase() !== DEFAULT_STYLE_STROKE);
+              if (fieldName === "pattern_type" && value === "none") {
+                nextValues.pattern_color = "";
+              }
 
-                if (!hasChosenColor) {
-                  nextValues.opacity = "0";
-                } else if (nextValues.opacity.trim().length === 0 || nextValues.opacity.trim() === "0") {
-                  nextValues.opacity = "1";
-                }
+              if (
+                fieldName === "pattern_type" &&
+                value !== "none" &&
+                nextValues.pattern_color.trim().length === 0
+              ) {
+                nextValues.pattern_color = DEFAULT_PATTERN_COLOR;
               }
 
               return {
@@ -986,7 +1051,8 @@ export function TechnicalAdminPage() {
           ...(activeReferenceView.styleTargetType
             ? {
                 stroke: DEFAULT_STYLE_STROKE,
-                opacity: "0",
+                pattern_type: "none",
+                pattern_color: "",
               }
             : {}),
         },
@@ -1028,11 +1094,22 @@ export function TechnicalAdminPage() {
         return;
       }
 
-      if (!isOpacityInputValid(row.values.opacity ?? "")) {
+      if (!isPatternTypeInputValid(row.values.pattern_type ?? "")) {
         setReferenceRows((current) =>
           current.map((item) =>
             item.localId === row.localId
-              ? { ...item, error: "Opacite invalide." }
+              ? { ...item, error: "Motif invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      if (!isHexColorInputValid(row.values.pattern_color ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Couleur du motif invalide." }
               : item,
           ),
         );
@@ -1062,15 +1139,26 @@ export function TechnicalAdminPage() {
             ...toEditableRow(activeReference.definition, savedRow).values,
             fill: row.values.fill ?? "",
             stroke: row.values.stroke ?? "",
-            opacity: row.values.opacity ?? "",
+            pattern_type: row.values.pattern_type ?? "none",
+            pattern_color: row.values.pattern_color ?? "",
           },
         };
+        const styleTargetId = getStyleTargetIdForRow(activeReferenceView ?? null, nextBaseRow.values);
         const stylePayload = buildStylePayload(activeReferenceView ?? null, nextBaseRow.values);
 
-        if (stylePayload) {
+        if (activeReferenceView?.styleTargetType && styleTargetId) {
           await fetchJson("/api/admin/tech/styles", {
             method: "POST",
-            body: JSON.stringify(stylePayload),
+            body: JSON.stringify(
+              stylePayload ?? {
+                target_type: activeReferenceView.styleTargetType,
+                target_id: styleTargetId,
+                fill: null,
+                stroke: null,
+                pattern_type: null,
+                pattern_color: null,
+              },
+            ),
           });
         }
 
@@ -1122,7 +1210,7 @@ export function TechnicalAdminPage() {
       }
 
       try {
-        const stylePayload = buildStylePayload(activeReferenceView ?? null, row.values);
+        const styleTargetId = getStyleTargetIdForRow(activeReferenceView ?? null, row.values);
         await fetchJson(
           `/api/admin/tech/references/${activeReference.definition.key}?pk=${encodeURIComponent(
             row.originalPrimaryKey,
@@ -1131,14 +1219,16 @@ export function TechnicalAdminPage() {
             method: "DELETE",
           },
         );
-        if (stylePayload) {
+        if (activeReferenceView?.styleTargetType && styleTargetId) {
           await fetchJson("/api/admin/tech/styles", {
             method: "POST",
             body: JSON.stringify({
-              ...stylePayload,
+              target_type: activeReferenceView.styleTargetType,
+              target_id: styleTargetId,
               fill: null,
               stroke: null,
-              opacity: null,
+              pattern_type: null,
+              pattern_color: null,
             }),
           });
         }
@@ -1781,7 +1871,8 @@ export function TechnicalAdminPage() {
                                     <StylePreview
                                       fill={row.values.fill ?? ""}
                                       stroke={row.values.stroke ?? ""}
-                                      opacity={row.values.opacity ?? ""}
+                                      patternType={row.values.pattern_type ?? "none"}
+                                      patternColor={row.values.pattern_color ?? ""}
                                     />
                                   ) : null}
                                   <div>
@@ -1926,24 +2017,70 @@ export function TechnicalAdminPage() {
 
                                     <div>
                                       <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                                        Opacite
+                                        Motif
                                       </p>
-                                      <input
+                                      <select
                                         className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
-                                          isOpacityInputValid(row.values.opacity ?? "")
+                                          isPatternTypeInputValid(row.values.pattern_type ?? "")
                                             ? "border-border/70"
                                             : "border-destructive/70"
                                         }`}
-                                        type="number"
-                                        min="0"
-                                        max="1"
-                                        step="0.05"
-                                        value={row.values.opacity ?? ""}
+                                        value={row.values.pattern_type ?? "none"}
                                         disabled={row.saving}
                                         onChange={(event) =>
-                                          handleReferenceRowValueChange(row.localId, "opacity", event.target.value)
+                                          handleReferenceRowValueChange(
+                                            row.localId,
+                                            "pattern_type",
+                                            event.target.value,
+                                          )
                                         }
-                                      />
+                                      >
+                                        {PATTERN_TYPE_OPTIONS.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Couleur du motif
+                                      </p>
+                                      <div className="flex items-center gap-3">
+                                        <input
+                                          type="color"
+                                          className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
+                                          value={
+                                            normalizeHexColor(row.values.pattern_color ?? "") ??
+                                            DEFAULT_PATTERN_COLOR
+                                          }
+                                          disabled={row.saving || (row.values.pattern_type ?? "none") === "none"}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(
+                                              row.localId,
+                                              "pattern_color",
+                                              event.target.value,
+                                            )
+                                          }
+                                        />
+                                        <input
+                                          className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                            isHexColorInputValid(row.values.pattern_color ?? "")
+                                              ? "border-border/70"
+                                              : "border-destructive/70"
+                                          }`}
+                                          value={row.values.pattern_color ?? ""}
+                                          disabled={row.saving || (row.values.pattern_type ?? "none") === "none"}
+                                          onChange={(event) =>
+                                            handleReferenceRowValueChange(
+                                              row.localId,
+                                              "pattern_color",
+                                              event.target.value,
+                                            )
+                                          }
+                                        />
+                                      </div>
                                     </div>
                                   </>
                                 ) : null}

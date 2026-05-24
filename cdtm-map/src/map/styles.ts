@@ -4,8 +4,9 @@ import Style from "ol/style/Style";
 
 import {
   normalizeHexColor,
-  normalizeOpacityValue,
+  normalizePatternType,
   type MapDisplayMode,
+  type MapPatternType,
   type PublicMapStyles,
   type StableCaseProperties,
 } from "@/map/types";
@@ -19,48 +20,28 @@ type CaseStyleOptions = {
   styles: PublicMapStyles;
 };
 
+type ResolvedStyle = {
+  fill: string | null;
+  stroke: string | null;
+  pattern_type: MapPatternType | null;
+  pattern_color: string | null;
+};
+
 const DEFAULT_FILL = "rgba(0, 0, 0, 0)";
-const DEFAULT_STROKE = "rgba(0, 0, 0, 0.96)";
+const DEFAULT_STROKE = "#000000";
+const DEFAULT_PATTERN_COLOR = "#000000";
 const DEFAULT_STROKE_WIDTH = 1.2;
+const PATTERN_TILE_SIZE = 12;
+const PATTERN_STEP = 6;
 
 const styleCache = new Map<string, Style>();
-
-function hexToRgb(color: string): [number, number, number] | null {
-  const normalized = normalizeHexColor(color);
-
-  if (!normalized) {
-    return null;
-  }
-
-  const hex = normalized.slice(1);
-  const expanded = hex.length === 3 ? hex.split("").map((part) => part + part).join("") : hex;
-
-  return [
-    Number.parseInt(expanded.slice(0, 2), 16),
-    Number.parseInt(expanded.slice(2, 4), 16),
-    Number.parseInt(expanded.slice(4, 6), 16),
-  ];
-}
-
-function toRgba(color: string | null, opacity: number | null, fallback: string): string {
-  if (!color) {
-    return fallback;
-  }
-
-  const rgb = hexToRgb(color);
-
-  if (!rgb) {
-    return fallback;
-  }
-
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${opacity ?? 1})`;
-}
+const patternCache = new Map<string, CanvasPattern | null>();
 
 function getStyleForTarget(
   styles: PublicMapStyles,
   targetType: keyof PublicMapStyles,
   targetId: string | null | undefined,
-) {
+): ResolvedStyle | null {
   if (!targetId) {
     return null;
   }
@@ -74,7 +55,24 @@ function getStyleForTarget(
   return {
     fill: normalizeHexColor(style.fill),
     stroke: normalizeHexColor(style.stroke),
-    opacity: normalizeOpacityValue(style.opacity),
+    pattern_type: normalizePatternType(style.pattern_type),
+    pattern_color: normalizeHexColor(style.pattern_color),
+  };
+}
+
+function mergeTopographicStyles(
+  terrainStyle: ResolvedStyle | null,
+  reliefStyle: ResolvedStyle | null,
+): ResolvedStyle | null {
+  if (!terrainStyle && !reliefStyle) {
+    return null;
+  }
+
+  return {
+    fill: terrainStyle?.fill ?? reliefStyle?.fill ?? null,
+    stroke: terrainStyle?.stroke ?? reliefStyle?.stroke ?? null,
+    pattern_type: reliefStyle?.pattern_type ?? terrainStyle?.pattern_type ?? null,
+    pattern_color: reliefStyle?.pattern_color ?? terrainStyle?.pattern_color ?? null,
   };
 }
 
@@ -82,22 +80,173 @@ function resolveBaseStyle(
   displayMode: MapDisplayMode,
   properties: StableCaseProperties | null,
   styles: PublicMapStyles,
-) {
-  if (displayMode === "political" && properties) {
+): ResolvedStyle | null {
+  if (!properties || displayMode === "neutral") {
+    return null;
+  }
+
+  if (displayMode === "political") {
     return (
       getStyleForTarget(styles, "controleur", properties.controleur) ??
       getStyleForTarget(styles, "faction", properties.faction)
     );
   }
 
-  if (displayMode === "topographic" && properties) {
-    return (
-      getStyleForTarget(styles, "terrain_type", properties.terrain_type) ??
-      getStyleForTarget(styles, "relief", properties.relief)
-    );
+  return mergeTopographicStyles(
+    getStyleForTarget(styles, "terrain_type", properties.terrain_type),
+    getStyleForTarget(styles, "relief", properties.relief),
+  );
+}
+
+function drawDiagonalPattern(
+  context: CanvasRenderingContext2D,
+  reverse = false,
+) {
+  for (let offset = -PATTERN_TILE_SIZE; offset <= PATTERN_TILE_SIZE * 2; offset += PATTERN_STEP) {
+    if (reverse) {
+      context.moveTo(offset, 0);
+      context.lineTo(offset + PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
+    } else {
+      context.moveTo(offset, PATTERN_TILE_SIZE);
+      context.lineTo(offset + PATTERN_TILE_SIZE, 0);
+    }
+  }
+}
+
+function drawHorizontalPattern(context: CanvasRenderingContext2D) {
+  for (let y = 2; y < PATTERN_TILE_SIZE; y += PATTERN_STEP) {
+    context.moveTo(0, y);
+    context.lineTo(PATTERN_TILE_SIZE, y);
+  }
+}
+
+function drawVerticalPattern(context: CanvasRenderingContext2D) {
+  for (let x = 2; x < PATTERN_TILE_SIZE; x += PATTERN_STEP) {
+    context.moveTo(x, 0);
+    context.lineTo(x, PATTERN_TILE_SIZE);
+  }
+}
+
+function createCanvasPattern(
+  fill: string | null,
+  patternType: MapPatternType | null,
+  patternColor: string | null,
+): CanvasPattern | null {
+  if (!patternType || typeof document === "undefined") {
+    return null;
   }
 
-  return null;
+  const normalizedFill = normalizeHexColor(fill);
+  const normalizedPatternColor = normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
+  const cacheKey = `${normalizedFill ?? "transparent"}|${patternType}|${normalizedPatternColor}`;
+  const cached = patternCache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = PATTERN_TILE_SIZE;
+  canvas.height = PATTERN_TILE_SIZE;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    patternCache.set(cacheKey, null);
+    return null;
+  }
+
+  context.clearRect(0, 0, PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
+
+  if (normalizedFill) {
+    context.fillStyle = normalizedFill;
+    context.fillRect(0, 0, PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
+  }
+
+  context.strokeStyle = normalizedPatternColor;
+  context.fillStyle = normalizedPatternColor;
+  context.lineWidth = 1.25;
+  context.beginPath();
+
+  switch (patternType) {
+    case "diagonal":
+      drawDiagonalPattern(context, false);
+      context.stroke();
+      break;
+    case "diagonal_reverse":
+      drawDiagonalPattern(context, true);
+      context.stroke();
+      break;
+    case "crosshatch":
+      drawDiagonalPattern(context, false);
+      drawDiagonalPattern(context, true);
+      context.stroke();
+      break;
+    case "horizontal":
+      drawHorizontalPattern(context);
+      context.stroke();
+      break;
+    case "vertical":
+      drawVerticalPattern(context);
+      context.stroke();
+      break;
+    case "grid":
+      drawHorizontalPattern(context);
+      drawVerticalPattern(context);
+      context.stroke();
+      break;
+    case "dots":
+      context.closePath();
+      for (let x = 3; x < PATTERN_TILE_SIZE; x += PATTERN_STEP) {
+        for (let y = 3; y < PATTERN_TILE_SIZE; y += PATTERN_STEP) {
+          context.beginPath();
+          context.arc(x, y, 1.2, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+      break;
+  }
+
+  const pattern = context.createPattern(canvas, "repeat");
+  patternCache.set(cacheKey, pattern);
+  return pattern;
+}
+
+function buildBaseFill(
+  displayMode: MapDisplayMode,
+  style: ResolvedStyle | null,
+): string | CanvasPattern {
+  if (displayMode === "neutral" || !style) {
+    return DEFAULT_FILL;
+  }
+
+  const pattern = createCanvasPattern(style.fill, style.pattern_type, style.pattern_color);
+
+  if (pattern) {
+    return pattern;
+  }
+
+  return style.fill ?? DEFAULT_FILL;
+}
+
+function buildCacheKey(
+  displayMode: MapDisplayMode,
+  selectionState: SelectionState,
+  style: ResolvedStyle | null,
+  strokeColor: string,
+  strokeWidth: number,
+  zIndex: number,
+) {
+  return [
+    displayMode,
+    selectionState,
+    style?.fill ?? "none",
+    style?.stroke ?? DEFAULT_STROKE,
+    style?.pattern_type ?? "none",
+    style?.pattern_color ?? "none",
+    strokeColor,
+    strokeWidth,
+    zIndex,
+  ].join("|");
 }
 
 export function getCaseStyle({
@@ -107,10 +256,7 @@ export function getCaseStyle({
   styles,
 }: CaseStyleOptions): Style {
   const resolved = resolveBaseStyle(displayMode, properties, styles);
-  const fillOpacity =
-    displayMode === "neutral" ? 0 : resolved?.fill ? (resolved.opacity ?? 1) : 0;
-  const fillColor = toRgba(resolved?.fill ?? null, fillOpacity, DEFAULT_FILL);
-  const baseStrokeColor = toRgba(resolved?.stroke ?? null, 0.96, DEFAULT_STROKE);
+  const baseStrokeColor = resolved?.stroke ?? DEFAULT_STROKE;
 
   const strokeColor =
     selectionState === "active"
@@ -122,15 +268,15 @@ export function getCaseStyle({
   const strokeWidth =
     selectionState === "active" ? 2.2 : selectionState === "selected" ? 1.9 : DEFAULT_STROKE_WIDTH;
 
-  const fillColorWithSelection =
+  const fillColorWithSelection: string | CanvasPattern =
     selectionState === "active"
       ? "rgba(33, 30, 26, 0.34)"
       : selectionState === "selected"
         ? "rgba(94, 82, 57, 0.18)"
-        : fillColor;
+        : buildBaseFill(displayMode, resolved);
 
   const zIndex = selectionState === "active" ? 10 : selectionState === "selected" ? 8 : 1;
-  const cacheKey = `${displayMode}|${selectionState}|${fillColorWithSelection}|${strokeColor}|${strokeWidth}|${zIndex}`;
+  const cacheKey = buildCacheKey(displayMode, selectionState, resolved, strokeColor, strokeWidth, zIndex);
   const cached = styleCache.get(cacheKey);
 
   if (cached) {

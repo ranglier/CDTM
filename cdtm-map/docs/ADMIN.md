@@ -97,17 +97,21 @@ Elles restent dans `reference_styles`, mais l'interface les affiche directement 
 
 - dans `Factions` pour modifier la couleur d'une faction ;
 - dans `Controleurs` pour modifier la couleur d'un controleur ;
-- dans `Terrains` pour modifier la couleur d'une categorie, d'un type ou d'un relief.
+- dans `Terrains` pour modifier la couleur et les motifs d'un type ou d'un relief.
 
 Pour chaque entree concernee, l'admin technique permet de renseigner :
 
 - la couleur de fond ;
 - la couleur de contour ;
-- l'opacite ;
+- le motif ;
+- la couleur du motif ;
 - un apercu visuel.
 
-Les reliefs restent modifies depuis le groupe fonctionnel `Terrains`.
+Les categories de terrain n'ont pas de couleur propre.
+Les reliefs restent modifies depuis le groupe fonctionnel `Terrains` et servent notamment a definir des hachures ou motifs complementaires.
 Les details techniques restent rattaches a `reference_styles`, mais ce n'est plus l'entree principale pour modifier les couleurs.
+
+L'opacite n'est plus reglable.
 
 Une section `Comptes staff` permet aussi de :
 

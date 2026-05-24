@@ -83,7 +83,6 @@ Ils sont stockes dans `reference_styles`, avec une cible fonctionnelle :
 
 - `faction`
 - `controleur`
-- `terrain_cat`
 - `terrain_type`
 - `relief`
 
@@ -91,14 +90,19 @@ Chaque style peut definir :
 
 - `fill`
 - `stroke`
-- `opacity`
+- `pattern_type`
+- `pattern_color`
 
 Les couleurs sont administrees dans l'admin technique, mais restent lisibles publiquement pour permettre le rendu de la carte.
+
+`terrain_cat` n'est pas une cible de style. Il sert a classifier et decrire les terrains, pas a piloter leur couleur.
 
 Priorites d'affichage :
 
 - mode politique : `controleur` > `faction` > style neutre ;
-- mode topographique : `terrain_type` > `terrain_cat` > `relief` eventuel > style neutre.
+- mode topographique : fond via `terrain_type`, motif eventuel via `relief`, puis style neutre.
+
+L'opacite ne fait plus partie du modele. Une couleur renseignee est rendue pleinement. Une couleur absente signifie absence de fond ou de contour.
 
 ## Donnees staff
 

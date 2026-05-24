@@ -33,8 +33,9 @@ import {
 import {
   createEmptyPublicMapStyles,
   normalizeHexColor,
-  normalizeOpacityValue,
+  normalizePatternType,
   type MapStyleRecord,
+  type MapPatternType,
   type MapStyleTargetType,
   type PublicMapStyles,
 } from "@/map/types";
@@ -46,7 +47,6 @@ const DYNAMIC_TABLE_PREFIX = "case_dynamic_";
 const MAP_STYLE_TARGET_TYPES: MapStyleTargetType[] = [
   "faction",
   "controleur",
-  "terrain_cat",
   "terrain_type",
   "relief",
 ];
@@ -105,13 +105,15 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
   targetId: string;
   fill: string | null;
   stroke: string | null;
-  opacity: number | null;
+  patternType: MapPatternType | null;
+  patternColor: string | null;
 } {
   const targetType = normalizeMapStyleTargetType(input.target_type);
   const targetId = normalizeMapStyleTargetId(input.target_id);
   const fillRaw = normalizeNullableText(input.fill);
   const strokeRaw = normalizeNullableText(input.stroke);
-  const opacityRaw = normalizeOpacityValue(input.opacity);
+  const patternTypeRaw = normalizeNullableText(input.pattern_type);
+  const patternColorRaw = normalizeNullableText(input.pattern_color);
 
   if (input.fill !== undefined && input.fill !== null && input.fill !== "" && fillRaw === null) {
     throw new Error("Couleur de fond invalide.");
@@ -121,12 +123,11 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     throw new Error("Couleur de contour invalide.");
   }
 
-  if (input.opacity !== undefined && input.opacity !== null && input.opacity !== "" && opacityRaw === null) {
-    throw new Error("Opacite invalide.");
-  }
-
   const fill = fillRaw ? normalizeHexColor(fillRaw) : null;
   const stroke = strokeRaw ? normalizeHexColor(strokeRaw) : null;
+  const patternType =
+    patternTypeRaw && patternTypeRaw !== "none" ? normalizePatternType(patternTypeRaw) : null;
+  const patternColor = patternType && patternColorRaw ? normalizeHexColor(patternColorRaw) : null;
 
   if (fillRaw && !fill) {
     throw new Error("Couleur de fond invalide.");
@@ -136,12 +137,21 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     throw new Error("Couleur de contour invalide.");
   }
 
+  if (patternTypeRaw && patternTypeRaw !== "none" && !patternType) {
+    throw new Error("Motif invalide.");
+  }
+
+  if (patternType && patternColorRaw && !patternColor) {
+    throw new Error("Couleur du motif invalide.");
+  }
+
   return {
     targetType,
     targetId,
     fill,
     stroke,
-    opacity: opacityRaw,
+    patternType,
+    patternColor,
   };
 }
 
@@ -150,7 +160,8 @@ function sanitizeMapStyleRow(row: {
   cible_id: string | null;
   fill: string | null;
   stroke: string | null;
-  opacity: number | null;
+  pattern_type: string | null;
+  pattern_color: string | null;
 }): MapStyleRecord | null {
   if (!row.cible_type || !row.cible_id || !isMapStyleTargetType(row.cible_type)) {
     return null;
@@ -158,9 +169,10 @@ function sanitizeMapStyleRow(row: {
 
   const fill = row.fill ? normalizeHexColor(row.fill) : null;
   const stroke = row.stroke ? normalizeHexColor(row.stroke) : null;
-  const opacity = normalizeOpacityValue(row.opacity);
+  const patternType = row.pattern_type ? normalizePatternType(row.pattern_type) : null;
+  const patternColor = row.pattern_color ? normalizeHexColor(row.pattern_color) : null;
 
-  if (!fill && !stroke && opacity === null) {
+  if (!fill && !stroke && !patternType && !patternColor) {
     return null;
   }
 
@@ -169,7 +181,8 @@ function sanitizeMapStyleRow(row: {
     target_id: row.cible_id,
     fill,
     stroke,
-    opacity,
+    pattern_type: patternType,
+    pattern_color: patternColor,
   };
 }
 
@@ -216,7 +229,8 @@ async function listStylesForTargets(
     cible_id: string | null;
     fill: string | null;
     stroke: string | null;
-    opacity: number | null;
+    pattern_type: string | null;
+    pattern_color: string | null;
   }>(
     `
       SELECT DISTINCT ON (cible_type, cible_id)
@@ -224,7 +238,8 @@ async function listStylesForTargets(
         cible_id,
         fill,
         stroke,
-        opacity
+        pattern_type,
+        pattern_color
       FROM reference_styles
       WHERE cible_type = $1
         AND cible_id = ANY($2::text[])
@@ -242,7 +257,8 @@ async function listStylesForTargets(
         {
           fill: row.fill,
           stroke: row.stroke,
-          opacity: row.opacity,
+          pattern_type: row.pattern_type,
+          pattern_color: row.pattern_color,
         },
       ]),
   );
@@ -950,7 +966,7 @@ export async function saveMapStyle(
   const client = await getPool().connect();
 
   try {
-    if (!normalized.fill && !normalized.stroke && normalized.opacity === null) {
+    if (!normalized.fill && !normalized.stroke && !normalized.patternType && !normalized.patternColor) {
       await client.query(
         `
           DELETE FROM reference_styles
@@ -980,7 +996,8 @@ export async function saveMapStyle(
       cible_id: string | null;
       fill: string | null;
       stroke: string | null;
-      opacity: number | null;
+      pattern_type: string | null;
+      pattern_color: string | null;
     }>(
       `
         INSERT INTO reference_styles (
@@ -989,20 +1006,22 @@ export async function saveMapStyle(
           cible_id,
           fill,
           stroke,
-          opacity,
+          pattern_type,
+          pattern_color,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id_style) DO UPDATE
         SET
           cible_type = EXCLUDED.cible_type,
           cible_id = EXCLUDED.cible_id,
           fill = EXCLUDED.fill,
           stroke = EXCLUDED.stroke,
-          opacity = EXCLUDED.opacity,
+          pattern_type = EXCLUDED.pattern_type,
+          pattern_color = EXCLUDED.pattern_color,
           updated_by_user_id = EXCLUDED.updated_by_user_id,
           updated_at = NOW()
-        RETURNING cible_type, cible_id, fill, stroke, opacity
+        RETURNING cible_type, cible_id, fill, stroke, pattern_type, pattern_color
       `,
       [
         stableStyleId,
@@ -1010,7 +1029,8 @@ export async function saveMapStyle(
         normalized.targetId,
         normalized.fill,
         normalized.stroke,
-        normalized.opacity,
+        normalized.patternType,
+        normalized.patternColor,
         userId,
       ],
     );
@@ -1033,7 +1053,8 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
     cible_id: string | null;
     fill: string | null;
     stroke: string | null;
-    opacity: number | null;
+    pattern_type: string | null;
+    pattern_color: string | null;
   }>(
     `
       SELECT DISTINCT ON (cible_type, cible_id)
@@ -1041,7 +1062,8 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
         cible_id,
         fill,
         stroke,
-        opacity
+        pattern_type,
+        pattern_color
       FROM reference_styles
       WHERE cible_type = ANY($1::text[])
       ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC

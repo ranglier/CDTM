@@ -17,9 +17,20 @@ export type StableCaseProperties = {
 export type MapStyleTargetType =
   | "faction"
   | "controleur"
-  | "terrain_cat"
   | "terrain_type"
   | "relief";
+
+export const MAP_PATTERN_TYPES = [
+  "diagonal",
+  "diagonal_reverse",
+  "crosshatch",
+  "horizontal",
+  "vertical",
+  "dots",
+  "grid",
+] as const;
+
+export type MapPatternType = (typeof MAP_PATTERN_TYPES)[number];
 
 export type MapDisplayMode = "neutral" | "political" | "topographic";
 
@@ -28,7 +39,8 @@ export type MapStyleRecord = {
   target_id: string;
   fill: string | null;
   stroke: string | null;
-  opacity: number | null;
+  pattern_type: MapPatternType | null;
+  pattern_color: string | null;
 };
 
 export type PublicMapStyles = Record<MapStyleTargetType, Record<string, MapStyleRecord>>;
@@ -37,7 +49,6 @@ export function createEmptyPublicMapStyles(): PublicMapStyles {
   return {
     faction: {},
     controleur: {},
-    terrain_cat: {},
     terrain_type: {},
     relief: {},
   };
@@ -57,23 +68,18 @@ export function normalizeHexColor(value: unknown): string | null {
   return null;
 }
 
-export function normalizeOpacityValue(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
+export function normalizePatternType(value: unknown): MapPatternType | null {
+  if (typeof value !== "string") {
     return null;
   }
 
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number.parseFloat(value.trim())
-        : Number.NaN;
+  const normalized = value.trim().toLowerCase();
 
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return null;
+  if ((MAP_PATTERN_TYPES as readonly string[]).includes(normalized)) {
+    return normalized as MapPatternType;
   }
 
-  return Number(parsed.toFixed(3));
+  return null;
 }
 
 export type StableCaseGeometry =
