@@ -870,11 +870,7 @@ export function TechnicalAdminPage() {
           withStyleValues(toEditableRow(response.definition, row), view, response.styles),
         );
         setReferenceRows(nextRows);
-        setSelectedReferenceRowId((current) =>
-          current && nextRows.some((row) => row.localId === current)
-            ? current
-            : nextRows[0]?.localId ?? null,
-        );
+        setSelectedReferenceRowId(null);
       } catch (error) {
         setReferenceError(error instanceof Error ? error.message : "Chargement des lignes impossible.");
         setReferenceRows([]);
@@ -1246,11 +1242,9 @@ export function TechnicalAdminPage() {
         setReferenceRows((current) =>
           current.map((item) => (item.localId === row.localId ? nextRow : item)),
         );
-        setSelectedReferenceRowId(nextRow.localId);
-        await Promise.all([
-          loadReferenceStatuses(),
-          activeReferenceView?.groupKey === "terrain_cat" ? loadTerrainCategoryOptions() : Promise.resolve(),
-        ]);
+        if (activeReferenceView?.groupKey === "terrain_cat") {
+          await loadTerrainCategoryOptions();
+        }
       } catch (error) {
         setReferenceRows((current) =>
           current.map((item) =>
@@ -1268,7 +1262,6 @@ export function TechnicalAdminPage() {
     [
       activeReference,
       activeReferenceView,
-      loadReferenceStatuses,
       loadTerrainCategoryOptions,
     ],
   );
@@ -1385,13 +1378,25 @@ export function TechnicalAdminPage() {
         },
       );
       setActiveSchemaDefinition(updated);
-      await loadSchemaSummaries();
+      setSchemaSummaries((current) =>
+        current.map((summary) =>
+          summary.table_key === updated.table_key
+            ? {
+                ...summary,
+                title: updated.title,
+                description: updated.description,
+                is_active: updated.is_active,
+                field_count: updated.fields.length,
+              }
+            : summary,
+        ),
+      );
     } catch (error) {
       setSchemaMetaError(error instanceof Error ? error.message : "Mise a jour impossible.");
     } finally {
       setSchemaMetaPending(false);
     }
-  }, [activeSchemaDefinition, loadSchemaSummaries, schemaMetaDraft]);
+  }, [activeSchemaDefinition, schemaMetaDraft]);
 
   const handleCreateField = useCallback(async () => {
     if (!activeSchemaDefinition) {
@@ -1419,13 +1424,25 @@ export function TechnicalAdminPage() {
       });
       setCreateFieldKeyEdited(false);
       setShowCreateFieldForm(false);
-      await loadSchemaSummaries();
+      setSchemaSummaries((current) =>
+        current.map((summary) =>
+          summary.table_key === result.definition.table_key
+            ? {
+                ...summary,
+                title: result.definition.title,
+                description: result.definition.description,
+                is_active: result.definition.is_active,
+                field_count: result.definition.fields.length,
+              }
+            : summary,
+        ),
+      );
     } catch (error) {
       setCreateFieldError(error instanceof Error ? error.message : "Ajout de champ impossible.");
     } finally {
       setCreateFieldPending(false);
     }
-  }, [activeSchemaDefinition, createFieldDraft, loadSchemaSummaries]);
+  }, [activeSchemaDefinition, createFieldDraft]);
 
   const handleCreateAccount = useCallback(async () => {
     setCreateAccountPending(true);
@@ -1443,7 +1460,7 @@ export function TechnicalAdminPage() {
         role: "staff",
       });
       setShowCreateAccountForm(false);
-      await loadStaffAccounts();
+      setStaffAccounts((current) => [...current, createdAccount]);
       setActiveAccountId(createdAccount.id);
       await hydrateSession();
     } catch (error) {
@@ -1451,7 +1468,7 @@ export function TechnicalAdminPage() {
     } finally {
       setCreateAccountPending(false);
     }
-  }, [createAccountDraft, hydrateSession, loadStaffAccounts]);
+  }, [createAccountDraft, hydrateSession]);
 
   const handleUpdateAccount = useCallback(async () => {
     if (!activeStaffAccount) {
@@ -1476,11 +1493,7 @@ export function TechnicalAdminPage() {
       setStaffAccounts((current) =>
         current.map((account) => (account.id === updatedAccount.id ? updatedAccount : account)),
       );
-      const nextSession = await hydrateSession();
-
-      if (nextSession.is_tech_admin) {
-        await loadStaffAccounts();
-      }
+      await hydrateSession();
       setEditingAccountId(null);
     } catch (error) {
       setAccountUpdateError(error instanceof Error ? error.message : "Mise a jour impossible.");
@@ -1492,7 +1505,6 @@ export function TechnicalAdminPage() {
     accountUpdateRole,
     activeStaffAccount,
     hydrateSession,
-    loadStaffAccounts,
   ]);
 
   const activeSchemaFieldCount = activeSchemaDefinition?.fields.length ?? 0;
