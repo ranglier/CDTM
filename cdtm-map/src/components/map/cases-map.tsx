@@ -380,9 +380,17 @@ export function CasesMap({
       }
 
       target.style.cursor = "pointer";
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+      const originalEvent = event.originalEvent;
+      const preferredX = originalEvent.clientX + 18;
+      const preferredY = originalEvent.clientY + 18;
+      const tooltipWidth = 240;
+      const tooltipHeight = 120;
+
       setHoverInfo({
-        x: event.pixel[0] + 18,
-        y: event.pixel[1] + 18,
+        x: viewportWidth > 0 ? Math.min(preferredX, viewportWidth - tooltipWidth) : preferredX,
+        y: viewportHeight > 0 ? Math.min(preferredY, viewportHeight - tooltipHeight) : preferredY,
         title: resolvedCase?.id_case ?? "Case",
         rows,
       });
@@ -490,7 +498,7 @@ export function CasesMap({
       />
       {hoverInfo && casesVisible && displayMode !== "neutral" ? (
         <div
-          className="pointer-events-none absolute z-30 min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
+          className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{
             left: hoverInfo.x,
             top: hoverInfo.y,

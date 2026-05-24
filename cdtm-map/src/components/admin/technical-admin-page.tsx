@@ -1467,7 +1467,7 @@ export function TechnicalAdminPage() {
         <SiteHeader
           adminAuthenticated
           adminModeEnabled
-          navigationItems={[{ href: "/", label: "Carte" }]}
+          navigationItems={[{ href: "/?admin=1", label: "Carte" }]}
           showAdminAction={false}
           onAdminAction={() => {}}
           onAdminLogout={() => void handleLogout()}
@@ -1493,8 +1493,8 @@ export function TechnicalAdminPage() {
         adminAuthenticated
         adminModeEnabled
         navigationItems={[
-          { href: "/", label: "Carte" },
-          ...(session.is_tech_admin ? [{ href: "/admin/tech", label: "Technique", current: true }] : []),
+          { href: "/?admin=1", label: "Carte" },
+          ...(session.is_tech_admin ? [{ href: "/admin/tech", label: "Administration", current: true }] : []),
         ]}
         showAdminAction={false}
         onAdminAction={() => {}}

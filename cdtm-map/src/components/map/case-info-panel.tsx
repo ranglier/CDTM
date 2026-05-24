@@ -291,7 +291,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
 
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
-  const hasEveryAdminRecord = selectedAdminRecords.length > 0 && selectedAdminRecords.length === selectedCaseIds.length;
   const terrainCategoryOptions = activeAdminRecord?.reference_data.terrain_categories.map((option) => option.value) ?? [];
   const bulkTerrainCategory = bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched ? "" : bulkDraft.terrain.terrain_cat.value;
   const singleTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, singleDraft.terrain.terrain_cat);
@@ -365,6 +364,24 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
           <header className="space-y-4">
             <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">Informations de case</h2>
             {adminModeEnabled ? <AdminSearchBox searchValue={searchValue} searchError={searchError} availableCaseIds={availableCaseIds} onSearchValueChange={onSearchValueChange} onSearchSubmit={onSearchSubmit} /> : null}
+            {adminModeEnabled && hasSelection && adminPanelMode === "read" ? (
+              <div className="rounded-[22px] border border-primary/25 bg-primary/8 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Edition</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {adminLoading
+                        ? "Chargement des donnees admin..."
+                        : "Ouvre directement le formulaire de modification de la selection."}
+                    </p>
+                  </div>
+                  <Button type="button" onClick={onEnterEditMode} disabled={adminLoading || !hasSelection}>
+                    Modifier
+                  </Button>
+                </div>
+                {adminError ? <p className="mt-3 text-sm text-destructive">{adminError}</p> : null}
+              </div>
+            ) : null}
           </header>
 
           <Separator className="my-5" />
@@ -516,31 +533,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   )}
                 </div>
               </section>
-
-              {adminModeEnabled ? (
-                <section className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-                  <SectionTitle title="Administration" />
-                  <div className="mt-4">
-                    <CompactInfoList
-                      rows={[
-                        {
-                          label: "Chargement",
-                          value: adminLoading
-                            ? "En cours"
-                            : hasEveryAdminRecord || activeAdminRecord
-                              ? "Pret"
-                              : "Non charge",
-                        },
-                      ]}
-                      emptyMessage="Aucune information d'administration."
-                    />
-                  </div>
-                  {adminError ? <p className="mt-4 text-sm text-destructive">{adminError}</p> : null}
-                  <div className="mt-4 flex justify-end">
-                    <Button type="button" onClick={onEnterEditMode} disabled={adminLoading || !hasSelection}>Modifier</Button>
-                  </div>
-                </section>
-              ) : null}
             </div>
           )}
         </div>

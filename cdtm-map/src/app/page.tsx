@@ -960,6 +960,16 @@ export default function HomePage() {
 
         if (!cancelled) {
           setAdminSession(session);
+          if (
+            session.authenticated &&
+            typeof window !== "undefined" &&
+            new URLSearchParams(window.location.search).get("admin") === "1"
+          ) {
+            setAdminModeEnabled(true);
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete("admin");
+            window.history.replaceState({}, "", nextUrl.toString());
+          }
         }
       } catch {
         if (!cancelled) {
@@ -1046,7 +1056,7 @@ export default function HomePage() {
         navigationItems={[
           { href: "#carte", label: "Carte", current: true },
           ...(adminSession.is_tech_admin
-            ? [{ href: "/admin/tech", label: "Technique" }]
+            ? [{ href: "/admin/tech", label: "Administration" }]
             : []),
         ]}
         onAdminAction={handleAdminModeAction}
