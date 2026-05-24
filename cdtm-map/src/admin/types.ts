@@ -36,6 +36,7 @@ export type AdminReferenceData = {
   terrain_types_by_category: Record<string, ReferenceOption[]>;
   relief_options: ReferenceOption[];
   faction_options: ReferenceOption[];
+  controller_options: ReferenceOption[];
   control_type_options: ReferenceOption[];
 };
 

@@ -297,6 +297,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const bulkTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, bulkTerrainCategory);
   const reliefOptions = activeAdminRecord?.reference_data.relief_options.map((option) => option.value) ?? [];
   const factionOptions = activeAdminRecord?.reference_data.faction_options.map((option) => option.value) ?? [];
+  const controllerOptions = activeAdminRecord?.reference_data.controller_options.map((option) => option.value) ?? [];
   const controlTypeOptions = activeAdminRecord?.reference_data.control_type_options.map((option) => option.value) ?? [];
   const publicMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.public.meta)) : formatMeta(activeAdminRecord?.public.meta);
   const terrainMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.terrain.meta)) : formatMeta(activeAdminRecord?.terrain.meta);
@@ -453,7 +454,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                     <SelectField value={isMultiSelection ? bulkDraft.control.faction.value : singleDraft.control.faction} options={factionOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "faction", value) : onSingleFieldChange("control", "faction", value)} disabled={adminLoading || adminSaving} />
                   </FormRow>
                   <FormRow label="Controleur" mixed={isMultiSelection ? bulkDraft.control.controleur.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.controleur) : undefined}>
-                    <input className={fieldClassName} value={isMultiSelection ? bulkDraft.control.controleur.value : singleDraft.control.controleur} onChange={(event) => isMultiSelection ? onBulkFieldChange("control", "controleur", event.target.value) : onSingleFieldChange("control", "controleur", event.target.value)} disabled={adminLoading || adminSaving} />
+                    <SelectField value={isMultiSelection ? bulkDraft.control.controleur.value : singleDraft.control.controleur} options={controllerOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "controleur", value) : onSingleFieldChange("control", "controleur", value)} disabled={adminLoading || adminSaving} />
                   </FormRow>
                   <FormRow label="Type de controle" mixed={isMultiSelection ? bulkDraft.control.controle_type.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.controle_type) : undefined}>
                     <SelectField value={isMultiSelection ? bulkDraft.control.controle_type.value : singleDraft.control.controle_type} options={controlTypeOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "controle_type", value) : onSingleFieldChange("control", "controle_type", value)} disabled={adminLoading || adminSaving} />

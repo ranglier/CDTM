@@ -465,6 +465,83 @@ function toSnakeCaseIdentifier(value: string): string {
     .replace(/_+/g, "_");
 }
 
+function shouldReplaceAutoValue(currentValue: string, previousSuggestedValue: string): boolean {
+  const normalizedCurrent = currentValue.trim();
+  return normalizedCurrent.length === 0 || normalizedCurrent === previousSuggestedValue;
+}
+
+function applyReferenceAutoFill(
+  tableKey: ReferenceTableKey,
+  currentValues: Record<string, string>,
+  nextValues: Record<string, string>,
+): Record<string, string> {
+  if (tableKey === "nomenclatures") {
+    const previousEntrySuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const nextEntrySuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
+
+    if (
+      nextEntrySuggestion &&
+      shouldReplaceAutoValue(currentValues.entry_key ?? "", previousEntrySuggestion)
+    ) {
+      nextValues.entry_key = nextEntrySuggestion;
+    }
+
+    const previousIdSuggestion =
+      currentValues.group_key?.trim() && currentValues.entry_key?.trim()
+        ? `${currentValues.group_key.trim()}:${currentValues.entry_key.trim()}`
+        : "";
+    const nextIdSuggestion =
+      nextValues.group_key?.trim() && nextValues.entry_key?.trim()
+        ? `${nextValues.group_key.trim()}:${nextValues.entry_key.trim()}`
+        : "";
+
+    if (
+      nextIdSuggestion &&
+      shouldReplaceAutoValue(currentValues.id_entry ?? "", previousIdSuggestion)
+    ) {
+      nextValues.id_entry = nextIdSuggestion;
+    }
+  }
+
+  if (tableKey === "factions") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.nom ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.nom ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.id_faction ?? "", previousSuggestion)
+    ) {
+      nextValues.id_faction = nextSuggestion;
+    }
+  }
+
+  if (tableKey === "controleurs") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.nom ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.nom ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.id_controleur ?? "", previousSuggestion)
+    ) {
+      nextValues.id_controleur = nextSuggestion;
+    }
+  }
+
+  if (tableKey === "emplacements_rules") {
+    const previousSuggestion = toSnakeCaseIdentifier(currentValues.rule_label ?? "");
+    const nextSuggestion = toSnakeCaseIdentifier(nextValues.rule_label ?? "");
+
+    if (
+      nextSuggestion &&
+      shouldReplaceAutoValue(currentValues.rule_key ?? "", previousSuggestion)
+    ) {
+      nextValues.rule_key = nextSuggestion;
+    }
+  }
+
+  return nextValues;
+}
+
 function getFieldTypeLabel(value: DynamicCaseTableFieldType): string {
   return (
     dynamicFieldTypeOptions.find((option) => option.value === value)?.label ?? value
@@ -1008,10 +1085,13 @@ export function TechnicalAdminPage() {
       current.map((row) =>
         row.localId === localId
           ? (() => {
-              const nextValues = {
+              const rawNextValues = {
                 ...row.values,
                 [fieldName]: value,
               };
+              const nextValues = activeReference
+                ? applyReferenceAutoFill(activeReference.definition.key, row.values, rawNextValues)
+                : rawNextValues;
 
               if (fieldName === "pattern_type" && value === "none") {
                 nextValues.pattern_color = "";
@@ -1034,7 +1114,7 @@ export function TechnicalAdminPage() {
           : row,
       ),
     );
-  }, []);
+  }, [activeReference]);
 
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {

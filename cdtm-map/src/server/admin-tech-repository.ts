@@ -799,7 +799,14 @@ export async function getStaticAdminReferenceData(
   const client = clientArg ?? (await getPool().connect());
 
   try {
-    const [terrainCategories, terrainTypeRows, reliefOptions, factionOptions, controlTypeOptions] =
+    const [
+      terrainCategories,
+      terrainTypeRows,
+      reliefOptions,
+      factionOptions,
+      controllerOptions,
+      controlTypeOptions,
+    ] =
       await Promise.all([
         listReferenceOptionsInternal(client, "nomenclatures", "terrain_cat"),
         client.query<{
@@ -816,6 +823,7 @@ export async function getStaticAdminReferenceData(
         ),
         listReferenceOptionsInternal(client, "nomenclatures", "relief"),
         listReferenceOptionsInternal(client, "factions"),
+        listReferenceOptionsInternal(client, "controleurs"),
         listReferenceOptionsInternal(client, "nomenclatures", "controle_type"),
       ]);
 
@@ -839,6 +847,7 @@ export async function getStaticAdminReferenceData(
       terrain_types_by_category: terrainTypesByCategory,
       relief_options: reliefOptions,
       faction_options: factionOptions,
+      controller_options: controllerOptions,
       control_type_options: controlTypeOptions,
     };
   } finally {
