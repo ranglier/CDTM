@@ -52,6 +52,23 @@ Le premier lot UI repose deja sur une carte OpenLayers en lecture seule :
 - couche Influence rendue sous les objets editeur
 - overlay `Influence` traite comme une option d'affichage de carte, distincte du filtre de statut des localites
 - overlay active par defaut pour donner un contexte strategique immediat
+- couche OpenLayers des cases factorisee dans un module partage avec la carte publique
+- reactivation de l'overlay Influence sans rechargement des donnees de cases
+
+## Couche cases partagee
+
+La carte publique et l'editeur reutilisent la meme brique OpenLayers pour :
+- creer la source vectorielle des cases
+- lire le GeoJSON stable
+- appliquer `getCaseStyle`
+- resoudre l'identite d'une case via `registry_id_case` puis `id_case`
+- synchroniser la visibilite de la couche
+
+La difference reste uniquement au niveau du contexte :
+- carte publique : modes `Faction`, `Influence`, `Topo` et etats `active/selected/default`
+- editeur : mode `Influence` uniquement, toujours en lecture seule pour les cases
+
+L'editeur n'ajoute donc plus qu'une couche localites au-dessus de la couche cases partagee.
 
 Ce lot ne fait aucune ecriture en base.
 Il ne modifie pas non plus les cases ni leurs styles publics.

@@ -3,15 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
-import GeoJSON from "ol/format/GeoJSON";
 import type Geometry from "ol/geom/Geometry";
 import ImageLayer from "ol/layer/Image";
-import VectorLayer from "ol/layer/Vector";
 import Map from "ol/Map";
 import { addProjection } from "ol/proj";
 import Projection from "ol/proj/Projection";
 import ImageStatic from "ol/source/ImageStatic";
-import VectorSource from "ol/source/Vector";
 import View from "ol/View";
 import { defaults as defaultControls } from "ol/control/defaults";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
@@ -26,17 +23,21 @@ import {
   MAP_MAX_ZOOM,
   MAP_PROJECTION_CODE,
 } from "@/map/config";
-import { getCaseStyle } from "@/map/styles";
+import {
+  createCasesVectorLayer,
+  createCasesVectorSource,
+  readCaseFeatures,
+  resolveCaseFeatureProperties,
+  syncCaseLayerVisibility,
+} from "@/map/openlayers/cases-layer";
 import {
   type CaseSelectionIntent,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
-  createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
   normalizeMapDisplayMode,
-  toStableCaseProperties,
 } from "@/map/types";
 
 type CasesMapProps = {
@@ -77,8 +78,6 @@ const casesProjection = new Projection({
 });
 
 addProjection(casesProjection);
-
-const geoJsonFormat = new GeoJSON();
 
 function buildHoverRows(displayMode: MapDisplayMode, properties: StableCaseProperties | null) {
   if (!properties) {
@@ -123,8 +122,8 @@ export function CasesMap({
 }: CasesMapProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
-  const sourceRef = useRef<VectorSource | null>(null);
-  const layerRef = useRef<VectorLayer | null>(null);
+  const sourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
+  const layerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
   const casesVisibleRef = useRef(casesVisible);
   const activeCaseIdRef = useRef<string | null>(activeCaseId);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
@@ -257,8 +256,7 @@ export function CasesMap({
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
-    layerRef.current?.setVisible(casesVisible);
-    layerRef.current?.changed();
+    syncCaseLayerVisibility(layerRef.current, casesVisible);
 
     if (!casesVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
@@ -295,30 +293,19 @@ export function CasesMap({
       }),
     });
 
-    const source = new VectorSource();
-    const layer = new VectorLayer({
-      source,
+    const source = createCasesVectorSource();
+    const layer = createCasesVectorLayer(source, {
+      getDisplayMode: () => displayModeRef.current,
+      getCasePropertiesById: () => casePropertiesByIdRef.current,
+      getPublicMapStyles: () => publicMapStylesRef.current,
+      getSelectionState: (idCase) =>
+        idCase === activeCaseIdRef.current
+          ? "active"
+          : idCase !== null && selectedCaseIdsRef.current.has(idCase)
+            ? "selected"
+            : "default",
+    }, {
       visible: casesVisibleRef.current,
-      style: (feature) => {
-        const idCase = feature.get("id_case");
-        const selectionState =
-          idCase === activeCaseIdRef.current
-            ? "active"
-            : selectedCaseIdsRef.current.has(idCase)
-              ? "selected"
-              : "default";
-        const caseProperties =
-          (typeof idCase === "string" ? casePropertiesByIdRef.current[idCase] : null) ??
-          toStableCaseProperties(feature.getProperties()) ??
-          null;
-
-        return getCaseStyle({
-          selectionState,
-          displayMode: displayModeRef.current,
-          properties: caseProperties,
-          styles: publicMapStylesRef.current ?? createEmptyPublicMapStyles(),
-        });
-      },
     });
 
     const map = new Map({
@@ -364,13 +351,10 @@ export function CasesMap({
         return;
       }
 
-      const featureProperties = toStableCaseProperties(feature.getProperties());
-      const registryId =
-        typeof feature.getId() === "string"
-          ? feature.getId()
-          : featureProperties?.registry_id_case ?? featureProperties?.id_case ?? null;
-      const resolvedCase =
-        (registryId ? casePropertiesByIdRef.current[registryId] : null) ?? featureProperties ?? null;
+      const resolvedCase = resolveCaseFeatureProperties(
+        feature as Feature<Geometry>,
+        casePropertiesByIdRef.current,
+      );
 
       onCaseSelectionChangeRef.current(resolvedCase, isToggleSelection ? "toggle" : "replace");
     };
@@ -405,13 +389,10 @@ export function CasesMap({
         return;
       }
 
-      const featureProperties = toStableCaseProperties(feature.getProperties());
-      const registryId =
-        typeof feature.getId() === "string"
-          ? feature.getId()
-          : featureProperties?.registry_id_case ?? featureProperties?.id_case ?? null;
-      const resolvedCase =
-        (registryId ? casePropertiesByIdRef.current[registryId] : null) ?? featureProperties ?? null;
+      const resolvedCase = resolveCaseFeatureProperties(
+        feature as Feature<Geometry>,
+        casePropertiesByIdRef.current,
+      );
       const rows = buildHoverRows(displayModeRef.current, resolvedCase);
 
       if (rows.length === 0) {
@@ -480,18 +461,7 @@ export function CasesMap({
           return;
         }
 
-        const features = geoJsonFormat.readFeatures(collection as object, {
-          dataProjection: casesProjection,
-          featureProjection: casesProjection,
-        });
-
-        for (const feature of features) {
-          const idCase = feature.get("id_case");
-
-          if (typeof idCase === "string" && idCase.length > 0) {
-            feature.setId(idCase);
-          }
-        }
+        const features = readCaseFeatures(collection, casesProjection);
 
         sourceRef.current.clear(true);
         sourceRef.current.addFeatures(features);
