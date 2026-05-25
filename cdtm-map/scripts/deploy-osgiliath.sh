@@ -128,6 +128,17 @@ while [ "$attempt" -le "$max_attempts" ]; do
 done
 
 echo "Healthcheck failed after ${max_attempts} attempts" >&2
+if command -v curl >/dev/null 2>&1; then
+  echo "Last /api/health response:" >&2
+  curl -sS "http://127.0.0.1:${APP_PORT}/api/health" >&2 || true
+  echo >&2
+else
+  echo "Last /api/health response:" >&2
+  wget -qO- "http://127.0.0.1:${APP_PORT}/api/health" >&2 || true
+  echo >&2
+fi
+echo "Recent app logs:" >&2
+docker compose --env-file "${REMOTE_ENV_FILE}" -f "${COMPOSE_FILE}" logs --tail=200 cdtm-app >&2 || true
 exit 1
 EOF
 

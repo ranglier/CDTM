@@ -738,6 +738,47 @@ const databaseMigrations: DatabaseMigration[] = [
         )
       `);
       await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS description TEXT
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS default_icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS consumes_slot BOOLEAN DEFAULT FALSE
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS slot_weight INTEGER DEFAULT 0
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        UPDATE reference_locality_types
+        SET
+          consumes_slot = COALESCE(consumes_slot, FALSE),
+          slot_weight = COALESCE(slot_weight, 0),
+          is_active = COALESCE(is_active, TRUE),
+          created_at = COALESCE(created_at, NOW()),
+          updated_at = COALESCE(updated_at, NOW())
+      `);
+      await client.query(`
         CREATE TABLE IF NOT EXISTS reference_landmark_types (
           type_key TEXT PRIMARY KEY,
           label TEXT NOT NULL,
@@ -750,6 +791,37 @@ const databaseMigrations: DatabaseMigration[] = [
         )
       `);
       await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS description TEXT
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS default_icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        UPDATE reference_landmark_types
+        SET
+          is_active = COALESCE(is_active, TRUE),
+          created_at = COALESCE(created_at, NOW()),
+          updated_at = COALESCE(updated_at, NOW())
+      `);
+      await client.query(`
         CREATE TABLE IF NOT EXISTS reference_force_types (
           type_key TEXT PRIMARY KEY,
           label TEXT NOT NULL,
@@ -760,6 +832,37 @@ const databaseMigrations: DatabaseMigration[] = [
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS description TEXT
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS default_icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        ALTER TABLE reference_force_types
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+      await client.query(`
+        UPDATE reference_force_types
+        SET
+          is_active = COALESCE(is_active, TRUE),
+          created_at = COALESCE(created_at, NOW()),
+          updated_at = COALESCE(updated_at, NOW())
       `);
       await client.query(`
         CREATE TABLE IF NOT EXISTS map_localities (

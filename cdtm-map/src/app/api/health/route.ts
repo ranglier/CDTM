@@ -47,7 +47,9 @@ export async function GET() {
         },
       },
     );
-  } catch {
+  } catch (error) {
+    console.error("Healthcheck database initialization failed", error);
+
     return NextResponse.json(
       {
         status: "error",
@@ -56,6 +58,7 @@ export async function GET() {
           configured: true,
           ready: false,
         },
+        error: error instanceof Error ? error.message : "Unknown healthcheck error",
       },
       {
         status: 503,
