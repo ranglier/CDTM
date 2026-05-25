@@ -42,4 +42,19 @@ La carte publique ne doit pas afficher automatiquement les objets `draft`.
 
 ## Integration future
 
-La page `/editeur` actuelle est une fondation. L'implementation OpenLayers viendra ensuite, en reutilisant les APIs deja posees plutot qu'en dupliquant la logique metier dans l'interface.
+Le premier lot UI repose deja sur une carte OpenLayers en lecture seule :
+- chargement de `reference-data`
+- chargement des `localities`
+- affichage des localites existantes
+- selection et inspection
+- filtre local par statut
+
+Ce lot ne fait aucune ecriture en base.
+
+Les prochains lots prevus sont :
+1. creation de localite par clic
+2. edition de formulaire
+3. deplacement drag/drop
+4. landmarks
+5. forces
+6. routes
