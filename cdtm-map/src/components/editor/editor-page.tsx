@@ -105,6 +105,7 @@ export function EditorPage() {
     casePropertiesById,
     publicMapStyles,
     influenceOverlayMessage,
+    influenceOverlayStats,
     loading,
     error: dataError,
     reload,
@@ -293,6 +294,11 @@ export function EditorPage() {
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               Affiche les cases colorees selon les controleurs, avec fallback sur les factions.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Cases chargees : {influenceOverlayStats.caseCount}. Styles influence :{" "}
+              {influenceOverlayStats.factionStyleCount} factions,{" "}
+              {influenceOverlayStats.controllerStyleCount} controleurs.
             </p>
             {showInfluenceOverlay ? (
               <p className="mt-2 text-sm text-muted-foreground">

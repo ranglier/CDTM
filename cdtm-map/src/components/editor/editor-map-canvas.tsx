@@ -62,6 +62,10 @@ addProjection(editorProjection);
 
 const geoJsonFormat = new GeoJSON();
 const EDITOR_INFLUENCE_LAYER_OPACITY = 0.55;
+const fallbackInfluenceCaseStyle = new Style({
+  fill: new Fill({ color: "rgba(220, 193, 130, 0.06)" }),
+  stroke: new Stroke({ color: "rgba(220, 193, 130, 0.35)", width: 1 }),
+});
 
 function getLocalityStyle(locality: EditorMapLocality | null, selected: boolean): Style {
   const palette =
@@ -104,6 +108,25 @@ function buildHoverRows(locality: EditorMapLocality | null) {
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
+function hasInfluenceStyle(
+  properties: StableCaseProperties | null,
+  styles: PublicMapStyles,
+): boolean {
+  if (!properties) {
+    return false;
+  }
+
+  if (properties.controleur && styles.controleur[properties.controleur]) {
+    return true;
+  }
+
+  if (properties.faction && styles.faction[properties.faction]) {
+    return true;
+  }
+
+  return false;
+}
+
 export function EditorMapCanvas({
   localities,
   stableCaseCollection,
@@ -125,6 +148,8 @@ export function EditorMapCanvas({
   const previousSelectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(casePropertiesById);
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
+  const showInfluenceOverlayRef = useRef(showInfluenceOverlay);
+  const stableCaseCollectionRef = useRef<StableCaseFeatureCollection | null>(stableCaseCollection);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(
@@ -182,6 +207,14 @@ export function EditorMapCanvas({
   }, [selectedLocalityId]);
 
   useEffect(() => {
+    showInfluenceOverlayRef.current = showInfluenceOverlay;
+  }, [showInfluenceOverlay]);
+
+  useEffect(() => {
+    stableCaseCollectionRef.current = stableCaseCollection;
+  }, [stableCaseCollection]);
+
+  useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
     casesLayerRef.current?.changed();
   }, [casePropertiesById]);
@@ -222,13 +255,17 @@ export function EditorMapCanvas({
     const casesLayer = new VectorLayer({
       source: casesSource,
       opacity: EDITOR_INFLUENCE_LAYER_OPACITY,
-      visible: false,
+      visible: showInfluenceOverlayRef.current && stableCaseCollectionRef.current !== null,
       style: (feature) => {
         const idCase = feature.get("id_case");
         const caseProperties =
           (typeof idCase === "string" ? casePropertiesByIdRef.current[idCase] : null) ??
           toStableCaseProperties(feature.getProperties() as Record<string, unknown>) ??
           null;
+
+        if (!hasInfluenceStyle(caseProperties, publicMapStylesRef.current)) {
+          return fallbackInfluenceCaseStyle;
+        }
 
         return getCaseStyle({
           selectionState: "default",
@@ -330,6 +367,8 @@ export function EditorMapCanvas({
     casesSourceRef.current = casesSource;
     localitiesSourceRef.current = localitiesSource;
     casesLayerRef.current = casesLayer;
+    casesLayer.setVisible(showInfluenceOverlayRef.current && stableCaseCollectionRef.current !== null);
+    casesLayer.changed();
     mapRef.current = map;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -399,6 +438,9 @@ export function EditorMapCanvas({
 
     source.clear(true);
     source.addFeatures(features as Feature<Geometry>[]);
+    const visible = showInfluenceOverlayRef.current && stableCaseCollection !== null;
+    casesLayerRef.current?.setVisible(visible);
+    casesLayerRef.current?.changed();
   }, [stableCaseCollection]);
 
   return (
@@ -409,7 +451,11 @@ export function EditorMapCanvas({
         aria-label="Carte editeur des localites"
       />
       <div className="pointer-events-none absolute right-6 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-        {showInfluenceOverlay ? "Influence affichee" : "Zones d’influence masquees"}
+        {!showInfluenceOverlay
+          ? "Zones d’influence masquees"
+          : stableCaseCollection === null
+            ? "Influence indisponible"
+            : "Influence affichee"}
       </div>
       {localities.length === 0 || influenceOverlayMessage ? (
         <div className="pointer-events-none absolute left-20 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">

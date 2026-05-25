@@ -23,6 +23,11 @@ type EditorDataState = {
   casePropertiesById: Record<string, StableCaseProperties>;
   publicMapStyles: PublicMapStyles;
   influenceOverlayMessage: string | null;
+  influenceOverlayStats: {
+    caseCount: number;
+    factionStyleCount: number;
+    controllerStyleCount: number;
+  };
   loading: boolean;
   error: string | null;
   reload: () => void;
@@ -172,6 +177,11 @@ export function useEditorData(enabled: boolean): EditorDataState {
       casePropertiesById: {},
       publicMapStyles: createEmptyPublicMapStyles(),
       influenceOverlayMessage: null,
+      influenceOverlayStats: {
+        caseCount: 0,
+        factionStyleCount: 0,
+        controllerStyleCount: 0,
+      },
       loading: false,
       error: null,
       reload,
@@ -185,6 +195,11 @@ export function useEditorData(enabled: boolean): EditorDataState {
     casePropertiesById,
     publicMapStyles,
     influenceOverlayMessage,
+    influenceOverlayStats: {
+      caseCount: stableCaseCollection?.features.length ?? 0,
+      factionStyleCount: Object.keys(publicMapStyles.faction).length,
+      controllerStyleCount: Object.keys(publicMapStyles.controleur).length,
+    },
     loading: loadStatus === "loading" || loadStatus === "idle",
     error,
     reload,
