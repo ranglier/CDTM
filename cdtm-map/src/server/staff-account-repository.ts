@@ -138,14 +138,14 @@ export async function createStaffAccount(
   }
 
   const username = normalizeText(input.username);
-  const password = normalizeText(input.password);
+  const rawPassword = typeof input.password === "string" ? input.password : "";
   const role = normalizeRole(input.role, "staff");
 
-  if (!username || !password) {
+  if (!username || rawPassword.length === 0 || rawPassword.trim().length === 0) {
     throw new Error("Identifiant et mot de passe obligatoires.");
   }
 
-  const passwordHash = await hashSecret(password);
+  const passwordHash = await hashSecret(rawPassword);
   const client = await getPool().connect();
 
   try {
@@ -194,8 +194,8 @@ export async function updateStaffAccount(
     throw new Error("Identifiant de compte invalide.");
   }
 
-  const nextPassword = normalizeText(patch.password);
-  const hasPasswordChange = nextPassword.length > 0;
+  const rawPassword = typeof patch.password === "string" ? patch.password : null;
+  const hasPasswordChange = rawPassword !== null && rawPassword.length > 0;
   const client = await getPool().connect();
 
   try {
@@ -221,6 +221,10 @@ export async function updateStaffAccount(
     const nextRole = patch.role ? normalizeRole(patch.role) : currentAccount.role;
     const nextIsActive = patch.is_active ?? currentAccount.is_active;
 
+    if (rawPassword !== null && rawPassword.length > 0 && rawPassword.trim().length === 0) {
+      throw new Error("Le mot de passe ne peut pas etre vide.");
+    }
+
     await ensureRoleChangeSafe(client, currentAccount, nextRole, nextIsActive);
 
     const updates: string[] = [];
@@ -238,7 +242,7 @@ export async function updateStaffAccount(
     }
 
     if (hasPasswordChange) {
-      const passwordHash = await hashSecret(nextPassword);
+      const passwordHash = await hashSecret(rawPassword as string);
       updates.push(`password_hash = $${valueIndex++}`);
       values.push(passwordHash);
     }

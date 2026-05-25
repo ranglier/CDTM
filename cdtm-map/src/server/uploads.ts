@@ -43,21 +43,73 @@ function assertAllowedMimeType(mimeType: string): string {
   return normalized;
 }
 
-function validateSvgContent(content: string): void {
-  const lower = content.toLowerCase();
+function assertExpectedExtension(filename: string, mimeType: string): void {
+  const expectedExtension = ALLOWED_MAP_ICON_MIME_TYPES.get(mimeType);
+  const extension = path.extname(filename).toLowerCase();
 
-  if (
-    lower.includes("<script") ||
-    /on[a-z]+\s*=/.test(lower) ||
-    lower.includes("javascript:") ||
-    lower.includes("<iframe") ||
-    lower.includes("<object") ||
-    lower.includes("<embed") ||
-    /xlink:href\s*=\s*["']https?:/i.test(content) ||
-    /href\s*=\s*["']https?:/i.test(content)
-  ) {
-    throw new Error("Fichier SVG refuse pour raison de securite.");
+  if (!expectedExtension || extension !== expectedExtension) {
+    throw new Error("Extension de fichier invalide.");
   }
+}
+
+function assertPngSignature(buffer: Buffer): void {
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  if (buffer.byteLength < pngSignature.byteLength || !buffer.subarray(0, 8).equals(pngSignature)) {
+    throw new Error("Signature PNG invalide.");
+  }
+}
+
+function assertWebpSignature(buffer: Buffer): void {
+  if (
+    buffer.byteLength < 12 ||
+    buffer.subarray(0, 4).toString("ascii") !== "RIFF" ||
+    buffer.subarray(8, 12).toString("ascii") !== "WEBP"
+  ) {
+    throw new Error("Signature WebP invalide.");
+  }
+}
+
+function validateSvgContent(content: string): string {
+  const normalized = content.replace(/^\uFEFF/, "");
+  const trimmed = normalized.trim();
+
+  if (!trimmed || !/<svg[\s>]/i.test(trimmed)) {
+    throw new Error("SVG invalide : balise <svg> manquante.");
+  }
+
+  if (/\0/.test(trimmed)) {
+    throw new Error("SVG invalide : contenu binaire detecte.");
+  }
+
+  const blockedPatterns: Array<[RegExp, string]> = [
+    [/<script[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<foreignobject[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<iframe[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<object[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<embed[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<audio[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<video[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<canvas[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<link[\s>]/i, "SVG refuse pour raison de securite."],
+    [/<!doctype/i, "SVG refuse pour raison de securite."],
+    [/<!entity/i, "SVG refuse pour raison de securite."],
+    [/on[a-z]+\s*=/i, "SVG refuse pour raison de securite."],
+    [/javascript\s*:/i, "SVG refuse pour raison de securite."],
+    [/xlink:href\s*=\s*["']\s*https?:/i, "SVG refuse pour raison de securite."],
+    [/\shref\s*=\s*["']\s*https?:/i, "SVG refuse pour raison de securite."],
+    [/xlink:href\s*=\s*["']\s*data:/i, "SVG refuse pour raison de securite."],
+    [/\shref\s*=\s*["']\s*data:/i, "SVG refuse pour raison de securite."],
+    [/<style[\s>][\s\S]*(@import|url\s*\()/i, "SVG refuse pour raison de securite."],
+  ];
+
+  for (const [pattern, message] of blockedPatterns) {
+    if (pattern.test(trimmed)) {
+      throw new Error(message);
+    }
+  }
+
+  return trimmed;
 }
 
 export function getUploadsDir(): string {
@@ -76,15 +128,21 @@ export async function ensureMapIconUploadsDir(): Promise<string> {
 
 export async function saveMapIconUpload(file: File): Promise<MapIconUploadResult> {
   const mimeType = assertAllowedMimeType(file.type);
+  assertExpectedExtension(file.name, mimeType);
 
   if (file.size <= 0 || file.size > MAX_MAP_ICON_SIZE_BYTES) {
     throw new Error("Taille d'image invalide.");
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const sourceBuffer = Buffer.from(await file.arrayBuffer());
+  let buffer = sourceBuffer;
 
   if (mimeType === "image/svg+xml") {
-    validateSvgContent(buffer.toString("utf8"));
+    buffer = Buffer.from(validateSvgContent(sourceBuffer.toString("utf8")), "utf8");
+  } else if (mimeType === "image/png") {
+    assertPngSignature(sourceBuffer);
+  } else if (mimeType === "image/webp") {
+    assertWebpSignature(sourceBuffer);
   }
 
   const extension = ALLOWED_MAP_ICON_MIME_TYPES.get(mimeType) ?? ".bin";

@@ -17,6 +17,8 @@ Le panneau lateral est un outil de navigation. Il est organise par categories re
 
 Le bouton `Ajouter une valeur` apparait dans l'en-tete du panneau principal, uniquement pour les `Listes de valeurs`.
 
+L'architecture interne de cette page est detaillee dans `docs/ADMIN_ARCHITECTURE.md`.
+
 ## Referentiels actifs
 
 - Categories de terrain
@@ -51,11 +53,23 @@ Le modele cible est separe :
 - `map_localities`
 - `map_landmarks`
 - `map_forces`
+- `map_routes`
 
 Les types associes sont :
 - `reference_locality_types`
 - `reference_landmark_types`
 - `reference_force_types`
+
+Les routes API d'edition cartographique sont reservees a `tech_admin`.
+
+## Uploads d'icones
+
+Les formats acceptes sont :
+- `PNG`
+- `WebP`
+- `SVG`
+
+Le SVG reste autorise car il est central pour beaucoup d'icones, mais il est valide defensivement cote serveur avant sauvegarde. Les uploads d'icones restent reserves aux utilisateurs autorises.
 
 ## Peuples
 

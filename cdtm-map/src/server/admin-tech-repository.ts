@@ -1806,6 +1806,7 @@ export async function validateStaticAdminDraftSelections(
   const terrainType = normalizeNullableText(draft.terrain.terrain_type);
   const relief = normalizeNullableText(draft.terrain.relief);
   const faction = normalizeNullableText(draft.control.faction);
+  const controleur = normalizeNullableText(draft.control.controleur);
   const controlType = normalizeNullableText(draft.control.controle_type);
 
   if (!isAllowedOption(referenceData.terrain_categories, terrainCategory)) {
@@ -1831,6 +1832,10 @@ export async function validateStaticAdminDraftSelections(
     throw new Error("La valeur du champ faction est invalide.");
   }
 
+  if (!isAllowedOption(referenceData.controller_options, controleur)) {
+    throw new Error("La valeur du champ controleur est invalide.");
+  }
+
   if (!isAllowedOption(referenceData.control_type_options, controlType)) {
     throw new Error("La valeur du champ controle_type est invalide.");
   }
@@ -1840,7 +1845,7 @@ export async function validateStaticBulkPatchSelections(
   client: PoolClient,
   patch: {
     terrain?: { terrain_cat?: string | null; terrain_type?: string | null; relief?: string | null };
-    control?: { faction?: string | null; controle_type?: string | null };
+    control?: { faction?: string | null; controleur?: string | null; controle_type?: string | null };
   },
 ): Promise<void> {
   const referenceData = await getStaticAdminReferenceData(client);
@@ -1875,6 +1880,12 @@ export async function validateStaticBulkPatchSelections(
   if (patch.control?.faction !== undefined) {
     if (!isAllowedOption(referenceData.faction_options, patch.control.faction ?? null)) {
       throw new Error("La valeur du champ faction est invalide.");
+    }
+  }
+
+  if (patch.control?.controleur !== undefined) {
+    if (!isAllowedOption(referenceData.controller_options, patch.control.controleur ?? null)) {
+      throw new Error("La valeur du champ controleur est invalide.");
     }
   }
 

@@ -3,8 +3,9 @@
 ## Court terme
 
 - finaliser l'administration technique epuree
-- brancher l'editeur cartographique sur les tables separees `localities`, `landmarks`, `forces`
+- brancher l'interface de l'editeur cartographique sur les APIs deja posees pour `map_localities`, `map_landmarks` et `map_forces`
 - enrichir les champs dynamiques de case
+- clarifier a part le futur module d'emplacements de case, sans le melanger aux localites, landmarks ou forces
 
 ## Contraintes structurelles
 

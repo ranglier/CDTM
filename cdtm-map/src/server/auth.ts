@@ -144,9 +144,9 @@ export async function loginStaffUser(
   }
 
   const normalizedUsername = username.trim();
-  const normalizedPassword = password.trim();
+  const rawPassword = password;
 
-  if (!normalizedUsername || !normalizedPassword) {
+  if (!normalizedUsername || rawPassword.length === 0 || rawPassword.trim().length === 0) {
     throw new Error("Identifiant et mot de passe obligatoires.");
   }
 
@@ -164,7 +164,7 @@ export async function loginStaffUser(
 
   const user = result.rows[0];
 
-  if (!user || !user.is_active || !(await verifySecret(normalizedPassword, user.password_hash))) {
+  if (!user || !user.is_active || !(await verifySecret(rawPassword, user.password_hash))) {
     throw new Error("Identifiants invalides.");
   }
 

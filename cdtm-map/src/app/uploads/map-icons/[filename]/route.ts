@@ -12,12 +12,23 @@ export async function GET(
     const params = await context.params;
     const file = await readMapIconUpload(params.filename);
 
+    const headers: Record<string, string> = {
+      "cache-control": "public, max-age=3600",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+    };
+
+    if (file.mimeType === "image/svg+xml") {
+      headers["content-type"] = "image/svg+xml; charset=utf-8";
+      headers["content-security-policy"] =
+        "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox;";
+    } else {
+      headers["content-type"] = file.mimeType;
+    }
+
     return new NextResponse(new Uint8Array(file.buffer), {
       status: 200,
-      headers: {
-        "content-type": file.mimeType,
-        "cache-control": "public, max-age=3600",
-      },
+      headers,
     });
   } catch {
     return new NextResponse("Not found", { status: 404 });

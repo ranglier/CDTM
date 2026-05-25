@@ -18,7 +18,9 @@ Les champs metier persistés par case sont separes en tables dediees :
 - `case_control_current`
 - `case_emplacements_current`
 
-Le champ fonctionnel attendu pour les emplacements est `peuple`.
+`case_emplacements_current` reste une table metier de case. Elle ne sert pas a modeliser les objets cartographiques libres de l'editeur.
+
+Le champ fonctionnel attendu pour cette table est `peuple`.
 `peuple_majoritaire` est un heritage migre puis supprime.
 
 ## Referentiels
@@ -56,6 +58,8 @@ Le statut des objets cartographiques est limite a :
 - `draft`
 - `published`
 - `archived`
+
+L'API d'edition cible ces tables separees directement. `map_points` et `reference_map_point_types` ne font plus partie du modele actif et ne subsistent que comme heritage de migration.
 
 ## Supprime
 
