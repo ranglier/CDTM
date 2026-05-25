@@ -14,10 +14,11 @@ Le projet se concentre sur deux usages :
 L'application contient aujourd'hui :
 
 - une carte publique OpenLayers basee sur un fond statique et `public/data/cases.geojson` ;
+- des filtres cartographiques `Faction`, `Influence` et `Topo` ;
 - un index public des cases capable de fusionner la couche stable avec les surcharges publiques stockees en base ;
 - une authentification staff simple par cookie de session ;
 - une interface admin integree pour consulter et modifier les donnees de case ;
-- une edition de masse pour les champs publics, notes, terrain et controle ;
+- une edition de masse pour les champs publics, terrain et controle ;
 - un espace admin technique pour gerer les referentiels globaux et creer des tables metier dynamiques ;
 - un deploiement Docker Compose vers `osgiliath` via Forgejo CI/CD.
 

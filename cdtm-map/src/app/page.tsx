@@ -25,11 +25,12 @@ import { getBaseLayers } from "@/map/layers";
 import {
   type CaseSelectionIntent,
   createEmptyPublicMapStyles,
+  isStableCaseFeatureCollection,
+  normalizeMapDisplayMode,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
-  isStableCaseFeatureCollection,
 } from "@/map/types";
 
 type LoginPayload = {
@@ -362,7 +363,7 @@ export default function HomePage() {
   const [panelVisible, setPanelVisible] = useState(true);
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
   const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(createEmptyPublicMapStyles());
-  const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>("neutral");
+  const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>("faction");
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [searchValue, setSearchValue] = useState("");
@@ -421,6 +422,9 @@ export default function HomePage() {
     () => (activeCaseId ? adminRecordsById[activeCaseId] ?? null : null),
     [activeCaseId, adminRecordsById],
   );
+  const handleDisplayModeChange = useCallback((mode: unknown) => {
+    setMapDisplayMode(normalizeMapDisplayMode(mode));
+  }, []);
   const isMultiSelection = selectedCaseIds.length > 1;
   const adminDirty =
     adminPanelMode === "edit"
@@ -1063,7 +1067,7 @@ export default function HomePage() {
           focusRequest={focusRequest}
           casesVisible={casesVisible}
           panelVisible={panelVisible}
-          onDisplayModeChange={setMapDisplayMode}
+          onDisplayModeChange={handleDisplayModeChange}
           onCaseSelectionChange={handleCaseSelectionChange}
           onCasesVisibilityChange={handleCasesVisibilityChange}
           onPanelVisibilityChange={setPanelVisible}

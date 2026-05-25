@@ -81,21 +81,26 @@ function resolveBaseStyle(
   properties: StableCaseProperties | null,
   styles: PublicMapStyles,
 ): ResolvedStyle | null {
-  if (!properties || displayMode === "neutral") {
+  if (!properties) {
     return null;
   }
 
-  if (displayMode === "political") {
-    return (
-      getStyleForTarget(styles, "controleur", properties.controleur) ??
-      getStyleForTarget(styles, "faction", properties.faction)
-    );
+  switch (displayMode) {
+    case "faction":
+      return getStyleForTarget(styles, "faction", properties.faction);
+    case "influence":
+      return (
+        getStyleForTarget(styles, "controleur", properties.controleur) ??
+        getStyleForTarget(styles, "faction", properties.faction)
+      );
+    case "topographic":
+      return mergeTopographicStyles(
+        getStyleForTarget(styles, "terrain_type", properties.terrain_type),
+        getStyleForTarget(styles, "relief", properties.relief),
+      );
+    default:
+      return null;
   }
-
-  return mergeTopographicStyles(
-    getStyleForTarget(styles, "terrain_type", properties.terrain_type),
-    getStyleForTarget(styles, "relief", properties.relief),
-  );
 }
 
 function drawDiagonalPattern(
@@ -212,10 +217,10 @@ function createCanvasPattern(
 }
 
 function buildBaseFill(
-  displayMode: MapDisplayMode,
+  _displayMode: MapDisplayMode,
   style: ResolvedStyle | null,
 ): string | CanvasPattern {
-  if (displayMode === "neutral" || !style) {
+  if (!style) {
     return DEFAULT_FILL;
   }
 

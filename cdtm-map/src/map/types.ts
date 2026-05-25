@@ -32,7 +32,23 @@ export const MAP_PATTERN_TYPES = [
 
 export type MapPatternType = (typeof MAP_PATTERN_TYPES)[number];
 
-export type MapDisplayMode = "neutral" | "political" | "topographic";
+export type MapDisplayMode = "faction" | "influence" | "topographic";
+
+export function normalizeMapDisplayMode(value: unknown): MapDisplayMode {
+  if (value === "influence" || value === "political") {
+    return "influence";
+  }
+
+  if (value === "topographic") {
+    return "topographic";
+  }
+
+  if (value === "faction" || value === "neutral") {
+    return "faction";
+  }
+
+  return "faction";
+}
 
 export type MapStyleRecord = {
   target_type: MapStyleTargetType;

@@ -37,19 +37,19 @@ export function MapToolbar({
       <div className="flex items-center gap-1">
         <Button
           type="button"
-          variant={displayMode === "neutral" ? "secondary" : "outline"}
+          variant={displayMode === "faction" ? "secondary" : "outline"}
           size="sm"
-          onClick={() => onDisplayModeChange("neutral")}
+          onClick={() => onDisplayModeChange("faction")}
         >
-          Neutre
+          Faction
         </Button>
         <Button
           type="button"
-          variant={displayMode === "political" ? "secondary" : "outline"}
+          variant={displayMode === "influence" ? "secondary" : "outline"}
           size="sm"
-          onClick={() => onDisplayModeChange("political")}
+          onClick={() => onDisplayModeChange("influence")}
         >
-          Politique
+          Influence
         </Button>
         <Button
           type="button"

@@ -35,6 +35,7 @@ import {
   type StableCaseProperties,
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
+  normalizeMapDisplayMode,
   toStableCaseProperties,
 } from "@/map/types";
 
@@ -80,16 +81,20 @@ addProjection(casesProjection);
 const geoJsonFormat = new GeoJSON();
 
 function buildHoverRows(displayMode: MapDisplayMode, properties: StableCaseProperties | null) {
-  if (!properties || displayMode === "neutral") {
+  if (!properties) {
     return [];
   }
 
-  if (displayMode === "political") {
-    if (properties.controleur) {
-      return [{ label: "Controleur", value: properties.controleur }];
-    }
-
+  if (displayMode === "faction") {
     return properties.faction ? [{ label: "Faction", value: properties.faction }] : [];
+  }
+
+  if (displayMode === "influence") {
+    return properties.controleur
+      ? [{ label: "Controleur", value: properties.controleur }]
+      : properties.faction
+        ? [{ label: "Faction", value: properties.faction }]
+        : [];
   }
 
   return [
@@ -125,7 +130,7 @@ export function CasesMap({
   const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
   const casePropertiesByIdRef = useRef(casePropertiesById);
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
-  const displayModeRef = useRef<MapDisplayMode>(displayMode);
+  const displayModeRef = useRef<MapDisplayMode>(normalizeMapDisplayMode(displayMode));
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
@@ -193,8 +198,17 @@ export function CasesMap({
   }, [publicMapStyles]);
 
   useEffect(() => {
-    displayModeRef.current = displayMode;
+    displayModeRef.current = normalizeMapDisplayMode(displayMode);
     layerRef.current?.changed();
+    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+
+    const frame = requestAnimationFrame(() => {
+      setHoverInfo(null);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [displayMode]);
 
   useEffect(() => {
@@ -251,12 +265,6 @@ export function CasesMap({
       onCaseSelectionChangeRef.current(null, "replace");
     }
   }, [casesVisible]);
-
-  useEffect(() => {
-    if (displayMode === "neutral") {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    }
-  }, [displayMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -371,7 +379,7 @@ export function CasesMap({
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
 
-      if (!casesVisibleRef.current || displayModeRef.current === "neutral") {
+      if (!casesVisibleRef.current) {
         target.style.cursor = "";
         setHoverInfo(null);
         return;
@@ -529,7 +537,7 @@ export function CasesMap({
         className="h-[calc(100svh-2rem)] w-full xl:h-full"
         aria-label="Carte des cases publiques"
       />
-      {hoverInfo && casesVisible && displayMode !== "neutral" ? (
+      {hoverInfo && casesVisible ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{
