@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
@@ -45,7 +46,7 @@ type EditorMapCanvasProps = {
   casePropertiesById: Record<string, StableCaseProperties>;
   publicMapStyles: PublicMapStyles;
   showInfluenceOverlay: boolean;
-  influenceOverlayMessage: string | null;
+  toolbar?: ReactNode;
   selectedLocalityId: string | null;
   focusLocalityId: string | null;
   focusRequest: number;
@@ -133,7 +134,7 @@ export function EditorMapCanvas({
   casePropertiesById,
   publicMapStyles,
   showInfluenceOverlay,
-  influenceOverlayMessage,
+  toolbar,
   selectedLocalityId,
   focusLocalityId,
   focusRequest,
@@ -450,20 +451,7 @@ export function EditorMapCanvas({
         className="h-[calc(100svh-2rem)] w-full xl:h-full"
         aria-label="Carte editeur des localites"
       />
-      <div className="pointer-events-none absolute right-6 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-        {!showInfluenceOverlay
-          ? "Zones d’influence masquees"
-          : stableCaseCollection === null
-            ? "Influence indisponible"
-            : "Influence affichee"}
-      </div>
-      {localities.length === 0 || influenceOverlayMessage ? (
-        <div className="pointer-events-none absolute left-20 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-          {localities.length === 0 ? "Aucune localite a afficher." : null}
-          {localities.length === 0 && influenceOverlayMessage ? " " : null}
-          {influenceOverlayMessage}
-        </div>
-      ) : null}
+      {toolbar ? <div className="absolute right-6 top-6 z-20 max-w-[min(100%-5rem,48rem)]">{toolbar}</div> : null}
       {hoverInfo ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"

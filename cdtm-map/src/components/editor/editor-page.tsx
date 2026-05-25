@@ -6,13 +6,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminSession } from "@/admin/types";
 import type { EditorMapLocality, MapObjectStatus } from "@/editor/types";
 import {
-  countLocalitiesByStatus,
   getEditorOptionLabel,
   getEditorReferenceOptions,
   sortEditorLocalitiesByName,
   type EditorLocalityStatusFilter,
 } from "@/editor/ui";
 import { EditorMapCanvas } from "@/components/editor/editor-map-canvas";
+import { EditorMapToolbar } from "@/components/editor/editor-map-toolbar";
 import { useEditorData } from "@/components/editor/use-editor-data";
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionPanel } from "@/components/layout/section-panel";
@@ -104,14 +104,10 @@ export function EditorPage() {
     stableCaseCollection,
     casePropertiesById,
     publicMapStyles,
-    influenceOverlayMessage,
-    influenceOverlayStats,
     loading,
     error: dataError,
     reload,
   } = useEditorData(session?.is_tech_admin ?? false);
-
-  const statusCounts = useMemo(() => countLocalitiesByStatus(localities), [localities]);
 
   const filteredLocalities = useMemo(() => {
     const byStatus =
@@ -249,7 +245,14 @@ export function EditorPage() {
               casePropertiesById={casePropertiesById}
               publicMapStyles={publicMapStyles}
               showInfluenceOverlay={showInfluenceOverlay}
-              influenceOverlayMessage={showInfluenceOverlay ? influenceOverlayMessage : null}
+              toolbar={
+                <EditorMapToolbar
+                  showInfluenceOverlay={showInfluenceOverlay}
+                  statusFilter={statusFilter}
+                  onToggleInfluence={() => setShowInfluenceOverlay((current) => !current)}
+                  onStatusFilterChange={setStatusFilter}
+                />
+              }
               selectedLocalityId={effectiveSelectedLocalityId}
               focusLocalityId={focusLocalityId}
               focusRequest={focusRequest}
@@ -270,70 +273,6 @@ export function EditorPage() {
               Rafraichir
             </Button>
           </div>
-
-          <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Affichage carte</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Affiche ou masque les zones d&apos;influence en arriere-plan.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant={showInfluenceOverlay ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowInfluenceOverlay((current) => !current)}
-              >
-                {showInfluenceOverlay ? "Influence active" : "Afficher influence"}
-              </Button>
-            </div>
-
-            <p className="mt-3 text-sm text-muted-foreground">
-              Overlay influence : {showInfluenceOverlay ? "actif" : "inactif"}.
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Affiche les cases colorees selon les controleurs, avec fallback sur les factions.
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Cases chargees : {influenceOverlayStats.caseCount}. Styles influence :{" "}
-              {influenceOverlayStats.factionStyleCount} factions,{" "}
-              {influenceOverlayStats.controllerStyleCount} controleurs.
-            </p>
-            {showInfluenceOverlay ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {influenceOverlayMessage ?? "Les zones d’influence sont visibles sous les localites."}
-              </p>
-            ) : null}
-          </section>
-
-          <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
-            <h2 className="text-lg font-semibold text-foreground">Filtre des localites</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Filtre uniquement les marqueurs de localites. Les zones d&apos;influence ne sont pas affectees.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(
-                [
-                  { value: "all", label: "Tous" },
-                  { value: "draft", label: "Brouillons" },
-                  { value: "published", label: "Publies" },
-                  { value: "archived", label: "Archives" },
-                ] as const
-              ).map((option) => (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant={statusFilter === option.value ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter(option.value)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          </section>
 
           {selectedLocality ? (
             <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
@@ -410,32 +349,7 @@ export function EditorPage() {
                 </div>
               </div>
             </section>
-          ) : (
-            <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
-              <h2 className="text-lg font-semibold text-foreground">Vue d&apos;ensemble</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[16px] border border-border/60 bg-background/35 p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Total</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">{localities.length}</p>
-                </div>
-                <div className="rounded-[16px] border border-border/60 bg-background/35 p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Brouillons</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">{statusCounts.draft}</p>
-                </div>
-                <div className="rounded-[16px] border border-border/60 bg-background/35 p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Publies</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">{statusCounts.published}</p>
-                </div>
-                <div className="rounded-[16px] border border-border/60 bg-background/35 p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Archives</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">{statusCounts.archived}</p>
-                </div>
-              </div>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Clique une localite sur la carte pour inspecter ses informations.
-              </p>
-            </section>
-          )}
+          ) : null}
 
           <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
             <div className="flex flex-col gap-3">
