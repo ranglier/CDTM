@@ -30,8 +30,10 @@ Au demarrage, l'application :
 
 1. recupere le pool PostgreSQL
 2. execute `runDatabaseMigrations(pool)`
-3. lance les synchronisations runtime
-4. applique les seeds de referentiels
+3. applique les seeds runtime de referentiels
+4. synchronise `case_registry` depuis le GeoJSON canonique
+5. synchronise les lignes des tables dynamiques
+6. applique le bootstrap admin si les variables d'environnement sont presentes
 
 ## Regles
 

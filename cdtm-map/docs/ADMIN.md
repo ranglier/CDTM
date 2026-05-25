@@ -77,6 +77,8 @@ Les SVG sont servis via une route applicative avec des headers defensifs :
 - `Referrer-Policy: no-referrer`
 - `Content-Security-Policy` restrictive
 
+La CSP actuellement servie reste compatible avec l'affichage des SVG importes dans l'admin. Si un SVG valide ne s'affiche pas, verifier en priorite la console navigateur et la CSP de la reponse `/uploads/map-icons/...`.
+
 Les fichiers suivants sont refuses a l'upload :
 - scripts
 - evenements inline

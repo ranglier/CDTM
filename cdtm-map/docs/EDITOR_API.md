@@ -69,6 +69,9 @@ Contraintes :
 - `PATCH {}` est invalide ;
 - seuls les champs fournis sont modifies ;
 - une chaine vide sur un champ nullable devient `null`.
+- `x` et `y`, s'ils sont fournis, doivent etre des nombres finis ;
+- `null`, `""` et les chaines blanches sont refuses pour `x` / `y` ;
+- `status`, s'il est fourni, doit etre strictement `draft`, `published` ou `archived`.
 
 Exemples :
 
@@ -155,3 +158,4 @@ Les SVG sont servis via une route applicative avec headers defensifs :
 - `Content-Security-Policy` restrictive
 
 Les SVG contenant scripts, evenements inline, liens externes, `foreignObject`, `DOCTYPE` ou `ENTITY` sont refuses.
+Si un SVG valide ne s'affiche pas, verifier la CSP retournee par la route de fichier dans la console navigateur.

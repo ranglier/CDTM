@@ -117,18 +117,22 @@ function isMapObjectStatus(value: unknown): value is MapObjectStatus {
   return MAP_OBJECT_STATUSES.includes(value as MapObjectStatus);
 }
 
-function normalizeStatus(value: unknown): MapObjectStatus {
+function normalizeRequiredStatus(value: unknown): MapObjectStatus {
   const normalized = normalizeText(value);
 
-  if (!normalized) {
-    return "draft";
-  }
-
-  if (!isMapObjectStatus(normalized)) {
+  if (!normalized || !isMapObjectStatus(normalized)) {
     throw new EditorValidationError("Statut invalide.");
   }
 
   return normalized;
+}
+
+function normalizeStatusForCreate(value: unknown): MapObjectStatus {
+  if (value === undefined) {
+    return "draft";
+  }
+
+  return normalizeRequiredStatus(value);
 }
 
 function assertSimpleIdentifier(value: string, fieldName: string): string {
@@ -140,6 +144,14 @@ function assertSimpleIdentifier(value: string, fieldName: string): string {
 }
 
 function normalizeFiniteNumber(value: unknown, fieldName: string): number {
+  if (value === null || value === undefined) {
+    throw new EditorValidationError(`Le champ ${fieldName} est invalide.`);
+  }
+
+  if (typeof value === "string" && value.trim().length === 0) {
+    throw new EditorValidationError(`Le champ ${fieldName} est invalide.`);
+  }
+
   const nextValue = typeof value === "number" ? value : Number(value);
 
   if (!Number.isFinite(nextValue)) {
@@ -371,7 +383,7 @@ function normalizeEditorObjectInput(
     id_case_detected: normalizeNullableText(input.id_case_detected),
     faction: normalizeNullableText(input.faction),
     controleur: normalizeNullableText(input.controleur),
-    status: normalizeStatus(input.status),
+    status: normalizeStatusForCreate(input.status),
     description: normalizeNullableText(input.description),
     depends_on_locality_id: config.dependsOnColumn
       ? normalizeNullableText((input as EditorMapLocalityInput).depends_on_locality_id)
@@ -420,7 +432,7 @@ function normalizeEditorObjectPatch(
         patch.controleur = normalizeNullableText(value);
         break;
       case "status":
-        patch.status = normalizeStatus(value);
+        patch.status = normalizeRequiredStatus(value);
         break;
       case "description":
         patch.description = normalizeNullableText(value);
