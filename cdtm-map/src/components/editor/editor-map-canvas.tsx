@@ -48,6 +48,14 @@ type HoverInfo = {
   rows: Array<{ label: string; value: string }>;
 };
 
+export type EditorCaseLayerDebugState = {
+  debugEnabled: boolean;
+  sourceFeatureCount: number;
+  propCasesVisible: boolean;
+  layerVisible: boolean | null;
+  layerOpacity: number | null;
+};
+
 type EditorMapCanvasProps = {
   dataUrl: string;
   localities: EditorMapLocality[];
@@ -61,6 +69,7 @@ type EditorMapCanvasProps = {
   onSelectLocality: (id: string | null) => void;
   onCaseFeaturesLoad?: (count: number) => void;
   onCaseLayerError?: (message: string | null) => void;
+  onCaseLayerDebugChange?: (state: EditorCaseLayerDebugState) => void;
 };
 
 const editorProjection = new Projection({
@@ -71,7 +80,12 @@ const editorProjection = new Projection({
 
 addProjection(editorProjection);
 
-const DEBUG_FORCE_CASE_STYLE = true;
+const DEBUG_FORCE_EDITOR_CASE_STYLE = true;
+const debugEditorCaseStyle = new Style({
+  fill: new Fill({ color: "rgba(0, 180, 255, 0.22)" }),
+  stroke: new Stroke({ color: "rgba(0, 180, 255, 0.98)", width: 2.5 }),
+  zIndex: 50,
+});
 
 function getLocalityStyle(locality: EditorMapLocality | null, selected: boolean): Style {
   const palette =
@@ -127,6 +141,7 @@ export function EditorMapCanvas({
   onSelectLocality,
   onCaseFeaturesLoad,
   onCaseLayerError,
+  onCaseLayerDebugChange,
 }: EditorMapCanvasProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -139,6 +154,19 @@ export function EditorMapCanvas({
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
   const casesVisibleRef = useRef(casesVisible);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+
+  const emitCaseLayerDebugState = useCallback(() => {
+    const source = casesSourceRef.current;
+    const layer = casesLayerRef.current;
+
+    onCaseLayerDebugChange?.({
+      debugEnabled: DEBUG_FORCE_EDITOR_CASE_STYLE,
+      sourceFeatureCount: source?.getFeatures().length ?? 0,
+      propCasesVisible: casesVisibleRef.current,
+      layerVisible: layer?.getVisible() ?? null,
+      layerOpacity: layer?.getOpacity() ?? null,
+    });
+  }, [onCaseLayerDebugChange]);
 
   const view = useMemo(
     () =>
@@ -202,12 +230,14 @@ export function EditorMapCanvas({
   useEffect(() => {
     publicMapStylesRef.current = publicMapStyles;
     casesLayerRef.current?.changed();
-  }, [publicMapStyles]);
+    emitCaseLayerDebugState();
+  }, [emitCaseLayerDebugState, publicMapStyles]);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
-  }, [casesVisible]);
+    emitCaseLayerDebugState();
+  }, [casesVisible, emitCaseLayerDebugState]);
 
   useEffect(() => {
     if (!focusLocalityId) {
@@ -244,13 +274,8 @@ export function EditorMapCanvas({
       },
     );
 
-    if (DEBUG_FORCE_CASE_STYLE) {
-      casesLayer.setStyle(
-        new Style({
-          fill: new Fill({ color: "rgba(0, 180, 255, 0.18)" }),
-          stroke: new Stroke({ color: "rgba(0, 180, 255, 0.95)", width: 2 }),
-        }),
-      );
+    if (DEBUG_FORCE_EDITOR_CASE_STYLE) {
+      casesLayer.setStyle(debugEditorCaseStyle);
     }
 
     const localitiesSource = new VectorSource();
@@ -346,6 +371,7 @@ export function EditorMapCanvas({
     casesLayerRef.current = casesLayer;
     syncCaseLayerVisibility(casesLayer, casesVisibleRef.current);
     mapRef.current = map;
+    emitCaseLayerDebugState();
 
     const resizeObserver = new ResizeObserver(() => {
       map.updateSize();
@@ -363,7 +389,7 @@ export function EditorMapCanvas({
       casesLayerRef.current = null;
       mapRef.current = null;
     };
-  }, [onSelectLocality, view]);
+  }, [emitCaseLayerDebugState, onSelectLocality, view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,6 +417,7 @@ export function EditorMapCanvas({
 
         onCaseFeaturesLoad?.(features.length);
         onCaseLayerError?.(null);
+        emitCaseLayerDebugState();
       } catch (error) {
         if (cancelled) {
           return;
@@ -401,6 +428,7 @@ export function EditorMapCanvas({
         onCaseLayerError?.(
           error instanceof Error ? error.message : "Impossible de charger la couche des cases.",
         );
+        emitCaseLayerDebugState();
         console.error("Impossible de charger la couche des cases de l'editeur.", error);
       }
     }
@@ -410,7 +438,7 @@ export function EditorMapCanvas({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, onCaseFeaturesLoad, onCaseLayerError]);
+  }, [dataUrl, emitCaseLayerDebugState, onCaseFeaturesLoad, onCaseLayerError]);
 
   useEffect(() => {
     const source = localitiesSourceRef.current;

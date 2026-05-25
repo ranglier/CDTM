@@ -12,7 +12,7 @@ import {
   type EditorLocalityStatusFilter,
 } from "@/editor/ui";
 import { CASES_DATA_URL } from "@/map/types";
-import { EditorMapCanvas } from "@/components/editor/editor-map-canvas";
+import { EditorMapCanvas, type EditorCaseLayerDebugState } from "@/components/editor/editor-map-canvas";
 import { EditorMapToolbar } from "@/components/editor/editor-map-toolbar";
 import { useEditorData } from "@/components/editor/use-editor-data";
 import { AppShell } from "@/components/layout/app-shell";
@@ -66,6 +66,7 @@ export function EditorPage() {
   const [casesVisible, setCasesVisible] = useState(true);
   const [caseFeatureCount, setCaseFeatureCount] = useState(0);
   const [caseLayerError, setCaseLayerError] = useState<string | null>(null);
+  const [caseLayerDebug, setCaseLayerDebug] = useState<EditorCaseLayerDebugState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +263,7 @@ export function EditorPage() {
               focusRequest={focusRequest}
               onCaseFeaturesLoad={setCaseFeatureCount}
               onCaseLayerError={setCaseLayerError}
+              onCaseLayerDebugChange={setCaseLayerDebug}
               onSelectLocality={(localityId) => handleSelectLocality(localityId, false)}
             />
           )}
@@ -292,6 +294,14 @@ export function EditorPage() {
               ) : null}
               {caseLayerError ? (
                 <p className="mt-2 text-xs text-destructive">{caseLayerError}</p>
+              ) : null}
+              {caseLayerDebug?.debugEnabled ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  DEBUG cases style actif: source={caseLayerDebug.sourceFeatureCount}, propVisible=
+                  {String(caseLayerDebug.propCasesVisible)}, layerVisible=
+                  {String(caseLayerDebug.layerVisible)}, opacity=
+                  {caseLayerDebug.layerOpacity ?? "n/a"}
+                </p>
               ) : null}
             </div>
             <Button type="button" variant="outline" onClick={reload} disabled={loading}>
