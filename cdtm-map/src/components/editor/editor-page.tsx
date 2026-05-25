@@ -64,6 +64,8 @@ export function EditorPage() {
   const [focusLocalityId, setFocusLocalityId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
   const [showInfluenceOverlay, setShowInfluenceOverlay] = useState(true);
+  const [caseFeatureCount, setCaseFeatureCount] = useState(0);
+  const [caseLayerError, setCaseLayerError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +106,8 @@ export function EditorPage() {
     localities,
     casePropertiesById,
     publicMapStyles,
+    influenceOverlayMessage,
+    influenceOverlayStats,
     loading,
     error: dataError,
     reload,
@@ -256,6 +260,8 @@ export function EditorPage() {
               selectedLocalityId={effectiveSelectedLocalityId}
               focusLocalityId={focusLocalityId}
               focusRequest={focusRequest}
+              onCaseFeaturesLoad={setCaseFeatureCount}
+              onCaseLayerError={setCaseLayerError}
               onSelectLocality={(localityId) => handleSelectLocality(localityId, false)}
             />
           )}
@@ -268,6 +274,25 @@ export function EditorPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Lecture seule des localites existantes.
               </p>
+              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {caseLayerError
+                  ? "Influence indisponible"
+                  : showInfluenceOverlay
+                    ? `Influence affichee · ${caseFeatureCount} case(s)`
+                    : "Influence masquee"}
+              </p>
+              {influenceOverlayMessage ? (
+                <p className="mt-2 text-xs text-muted-foreground">{influenceOverlayMessage}</p>
+              ) : null}
+              {!caseLayerError ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Styles influence : {influenceOverlayStats.controllerStyleCount} controleur(s),{" "}
+                  {influenceOverlayStats.factionStyleCount} faction(s).
+                </p>
+              ) : null}
+              {caseLayerError ? (
+                <p className="mt-2 text-xs text-destructive">{caseLayerError}</p>
+              ) : null}
             </div>
             <Button type="button" variant="outline" onClick={reload} disabled={loading}>
               Rafraichir

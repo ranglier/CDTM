@@ -70,6 +70,13 @@ La difference reste uniquement au niveau du contexte :
 
 L'editeur charge lui-meme `cases.geojson`, comme la page Carte, au lieu de recevoir une collection de features depuis son parent. Cela evite les desynchronisations entre chargement des donnees et visibilite de la couche.
 
+Dans l'editeur :
+- `EditorMapCanvas` possede sa source et sa layer OpenLayers des cases
+- `casesVisible` est l'unique source de verite pour masquer ou reafficher la couche
+- les proprietes publiques et les styles viennent de `/api/cases/public-index`
+- les localites restent une couche distincte au-dessus des cases
+- le mode cases est force a `influence`
+
 L'editeur n'ajoute donc plus qu'une couche localites au-dessus de la couche cases partagee.
 
 Ce lot ne fait aucune ecriture en base.
