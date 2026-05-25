@@ -62,6 +62,7 @@ export function EditorPage() {
   const [listFilter, setListFilter] = useState("");
   const [focusLocalityId, setFocusLocalityId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [showInfluenceOverlay, setShowInfluenceOverlay] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,9 +98,17 @@ export function EditorPage() {
     }
   }, []);
 
-  const { referenceData, localities, loading, error: dataError, reload } = useEditorData(
-    session?.is_tech_admin ?? false,
-  );
+  const {
+    referenceData,
+    localities,
+    stableCaseCollection,
+    casePropertiesById,
+    publicMapStyles,
+    influenceOverlayMessage,
+    loading,
+    error: dataError,
+    reload,
+  } = useEditorData(session?.is_tech_admin ?? false);
 
   const statusCounts = useMemo(() => countLocalitiesByStatus(localities), [localities]);
 
@@ -235,6 +244,10 @@ export function EditorPage() {
           ) : (
             <EditorMapCanvas
               localities={filteredLocalities}
+              stableCaseCollection={stableCaseCollection}
+              casePropertiesById={casePropertiesById}
+              publicMapStyles={publicMapStyles}
+              showInfluenceOverlay={showInfluenceOverlay}
               selectedLocalityId={effectiveSelectedLocalityId}
               focusLocalityId={focusLocalityId}
               focusRequest={focusRequest}
@@ -257,6 +270,14 @@ export function EditorPage() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={showInfluenceOverlay ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowInfluenceOverlay((current) => !current)}
+            >
+              Influence
+            </Button>
             {(
               [
                 { value: "all", label: "Tous" },
@@ -276,6 +297,13 @@ export function EditorPage() {
               </Button>
             ))}
           </div>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            Influence : controleur prioritaire, sinon faction. Affiche les cases colorees sous les localites.
+          </p>
+          {showInfluenceOverlay && influenceOverlayMessage ? (
+            <p className="mt-2 text-sm text-muted-foreground">{influenceOverlayMessage}</p>
+          ) : null}
 
           {selectedLocality ? (
             <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">

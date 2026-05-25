@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
+import GeoJSON from "ol/format/GeoJSON";
+import type Geometry from "ol/geom/Geometry";
 import Point from "ol/geom/Point";
 import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
@@ -17,14 +19,18 @@ import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 import { Circle as CircleStyle, Fill, Stroke, Style } from "ol/style";
 
+import type { PublicMapStyles, StableCaseFeatureCollection, StableCaseProperties } from "@/map/types";
 import type { EditorMapLocality } from "@/editor/types";
 import {
   CASES_EXTENT,
+  MAP_FIT_PADDING,
   MAP_BACKGROUND_PATH,
   MAP_EXTENT,
   MAP_MAX_ZOOM,
   MAP_PROJECTION_CODE,
 } from "@/map/config";
+import { getCaseStyle } from "@/map/styles";
+import { createEmptyPublicMapStyles, toStableCaseProperties } from "@/map/types";
 
 type HoverInfo = {
   x: number;
@@ -35,6 +41,10 @@ type HoverInfo = {
 
 type EditorMapCanvasProps = {
   localities: EditorMapLocality[];
+  stableCaseCollection: StableCaseFeatureCollection | null;
+  casePropertiesById: Record<string, StableCaseProperties>;
+  publicMapStyles: PublicMapStyles;
+  showInfluenceOverlay: boolean;
   selectedLocalityId: string | null;
   focusLocalityId: string | null;
   focusRequest: number;
@@ -48,6 +58,9 @@ const editorProjection = new Projection({
 });
 
 addProjection(editorProjection);
+
+const geoJsonFormat = new GeoJSON();
+const EDITOR_INFLUENCE_LAYER_OPACITY = 0.55;
 
 function getLocalityStyle(locality: EditorMapLocality | null, selected: boolean): Style {
   const palette =
@@ -92,6 +105,10 @@ function buildHoverRows(locality: EditorMapLocality | null) {
 
 export function EditorMapCanvas({
   localities,
+  stableCaseCollection,
+  casePropertiesById,
+  publicMapStyles,
+  showInfluenceOverlay,
   selectedLocalityId,
   focusLocalityId,
   focusRequest,
@@ -99,9 +116,13 @@ export function EditorMapCanvas({
 }: EditorMapCanvasProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
-  const sourceRef = useRef<VectorSource | null>(null);
+  const localitiesSourceRef = useRef<VectorSource | null>(null);
+  const casesSourceRef = useRef<VectorSource | null>(null);
+  const casesLayerRef = useRef<VectorLayer | null>(null);
   const selectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
   const previousSelectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
+  const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(casePropertiesById);
+  const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(
@@ -117,7 +138,7 @@ export function EditorMapCanvas({
   );
 
   const focusLocality = useCallback((localityId: string, duration = 250) => {
-    const source = sourceRef.current;
+    const source = localitiesSourceRef.current;
     const map = mapRef.current;
 
     if (!source || !map) {
@@ -143,7 +164,7 @@ export function EditorMapCanvas({
     selectedLocalityIdRef.current = selectedLocalityId;
     previousSelectedLocalityIdRef.current = selectedLocalityId;
 
-    const source = sourceRef.current;
+    const source = localitiesSourceRef.current;
 
     if (!source) {
       return;
@@ -157,6 +178,22 @@ export function EditorMapCanvas({
       source.getFeatureById(selectedLocalityId)?.changed();
     }
   }, [selectedLocalityId]);
+
+  useEffect(() => {
+    casePropertiesByIdRef.current = casePropertiesById;
+    casesLayerRef.current?.changed();
+  }, [casePropertiesById]);
+
+  useEffect(() => {
+    publicMapStylesRef.current = publicMapStyles;
+    casesLayerRef.current?.changed();
+  }, [publicMapStyles]);
+
+  useEffect(() => {
+    const visible = showInfluenceOverlay && stableCaseCollection !== null;
+    casesLayerRef.current?.setVisible(visible);
+    casesLayerRef.current?.changed();
+  }, [showInfluenceOverlay, stableCaseCollection]);
 
   useEffect(() => {
     if (!focusLocalityId) {
@@ -179,9 +216,30 @@ export function EditorMapCanvas({
       }),
     });
 
-    const source = new VectorSource();
-    const layer = new VectorLayer({
-      source,
+    const casesSource = new VectorSource();
+    const casesLayer = new VectorLayer({
+      source: casesSource,
+      opacity: EDITOR_INFLUENCE_LAYER_OPACITY,
+      visible: false,
+      style: (feature) => {
+        const idCase = feature.get("id_case");
+        const caseProperties =
+          (typeof idCase === "string" ? casePropertiesByIdRef.current[idCase] : null) ??
+          toStableCaseProperties(feature.getProperties() as Record<string, unknown>) ??
+          null;
+
+        return getCaseStyle({
+          selectionState: "default",
+          displayMode: "influence",
+          properties: caseProperties,
+          styles: publicMapStylesRef.current ?? createEmptyPublicMapStyles(),
+        });
+      },
+    });
+
+    const localitiesSource = new VectorSource();
+    const localitiesLayer = new VectorLayer({
+      source: localitiesSource,
       style: (feature) => {
         const locality = feature.get("locality") as EditorMapLocality | undefined;
         const localityId = feature.getId();
@@ -194,7 +252,7 @@ export function EditorMapCanvas({
 
     const map = new Map({
       target: mapElementRef.current,
-      layers: [backgroundLayer, layer],
+      layers: [backgroundLayer, casesLayer, localitiesLayer],
       controls: defaultControls({
         attribution: false,
         rotate: false,
@@ -204,7 +262,7 @@ export function EditorMapCanvas({
 
     map.getView().fit(CASES_EXTENT, {
       duration: 0,
-      padding: [24, 24, 24, 24],
+      padding: MAP_FIT_PADDING,
       maxZoom: MAP_MAX_ZOOM,
     });
 
@@ -214,7 +272,7 @@ export function EditorMapCanvas({
         event.pixel,
         (candidate) => (candidate instanceof Feature ? candidate : null),
         {
-          layerFilter: (candidateLayer) => candidateLayer === layer,
+          layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
         },
       ) as Feature<Point> | null;
 
@@ -234,7 +292,7 @@ export function EditorMapCanvas({
         event.pixel,
         (candidate) => (candidate instanceof Feature ? candidate : null),
         {
-          layerFilter: (candidateLayer) => candidateLayer === layer,
+          layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
         },
       ) as Feature<Point> | null;
 
@@ -267,7 +325,9 @@ export function EditorMapCanvas({
       });
     });
 
-    sourceRef.current = source;
+    casesSourceRef.current = casesSource;
+    localitiesSourceRef.current = localitiesSource;
+    casesLayerRef.current = casesLayer;
     mapRef.current = map;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -281,13 +341,15 @@ export function EditorMapCanvas({
       unByKey(pointerMoveKey);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
-      sourceRef.current = null;
+      casesSourceRef.current = null;
+      localitiesSourceRef.current = null;
+      casesLayerRef.current = null;
       mapRef.current = null;
     };
   }, [onSelectLocality, view]);
 
   useEffect(() => {
-    const source = sourceRef.current;
+    const source = localitiesSourceRef.current;
 
     if (!source) {
       return;
@@ -307,6 +369,35 @@ export function EditorMapCanvas({
     source.clear(true);
     source.addFeatures(features);
   }, [localities]);
+
+  useEffect(() => {
+    const source = casesSourceRef.current;
+
+    if (!source) {
+      return;
+    }
+
+    if (!stableCaseCollection) {
+      source.clear(true);
+      return;
+    }
+
+    const features = geoJsonFormat.readFeatures(stableCaseCollection as object, {
+      dataProjection: editorProjection,
+      featureProjection: editorProjection,
+    });
+
+    for (const feature of features) {
+      const idCase = feature.get("id_case");
+
+      if (typeof idCase === "string" && idCase.length > 0) {
+        feature.setId(idCase);
+      }
+    }
+
+    source.clear(true);
+    source.addFeatures(features as Feature<Geometry>[]);
+  }, [stableCaseCollection]);
 
   return (
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">

@@ -48,8 +48,11 @@ Le premier lot UI repose deja sur une carte OpenLayers en lecture seule :
 - affichage des localites existantes
 - selection et inspection
 - filtre local par statut
+- overlay optionnel `Influence` pour afficher les cases selon la meme logique que la carte publique
+- couche Influence rendue sous les objets editeur
 
 Ce lot ne fait aucune ecriture en base.
+Il ne modifie pas non plus les cases ni leurs styles publics.
 
 Les prochains lots prevus sont :
 1. creation de localite par clic
