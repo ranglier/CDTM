@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireTechAdminUser } from "@/server/auth";
-import { EditorEntityNotFoundError } from "@/server/editor-repository";
+import {
+  EditorConflictError,
+  EditorEntityNotFoundError,
+  EditorValidationError,
+} from "@/server/editor-errors";
 
 export async function ensureTechAdmin(request: NextRequest) {
   try {
@@ -19,20 +23,20 @@ export async function ensureTechAdmin(request: NextRequest) {
 }
 
 export function editorErrorResponse(error: unknown, fallbackMessage: string): NextResponse {
-  const message = error instanceof Error ? error.message : fallbackMessage;
-
-  if (error instanceof EditorEntityNotFoundError || message.includes("introuvable")) {
-    return NextResponse.json({ error: message }, { status: 404 });
+  if (error instanceof EditorValidationError) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  if (
-    message.includes("obligatoire") ||
-    message.includes("invalide") ||
-    message.includes("impossible") ||
-    message.includes("depend") ||
-    message.includes("Statut")
-  ) {
-    return NextResponse.json({ error: message }, { status: 400 });
+  if (error instanceof EditorEntityNotFoundError) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
+  if (error instanceof EditorConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
+  }
+
+  if (error instanceof SyntaxError) {
+    return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
   }
 
   return NextResponse.json({ error: fallbackMessage }, { status: 500 });

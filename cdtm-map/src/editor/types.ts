@@ -98,6 +98,18 @@ export type EditorMapForceInput = {
   description?: string | null;
 };
 
+export type EditorMapLocalityPatch = Partial<
+  Omit<EditorMapLocalityInput, "id_locality">
+>;
+
+export type EditorMapLandmarkPatch = Partial<
+  Omit<EditorMapLandmarkInput, "id_landmark">
+>;
+
+export type EditorMapForcePatch = Partial<
+  Omit<EditorMapForceInput, "id_force">
+>;
+
 export type EditorListOptions = {
   status?: string | null;
   type_key?: string | null;

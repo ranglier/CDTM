@@ -71,6 +71,20 @@ Les formats acceptes sont :
 
 Le SVG reste autorise car il est central pour beaucoup d'icones, mais il est valide defensivement cote serveur avant sauvegarde. Les uploads d'icones restent reserves aux utilisateurs autorises.
 
+Les SVG sont servis via une route applicative avec des headers defensifs :
+- `Content-Type: image/svg+xml; charset=utf-8`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: no-referrer`
+- `Content-Security-Policy` restrictive
+
+Les fichiers suivants sont refuses a l'upload :
+- scripts
+- evenements inline
+- liens externes
+- `foreignObject`
+- `DOCTYPE`
+- `ENTITY`
+
 ## Peuples
 
 Le modele canonique repose sur :

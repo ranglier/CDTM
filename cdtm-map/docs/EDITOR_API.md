@@ -38,6 +38,8 @@ Filtres supportes :
 
 ### `POST /api/admin/editor/localities`
 
+`POST` attend un objet complet minimal.
+
 Payload :
 
 ```json
@@ -60,6 +62,50 @@ Payload :
 ### `PATCH /api/admin/editor/localities/[id]`
 ### `DELETE /api/admin/editor/localities/[id]`
 
+`PATCH` accepte un objet partiel.
+
+Contraintes :
+- l'identifiant ne peut pas etre modifie ;
+- `PATCH {}` est invalide ;
+- seuls les champs fournis sont modifies ;
+- une chaine vide sur un champ nullable devient `null`.
+
+Exemples :
+
+Deplacement :
+
+```json
+{
+  "x": 1234.5,
+  "y": 6789.5,
+  "id_case_detected": "case_0012"
+}
+```
+
+Publication :
+
+```json
+{
+  "status": "published"
+}
+```
+
+Changement de description :
+
+```json
+{
+  "description": "Capitale fortifiee"
+}
+```
+
+Retrait d'icone :
+
+```json
+{
+  "icon_key": ""
+}
+```
+
 ## Landmarks
 
 ### `GET /api/admin/editor/landmarks`
@@ -70,6 +116,8 @@ Payload :
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
 
+`PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
+
 ## Forces
 
 ### `GET /api/admin/editor/forces`
@@ -79,6 +127,8 @@ Les champs suivent le modele des localites sans `depends_on_locality_id`.
 ### `DELETE /api/admin/editor/forces/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
+
+`PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
 
 ## Statuts
 
@@ -97,3 +147,11 @@ Les icones de carte acceptent :
 - `image/svg+xml`
 
 Le SVG reste autorise, mais il est valide defensivement cote serveur avant sauvegarde.
+
+Les SVG sont servis via une route applicative avec headers defensifs :
+- `Content-Type: image/svg+xml; charset=utf-8`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: no-referrer`
+- `Content-Security-Policy` restrictive
+
+Les SVG contenant scripts, evenements inline, liens externes, `foreignObject`, `DOCTYPE` ou `ENTITY` sont refuses.

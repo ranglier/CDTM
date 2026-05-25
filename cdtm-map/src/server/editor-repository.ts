@@ -5,10 +5,13 @@ import type { PoolClient } from "pg";
 import type {
   EditorListOptions,
   EditorMapForce,
+  EditorMapForcePatch,
   EditorMapForceInput,
   EditorMapLandmark,
+  EditorMapLandmarkPatch,
   EditorMapLandmarkInput,
   EditorMapLocality,
+  EditorMapLocalityPatch,
   EditorMapLocalityInput,
   EditorReferenceData,
   EditorReferenceOption,
@@ -16,6 +19,11 @@ import type {
 } from "@/editor/types";
 import { MAP_OBJECT_STATUSES } from "@/editor/types";
 import { ensureDatabaseReady, getPool } from "@/server/db";
+import {
+  EditorConflictError,
+  EditorEntityNotFoundError,
+  EditorValidationError,
+} from "@/server/editor-errors";
 
 type EditorLocalityRow = {
   id_locality: string;
@@ -75,10 +83,6 @@ type EditorEntityConfig = {
   dependsOnColumn?: "depends_on_locality_id";
 };
 
-type EditorLocalityPatch = Omit<EditorMapLocalityInput, "id_locality">;
-type EditorLandmarkPatch = Omit<EditorMapLandmarkInput, "id_landmark">;
-type EditorForcePatch = Omit<EditorMapForceInput, "id_force">;
-
 type NormalizedEditorObjectInput = {
   id: string;
   name: string;
@@ -93,8 +97,8 @@ type NormalizedEditorObjectInput = {
   description: string | null;
   depends_on_locality_id: string | null;
 };
-
-export class EditorEntityNotFoundError extends Error {}
+type EditorEntityPatch = EditorMapLocalityPatch | EditorMapLandmarkPatch | EditorMapForcePatch;
+type NormalizedEditorObjectPatch = Partial<Omit<NormalizedEditorObjectInput, "id">>;
 
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -121,7 +125,7 @@ function normalizeStatus(value: unknown): MapObjectStatus {
   }
 
   if (!isMapObjectStatus(normalized)) {
-    throw new Error("Statut invalide.");
+    throw new EditorValidationError("Statut invalide.");
   }
 
   return normalized;
@@ -129,7 +133,7 @@ function normalizeStatus(value: unknown): MapObjectStatus {
 
 function assertSimpleIdentifier(value: string, fieldName: string): string {
   if (!/^[a-z][a-z0-9_]*$/.test(value)) {
-    throw new Error(`Le champ ${fieldName} est invalide.`);
+    throw new EditorValidationError(`Le champ ${fieldName} est invalide.`);
   }
 
   return value;
@@ -139,7 +143,7 @@ function normalizeFiniteNumber(value: unknown, fieldName: string): number {
   const nextValue = typeof value === "number" ? value : Number(value);
 
   if (!Number.isFinite(nextValue)) {
-    throw new Error(`Le champ ${fieldName} est invalide.`);
+    throw new EditorValidationError(`Le champ ${fieldName} est invalide.`);
   }
 
   return nextValue;
@@ -240,7 +244,7 @@ async function assertValueExists(
   );
 
   if (!result.rows[0]?.exists) {
-    throw new Error(errorMessage);
+    throw new EditorValidationError(errorMessage);
   }
 }
 
@@ -287,7 +291,7 @@ async function validateEditorObjectReferences(
 
   if (config.dependsOnColumn) {
     if (input.depends_on_locality_id && input.depends_on_locality_id === input.id) {
-      throw new Error("Une localite ne peut pas dependre d'elle-meme.");
+      throw new EditorValidationError("Une localite ne peut pas dependre d'elle-meme.");
     }
 
     await assertValueExists(
@@ -300,27 +304,53 @@ async function validateEditorObjectReferences(
   }
 }
 
+function assertPlainObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new EditorValidationError("Payload invalide.");
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function getAllowedPatchFields(config: EditorEntityConfig): Set<string> {
+  return new Set([
+    "name",
+    "type_key",
+    "icon_key",
+    "x",
+    "y",
+    "id_case_detected",
+    "faction",
+    "controleur",
+    "status",
+    "description",
+    ...(config.dependsOnColumn ? [config.dependsOnColumn] : []),
+  ]);
+}
+
+function normalizeRequiredStringField(value: unknown, fieldName: string): string {
+  const normalized = normalizeText(value);
+
+  if (!normalized) {
+    throw new EditorValidationError(`Le champ ${fieldName} est obligatoire.`);
+  }
+
+  return normalized;
+}
+
 function normalizeEditorObjectInput(
   config: EditorEntityConfig,
   input:
     | EditorMapLocalityInput
     | EditorMapLandmarkInput
     | EditorMapForceInput
-    | EditorLocalityPatch
-    | EditorLandmarkPatch
-    | EditorForcePatch,
+    | EditorMapLocalityPatch
+    | EditorMapLandmarkPatch
+    | EditorMapForcePatch,
   providedId?: string,
 ): NormalizedEditorObjectInput {
-  const name = normalizeText(input.name);
-  const typeKey = normalizeText(input.type_key);
-
-  if (!name) {
-    throw new Error("Le nom est obligatoire.");
-  }
-
-  if (!typeKey) {
-    throw new Error("Le type est obligatoire.");
-  }
+  const name = normalizeRequiredStringField(input.name, "name");
+  const typeKey = normalizeRequiredStringField(input.type_key, "type_key");
 
   const nextId =
     providedId !== undefined
@@ -347,6 +377,115 @@ function normalizeEditorObjectInput(
       ? normalizeNullableText((input as EditorMapLocalityInput).depends_on_locality_id)
       : null,
   };
+}
+
+function normalizeEditorObjectPatch(
+  config: EditorEntityConfig,
+  input: EditorEntityPatch,
+): NormalizedEditorObjectPatch {
+  const payload = assertPlainObject(input);
+  const allowedFields = getAllowedPatchFields(config);
+  const patch: NormalizedEditorObjectPatch = {};
+
+  for (const key of Object.keys(payload)) {
+    if (!allowedFields.has(key)) {
+      throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+    }
+
+    const value = payload[key];
+
+    switch (key) {
+      case "name":
+        patch.name = normalizeRequiredStringField(value, "name");
+        break;
+      case "type_key":
+        patch.type_key = normalizeRequiredStringField(value, "type_key");
+        break;
+      case "icon_key":
+        patch.icon_key = normalizeNullableText(value);
+        break;
+      case "x":
+        patch.x = normalizeFiniteNumber(value, "x");
+        break;
+      case "y":
+        patch.y = normalizeFiniteNumber(value, "y");
+        break;
+      case "id_case_detected":
+        patch.id_case_detected = normalizeNullableText(value);
+        break;
+      case "faction":
+        patch.faction = normalizeNullableText(value);
+        break;
+      case "controleur":
+        patch.controleur = normalizeNullableText(value);
+        break;
+      case "status":
+        patch.status = normalizeStatus(value);
+        break;
+      case "description":
+        patch.description = normalizeNullableText(value);
+        break;
+      case "depends_on_locality_id":
+        patch.depends_on_locality_id = normalizeNullableText(value);
+        break;
+      default:
+        throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new EditorValidationError("Le patch ne peut pas etre vide.");
+  }
+
+  return patch;
+}
+
+function mapRowToNormalizedInput(
+  config: EditorEntityConfig,
+  row: EditorLocalityRow | EditorLandmarkRow | EditorForceRow,
+): NormalizedEditorObjectInput {
+  let id: string;
+
+  if (config.idColumn === "id_locality" && "id_locality" in row) {
+    id = row.id_locality;
+  } else if (config.idColumn === "id_landmark" && "id_landmark" in row) {
+    id = row.id_landmark;
+  } else if (config.idColumn === "id_force" && "id_force" in row) {
+    id = row.id_force;
+  } else {
+    throw new Error("Ligne editeur incoherente.");
+  }
+
+  return {
+    id,
+    name: row.name,
+    type_key: row.type_key,
+    icon_key: row.icon_key,
+    x: row.x,
+    y: row.y,
+    id_case_detected: row.id_case_detected,
+    faction: row.faction,
+    controleur: row.controleur,
+    status: row.status,
+    description: row.description,
+    depends_on_locality_id:
+      config.dependsOnColumn && "depends_on_locality_id" in row
+        ? (row.depends_on_locality_id ?? null)
+        : null,
+  };
+}
+
+function mapDatabaseError(error: unknown, fallbackMessage: string): never {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  ) {
+    throw new EditorConflictError(fallbackMessage);
+  }
+
+  throw error;
 }
 
 function buildListQuery(
@@ -536,19 +675,24 @@ async function createEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
     userId,
   ];
 
-  const result = await client.query<T>(
-    `
-      INSERT INTO ${config.tableName} (${columns.join(", ")})
-      VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
-      RETURNING *
-    `,
-    values,
-  );
+  let result;
+  try {
+    result = await client.query<T>(
+      `
+        INSERT INTO ${config.tableName} (${columns.join(", ")})
+        VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
+        RETURNING *
+      `,
+      values,
+    );
+  } catch (error) {
+    mapDatabaseError(error, `Un objet ${normalized.id} existe deja.`);
+  }
 
   const row = result.rows[0];
 
   if (!row) {
-    throw new Error("Creation impossible.");
+    throw new EditorConflictError("Creation impossible.");
   }
 
   return row;
@@ -558,44 +702,38 @@ async function updateEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
   client: PoolClient,
   config: EditorEntityConfig,
   id: string,
-  input: EditorLocalityPatch | EditorLandmarkPatch | EditorForcePatch,
+  input: EditorEntityPatch,
   userId: number,
 ): Promise<T> {
-  const normalized = normalizeEditorObjectInput(config, input, id);
-  await getEditorEntityRow(client, config, id);
-  await validateEditorObjectReferences(client, config, normalized);
+  const existingRow = await getEditorEntityRow<T>(client, config, id);
+  const patch = normalizeEditorObjectPatch(config, input);
+  const merged = {
+    ...mapRowToNormalizedInput(config, existingRow),
+    ...patch,
+  };
 
-  const assignments = [
-    "name = $2",
-    "type_key = $3",
-    "icon_key = $4",
-    "x = $5",
-    "y = $6",
-    "id_case_detected = $7",
-    "faction = $8",
-    "controleur = $9",
-    "status = $10",
-    ...(config.dependsOnColumn ? [`${config.dependsOnColumn} = $11`] : []),
-    `description = $${config.dependsOnColumn ? 12 : 11}`,
-    `updated_by_user_id = $${config.dependsOnColumn ? 13 : 12}`,
-    "updated_at = NOW()",
-  ];
+  await validateEditorObjectReferences(client, config, merged);
 
-  const values = [
-    id,
-    normalized.name,
-    normalized.type_key,
-    normalized.icon_key,
-    normalized.x,
-    normalized.y,
-    normalized.id_case_detected,
-    normalized.faction,
-    normalized.controleur,
-    normalized.status,
-    ...(config.dependsOnColumn ? [normalized.depends_on_locality_id] : []),
-    normalized.description,
-    userId,
-  ];
+  const assignments: string[] = [];
+  const values: Array<string | number | null> = [id];
+  let parameterIndex = 2;
+
+  for (const [fieldName, fieldValue] of Object.entries(patch)) {
+    const columnName = fieldName === "depends_on_locality_id" ? config.dependsOnColumn : fieldName;
+
+    if (!columnName) {
+      continue;
+    }
+
+    assignments.push(`${columnName} = $${parameterIndex}`);
+    values.push(fieldValue as string | number | null);
+    parameterIndex += 1;
+  }
+
+  assignments.push(`updated_by_user_id = $${parameterIndex}`);
+  values.push(userId);
+  parameterIndex += 1;
+  assignments.push("updated_at = NOW()");
 
   const result = await client.query<T>(
     `
@@ -726,7 +864,7 @@ export async function createEditorLocality(
 
 export async function updateEditorLocality(
   id: string,
-  input: EditorLocalityPatch,
+  input: EditorMapLocalityPatch,
   userId: number,
 ): Promise<EditorMapLocality> {
   const hasDatabase = await ensureDatabaseReady();
@@ -807,7 +945,7 @@ export async function createEditorLandmark(
 
 export async function updateEditorLandmark(
   id: string,
-  input: EditorLandmarkPatch,
+  input: EditorMapLandmarkPatch,
   userId: number,
 ): Promise<EditorMapLandmark> {
   const hasDatabase = await ensureDatabaseReady();
@@ -888,7 +1026,7 @@ export async function createEditorForce(
 
 export async function updateEditorForce(
   id: string,
-  input: EditorForcePatch,
+  input: EditorMapForcePatch,
   userId: number,
 ): Promise<EditorMapForce> {
   const hasDatabase = await ensureDatabaseReady();

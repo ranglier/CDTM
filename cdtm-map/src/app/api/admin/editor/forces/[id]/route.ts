@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { EditorMapForceInput } from "@/editor/types";
+import type { EditorMapForcePatch } from "@/editor/types";
 import {
   deleteEditorForce,
   getEditorForce,
@@ -45,7 +45,7 @@ export async function PATCH(
 
   try {
     const params = await context.params;
-    const body = (await request.json()) as EditorMapForceInput;
+    const body = (await request.json()) as EditorMapForcePatch;
     const item = await updateEditorForce(params.id, body, guard.userId);
 
     return NextResponse.json(item, {

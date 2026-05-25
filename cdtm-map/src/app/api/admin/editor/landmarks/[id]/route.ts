@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { EditorMapLandmarkInput } from "@/editor/types";
+import type { EditorMapLandmarkPatch } from "@/editor/types";
 import {
   deleteEditorLandmark,
   getEditorLandmark,
@@ -45,7 +45,7 @@ export async function PATCH(
 
   try {
     const params = await context.params;
-    const body = (await request.json()) as EditorMapLandmarkInput;
+    const body = (await request.json()) as EditorMapLandmarkPatch;
     const item = await updateEditorLandmark(params.id, body, guard.userId);
 
     return NextResponse.json(item, {

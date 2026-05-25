@@ -142,6 +142,10 @@ export function EditorPage() {
               Cette premiere version prepare la page de travail sans encore integrer toute l’edition
               OpenLayers avancee.
             </p>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              L’UI finale sera isolee dans le module editeur et s’appuiera sur les APIs
+              `/api/admin/editor/...` ainsi que sur les types de `src/editor/types.ts`.
+            </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-[18px] border border-border/60 bg-background/35 p-4">
                 <p className="text-sm font-medium text-foreground">Points libres</p>

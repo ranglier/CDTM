@@ -37,11 +37,14 @@ Au demarrage, l'application :
 
 - Ne pas ajouter de gros DDL directement dans `db.ts`.
 - Toute evolution de schema doit passer par une migration versionnee.
+- Ne jamais modifier une migration deja appliquee en production.
 - Une migration deja enregistree dans `schema_migrations` ne doit pas etre rejouee.
 - Chaque migration doit etre transactionnelle.
 - En cas d'echec, la migration courante est rollbackee.
 - Ne jamais masquer une migration legacy avec `.catch(() => undefined)`.
 - Les operations destructives doivent etre explicites et idempotentes autant que possible.
+- La table `schema_migrations` est la source de verite des migrations deja appliquees.
+- Les seeds runtime ne remplacent jamais une migration de schema.
 
 ## Ajouter une migration
 
@@ -50,6 +53,7 @@ Ajouter une nouvelle entree a la liste `databaseMigrations` dans `src/server/db-
 - une `version` ordonnee
 - un `name` explicite
 - une fonction `up(client)`
+- une version strictement superieure aux migrations existantes
 
 Exemple de structure :
 
@@ -72,3 +76,9 @@ Les migrations legacy explicites peuvent encore :
 - nettoyer des colonnes heritees
 
 Mais elles ne doivent plus rester cachees dans l'initialisation runtime de `db.ts`.
+
+## Deploiement
+
+- Le healthcheck appelle `ensureDatabaseReady`.
+- Si une migration echoue, `/api/health` renvoie `503`.
+- Le script de deploiement affiche la derniere reponse health et les logs applicatifs en cas d'echec.

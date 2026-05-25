@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { EditorMapLocalityInput } from "@/editor/types";
+import type { EditorMapLocalityPatch } from "@/editor/types";
 import {
   deleteEditorLocality,
   getEditorLocality,
@@ -45,7 +45,7 @@ export async function PATCH(
 
   try {
     const params = await context.params;
-    const body = (await request.json()) as EditorMapLocalityInput;
+    const body = (await request.json()) as EditorMapLocalityPatch;
     const item = await updateEditorLocality(params.id, body, guard.userId);
 
     return NextResponse.json(item, {
