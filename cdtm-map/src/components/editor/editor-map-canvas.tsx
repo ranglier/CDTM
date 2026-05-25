@@ -228,7 +228,9 @@ export function EditorMapCanvas({
   useEffect(() => {
     const visible = showInfluenceOverlay && stableCaseCollection !== null;
     casesLayerRef.current?.setVisible(visible);
+    casesSourceRef.current?.changed();
     casesLayerRef.current?.changed();
+    mapRef.current?.renderSync();
   }, [showInfluenceOverlay, stableCaseCollection]);
 
   useEffect(() => {
@@ -441,7 +443,9 @@ export function EditorMapCanvas({
     source.addFeatures(features as Feature<Geometry>[]);
     const visible = showInfluenceOverlayRef.current && stableCaseCollection !== null;
     casesLayerRef.current?.setVisible(visible);
+    source.changed();
     casesLayerRef.current?.changed();
+    mapRef.current?.renderSync();
   }, [stableCaseCollection]);
 
   return (
