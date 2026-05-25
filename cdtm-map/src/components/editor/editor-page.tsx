@@ -11,6 +11,7 @@ import {
   sortEditorLocalitiesByName,
   type EditorLocalityStatusFilter,
 } from "@/editor/ui";
+import { CASES_DATA_URL } from "@/map/types";
 import { EditorMapCanvas } from "@/components/editor/editor-map-canvas";
 import { EditorMapToolbar } from "@/components/editor/editor-map-toolbar";
 import { useEditorData } from "@/components/editor/use-editor-data";
@@ -101,7 +102,6 @@ export function EditorPage() {
   const {
     referenceData,
     localities,
-    stableCaseCollection,
     casePropertiesById,
     publicMapStyles,
     loading,
@@ -240,11 +240,11 @@ export function EditorPage() {
             </SectionPanel>
           ) : (
             <EditorMapCanvas
+              dataUrl={CASES_DATA_URL}
               localities={filteredLocalities}
-              stableCaseCollection={stableCaseCollection}
               casePropertiesById={casePropertiesById}
               publicMapStyles={publicMapStyles}
-              showInfluenceOverlay={showInfluenceOverlay}
+              casesVisible={showInfluenceOverlay}
               toolbar={
                 <EditorMapToolbar
                   showInfluenceOverlay={showInfluenceOverlay}

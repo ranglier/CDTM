@@ -18,7 +18,7 @@ import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 import { Circle as CircleStyle, Fill, Stroke, Style } from "ol/style";
 
-import type { PublicMapStyles, StableCaseFeatureCollection, StableCaseProperties } from "@/map/types";
+import { loadJsonData } from "@/data/loaders";
 import type { EditorMapLocality } from "@/editor/types";
 import {
   CASES_EXTENT,
@@ -31,9 +31,15 @@ import {
 import {
   createCasesVectorLayer,
   createCasesVectorSource,
-  replaceCaseFeatures,
+  readCaseFeatures,
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
+import {
+  type PublicMapStyles,
+  type StableCaseFeatureCollection,
+  type StableCaseProperties,
+  isStableCaseFeatureCollection,
+} from "@/map/types";
 
 type HoverInfo = {
   x: number;
@@ -43,16 +49,18 @@ type HoverInfo = {
 };
 
 type EditorMapCanvasProps = {
+  dataUrl: string;
   localities: EditorMapLocality[];
-  stableCaseCollection: StableCaseFeatureCollection | null;
   casePropertiesById: Record<string, StableCaseProperties>;
   publicMapStyles: PublicMapStyles;
-  showInfluenceOverlay: boolean;
+  casesVisible: boolean;
   toolbar?: ReactNode;
   selectedLocalityId: string | null;
   focusLocalityId: string | null;
   focusRequest: number;
   onSelectLocality: (id: string | null) => void;
+  onCaseFeaturesLoad?: (count: number) => void;
+  onCaseLayerError?: (message: string | null) => void;
 };
 
 const editorProjection = new Projection({
@@ -107,16 +115,18 @@ function buildHoverRows(locality: EditorMapLocality | null) {
 }
 
 export function EditorMapCanvas({
+  dataUrl,
   localities,
-  stableCaseCollection,
   casePropertiesById,
   publicMapStyles,
-  showInfluenceOverlay,
+  casesVisible,
   toolbar,
   selectedLocalityId,
   focusLocalityId,
   focusRequest,
   onSelectLocality,
+  onCaseFeaturesLoad,
+  onCaseLayerError,
 }: EditorMapCanvasProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -127,7 +137,7 @@ export function EditorMapCanvas({
   const previousSelectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(casePropertiesById);
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
-  const casesVisibleRef = useRef(showInfluenceOverlay && stableCaseCollection !== null);
+  const casesVisibleRef = useRef(casesVisible);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(
@@ -195,10 +205,9 @@ export function EditorMapCanvas({
   }, [publicMapStyles]);
 
   useEffect(() => {
-    const visible = showInfluenceOverlay && stableCaseCollection !== null;
-    casesVisibleRef.current = visible;
-    syncCaseLayerVisibility(casesLayerRef.current, visible);
-  }, [showInfluenceOverlay, stableCaseCollection]);
+    casesVisibleRef.current = casesVisible;
+    syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
+  }, [casesVisible]);
 
   useEffect(() => {
     if (!focusLocalityId) {
@@ -350,6 +359,53 @@ export function EditorMapCanvas({
   }, [onSelectLocality, view]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadCases() {
+      if (!casesSourceRef.current || !mapRef.current) {
+        return;
+      }
+
+      try {
+        const collection = await loadJsonData<StableCaseFeatureCollection>(dataUrl);
+
+        if (!isStableCaseFeatureCollection(collection)) {
+          throw new Error("Le GeoJSON des cases ne respecte pas le contrat stable attendu.");
+        }
+
+        if (cancelled || !casesSourceRef.current || !mapRef.current) {
+          return;
+        }
+
+        const features = readCaseFeatures(collection, editorProjection);
+
+        casesSourceRef.current.clear(true);
+        casesSourceRef.current.addFeatures(features);
+
+        onCaseFeaturesLoad?.(features.length);
+        onCaseLayerError?.(null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        casesSourceRef.current?.clear(true);
+        onCaseFeaturesLoad?.(0);
+        onCaseLayerError?.(
+          error instanceof Error ? error.message : "Impossible de charger la couche des cases.",
+        );
+        console.error("Impossible de charger la couche des cases de l'editeur.", error);
+      }
+    }
+
+    void loadCases();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataUrl, onCaseFeaturesLoad, onCaseLayerError]);
+
+  useEffect(() => {
     const source = localitiesSourceRef.current;
 
     if (!source) {
@@ -370,17 +426,6 @@ export function EditorMapCanvas({
     source.clear(true);
     source.addFeatures(features);
   }, [localities]);
-
-  useEffect(() => {
-    const source = casesSourceRef.current;
-
-    if (!source) {
-      return;
-    }
-
-    replaceCaseFeatures(source, stableCaseCollection, editorProjection);
-    syncCaseLayerVisibility(casesLayerRef.current, casesVisibleRef.current);
-  }, [stableCaseCollection]);
 
   return (
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">

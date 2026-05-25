@@ -68,6 +68,8 @@ La difference reste uniquement au niveau du contexte :
 - carte publique : modes `Faction`, `Influence`, `Topo` et etats `active/selected/default`
 - editeur : mode `Influence` uniquement, toujours en lecture seule pour les cases
 
+L'editeur charge lui-meme `cases.geojson`, comme la page Carte, au lieu de recevoir une collection de features depuis son parent. Cela evite les desynchronisations entre chargement des donnees et visibilite de la couche.
+
 L'editeur n'ajoute donc plus qu'une couche localites au-dessus de la couche cases partagee.
 
 Ce lot ne fait aucune ecriture en base.

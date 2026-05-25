@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { PublicCaseIndexResponse } from "@/admin/types";
-import { buildCasePropertiesById, getStableCasesFromCollection, mergeStableCases } from "@/map/case-data";
+import type { PublicCaseIndexResponse, PublicCaseProperties } from "@/admin/types";
 import {
-  CASES_DATA_URL,
   createEmptyPublicMapStyles,
-  isStableCaseFeatureCollection,
   type PublicMapStyles,
-  type StableCaseFeatureCollection,
   type StableCaseProperties,
 } from "@/map/types";
 import type { EditorMapLocality, EditorReferenceData } from "@/editor/types";
@@ -19,13 +15,47 @@ type EditorDataLoadStatus = "idle" | "loading" | "ready" | "error";
 type EditorDataState = {
   referenceData: EditorReferenceData | null;
   localities: EditorMapLocality[];
-  stableCaseCollection: StableCaseFeatureCollection | null;
   casePropertiesById: Record<string, StableCaseProperties>;
   publicMapStyles: PublicMapStyles;
+  influenceOverlayMessage: string | null;
+  influenceOverlayStats: {
+    caseCount: number;
+    factionStyleCount: number;
+    controllerStyleCount: number;
+  };
   loading: boolean;
   error: string | null;
   reload: () => void;
 };
+
+function buildPublicCasePropertiesById(
+  publicCases: PublicCaseProperties[],
+): Record<string, StableCaseProperties> {
+  return Object.fromEntries(
+    publicCases.map((publicCase) => {
+      const key = publicCase.registry_id_case || publicCase.id_case;
+
+      return [
+        key,
+        {
+          registry_id_case: publicCase.registry_id_case,
+          id_case: publicCase.id_case,
+          region: publicCase.region,
+          sous_region: publicCase.sous_region,
+          cote: publicCase.cote,
+          lac_majeur: publicCase.lac_majeur,
+          cours_eau_majeur: publicCase.cours_eau_majeur,
+          terrain_cat: publicCase.terrain_cat,
+          terrain_type: publicCase.terrain_type,
+          relief: publicCase.relief,
+          faction: publicCase.faction,
+          controleur: publicCase.controleur,
+          controle_type: publicCase.controle_type,
+        } satisfies StableCaseProperties,
+      ];
+    }),
+  );
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -56,15 +86,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export function useEditorData(enabled: boolean): EditorDataState {
   const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
   const [localities, setLocalities] = useState<EditorMapLocality[]>([]);
-  const [stableCaseCollection, setStableCaseCollection] = useState<StableCaseFeatureCollection | null>(null);
   const [casePropertiesById, setCasePropertiesById] = useState<Record<string, StableCaseProperties>>({});
   const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(createEmptyPublicMapStyles());
+  const [influenceOverlayMessage, setInfluenceOverlayMessage] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<EditorDataLoadStatus>(enabled ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   const reload = useCallback(() => {
     setError(null);
+    setInfluenceOverlayMessage(null);
     setLoadStatus("loading");
     setReloadToken((current) => current + 1);
   }, []);
@@ -78,32 +109,9 @@ export function useEditorData(enabled: boolean): EditorDataState {
 
     void (async () => {
       try {
-        const [
-          nextReferenceData,
-          nextLocalities,
-          nextStableCaseResult,
-          nextPublicCaseIndexResult,
-        ] = await Promise.all([
+        const [nextReferenceData, nextLocalities, nextPublicCaseIndexResult] = await Promise.all([
           fetchJson<EditorReferenceData>("/api/admin/editor/reference-data"),
           fetchJson<EditorMapLocality[]>("/api/admin/editor/localities?limit=1000"),
-          fetchJson<StableCaseFeatureCollection>(CASES_DATA_URL)
-            .then((collection) => {
-              if (!isStableCaseFeatureCollection(collection)) {
-                throw new Error("Le GeoJSON stable des cases est invalide pour l’overlay Influence.");
-              }
-
-              return {
-                collection,
-                message: null,
-              };
-            })
-            .catch((nextError) => ({
-              collection: null,
-              message:
-                nextError instanceof Error
-                  ? nextError.message
-                  : "Les cases n’ont pas pu être chargées pour l’overlay Influence.",
-            })),
           fetchJson<PublicCaseIndexResponse>("/api/cases/public-index")
             .then((response) => ({
               data: response,
@@ -121,19 +129,15 @@ export function useEditorData(enabled: boolean): EditorDataState {
         if (cancelled) {
           return;
         }
-        const mergedCases =
-          nextStableCaseResult.collection === null
-            ? []
-            : mergeStableCases(
-                getStableCasesFromCollection(nextStableCaseResult.collection),
-                nextPublicCaseIndexResult.data.cases,
-              );
+        const overlayMessage = nextPublicCaseIndexResult.fallbackUsed
+          ? "Les styles publics n’ont pas pu être chargés. L’overlay Influence utilisera seulement les données stables disponibles."
+          : null;
 
         setReferenceData(nextReferenceData);
         setLocalities(nextLocalities);
-        setStableCaseCollection(nextStableCaseResult.collection);
-        setCasePropertiesById(buildCasePropertiesById(mergedCases));
+        setCasePropertiesById(buildPublicCasePropertiesById(nextPublicCaseIndexResult.data.cases));
         setPublicMapStyles(nextPublicCaseIndexResult.data.styles);
+        setInfluenceOverlayMessage(overlayMessage);
         setError(null);
         setLoadStatus("ready");
       } catch (nextError) {
@@ -142,9 +146,9 @@ export function useEditorData(enabled: boolean): EditorDataState {
         }
 
         setError(nextError instanceof Error ? nextError.message : "Chargement de l'editeur impossible.");
-        setStableCaseCollection(null);
         setCasePropertiesById({});
         setPublicMapStyles(createEmptyPublicMapStyles());
+        setInfluenceOverlayMessage(null);
         setLoadStatus("error");
       }
     })();
@@ -158,9 +162,14 @@ export function useEditorData(enabled: boolean): EditorDataState {
     return {
       referenceData: null,
       localities: [],
-      stableCaseCollection: null,
       casePropertiesById: {},
       publicMapStyles: createEmptyPublicMapStyles(),
+      influenceOverlayMessage: null,
+      influenceOverlayStats: {
+        caseCount: 0,
+        factionStyleCount: 0,
+        controllerStyleCount: 0,
+      },
       loading: false,
       error: null,
       reload,
@@ -170,9 +179,14 @@ export function useEditorData(enabled: boolean): EditorDataState {
   return {
     referenceData,
     localities,
-    stableCaseCollection,
     casePropertiesById,
     publicMapStyles,
+    influenceOverlayMessage,
+    influenceOverlayStats: {
+      caseCount: Object.keys(casePropertiesById).length,
+      factionStyleCount: Object.keys(publicMapStyles.faction).length,
+      controllerStyleCount: Object.keys(publicMapStyles.controleur).length,
+    },
     loading: loadStatus === "loading" || loadStatus === "idle",
     error,
     reload,
