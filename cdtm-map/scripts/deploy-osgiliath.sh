@@ -138,6 +138,7 @@ else
   echo >&2
 fi
 echo "Recent app logs:" >&2
+cd "${DEPLOY_PATH}"
 docker compose --env-file "${REMOTE_ENV_FILE}" -f "${COMPOSE_FILE}" logs --tail=200 cdtm-app >&2 || true
 exit 1
 EOF

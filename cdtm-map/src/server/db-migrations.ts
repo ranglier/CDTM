@@ -137,8 +137,6 @@ async function migrateLegacyReferenceMapPointTypes(client: PoolClient): Promise<
     WHERE object_family = 'force'
     ON CONFLICT (type_key) DO NOTHING
   `);
-
-  await client.query(`DROP TABLE IF EXISTS reference_map_point_types`);
 }
 
 async function migrateLegacyMapPoints(client: PoolClient): Promise<void> {
@@ -936,6 +934,7 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
       await migrateLegacyReferenceMapPointTypes(client);
       await migrateLegacyMapPoints(client);
+      await client.query(`DROP TABLE IF EXISTS reference_map_point_types`);
       await client.query(`
         CREATE INDEX IF NOT EXISTS reference_locality_types_label_idx
         ON reference_locality_types(label, type_key)
