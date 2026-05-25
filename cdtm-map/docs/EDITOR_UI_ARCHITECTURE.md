@@ -48,12 +48,12 @@ Le premier lot UI repose deja sur une carte OpenLayers en lecture seule :
 - affichage des localites existantes
 - selection et inspection
 - filtre local par statut
-- overlay optionnel `Influence` pour afficher les cases selon la meme logique que la carte publique
-- couche Influence rendue sous les objets editeur
-- overlay `Influence` traite comme une option d'affichage de carte, distincte du filtre de statut des localites
-- overlay active par defaut pour donner un contexte strategique immediat
+- couche cases masquable ou affichable comme sur la page Carte
+- couche cases rendue sous les objets editeur
+- rendu des cases force en mode `Influence`, distinct du filtre de statut des localites
+- cases visibles par defaut pour donner un contexte strategique immediat
 - couche OpenLayers des cases factorisee dans un module partage avec la carte publique
-- reactivation de l'overlay Influence sans rechargement des donnees de cases
+- reactivation des cases sans rechargement des donnees de cases
 
 ## Couche cases partagee
 
@@ -66,7 +66,7 @@ La carte publique et l'editeur reutilisent la meme brique OpenLayers pour :
 
 La difference reste uniquement au niveau du contexte :
 - carte publique : modes `Faction`, `Influence`, `Topo` et etats `active/selected/default`
-- editeur : mode `Influence` uniquement, toujours en lecture seule pour les cases
+- editeur : couche cases standard, toujours en lecture seule, rendue en mode `Influence`
 
 L'editeur charge lui-meme `cases.geojson`, comme la page Carte, au lieu de recevoir une collection de features depuis son parent. Cela evite les desynchronisations entre chargement des donnees et visibilite de la couche.
 

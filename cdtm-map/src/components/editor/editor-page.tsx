@@ -63,7 +63,7 @@ export function EditorPage() {
   const [listFilter, setListFilter] = useState("");
   const [focusLocalityId, setFocusLocalityId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [showInfluenceOverlay, setShowInfluenceOverlay] = useState(true);
+  const [casesVisible, setCasesVisible] = useState(true);
   const [caseFeatureCount, setCaseFeatureCount] = useState(0);
   const [caseLayerError, setCaseLayerError] = useState<string | null>(null);
 
@@ -248,12 +248,12 @@ export function EditorPage() {
               localities={filteredLocalities}
               casePropertiesById={casePropertiesById}
               publicMapStyles={publicMapStyles}
-              casesVisible={showInfluenceOverlay}
+              casesVisible={casesVisible}
               toolbar={
                 <EditorMapToolbar
-                  showInfluenceOverlay={showInfluenceOverlay}
+                  casesVisible={casesVisible}
                   statusFilter={statusFilter}
-                  onToggleInfluence={() => setShowInfluenceOverlay((current) => !current)}
+                  onToggleCases={() => setCasesVisible((current) => !current)}
                   onStatusFilterChange={setStatusFilter}
                 />
               }
@@ -276,17 +276,17 @@ export function EditorPage() {
               </p>
               <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 {caseLayerError
-                  ? "Influence indisponible"
-                  : showInfluenceOverlay
-                    ? `Influence affichee · ${caseFeatureCount} case(s)`
-                    : "Influence masquee"}
+                  ? "Cases indisponibles"
+                  : casesVisible
+                    ? `Cases affichees · ${caseFeatureCount} case(s)`
+                    : "Cases masquees"}
               </p>
               {influenceOverlayMessage ? (
                 <p className="mt-2 text-xs text-muted-foreground">{influenceOverlayMessage}</p>
               ) : null}
               {!caseLayerError ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Styles influence : {influenceOverlayStats.controllerStyleCount} controleur(s),{" "}
+                  Rendu des cases : Influence. {influenceOverlayStats.controllerStyleCount} controleur(s),{" "}
                   {influenceOverlayStats.factionStyleCount} faction(s).
                 </p>
               ) : null}

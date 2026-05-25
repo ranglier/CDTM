@@ -130,7 +130,7 @@ export function useEditorData(enabled: boolean): EditorDataState {
           return;
         }
         const overlayMessage = nextPublicCaseIndexResult.fallbackUsed
-          ? "Les styles publics n’ont pas pu être chargés. L’overlay Influence utilisera seulement les données stables disponibles."
+          ? "Les styles publics n’ont pas pu être chargés. Le rendu des cases utilisera seulement les donnees stables disponibles."
           : null;
 
         setReferenceData(nextReferenceData);

@@ -71,8 +71,6 @@ const editorProjection = new Projection({
 
 addProjection(editorProjection);
 
-const EDITOR_INFLUENCE_LAYER_OPACITY = 0.55;
-
 function getLocalityStyle(locality: EditorMapLocality | null, selected: boolean): Style {
   const palette =
     locality?.status === "archived"
@@ -241,8 +239,6 @@ export function EditorMapCanvas({
       },
       {
         visible: casesVisibleRef.current,
-        opacity: EDITOR_INFLUENCE_LAYER_OPACITY,
-        fallbackWhenUnstyled: true,
       },
     );
 
