@@ -71,6 +71,8 @@ const editorProjection = new Projection({
 
 addProjection(editorProjection);
 
+const DEBUG_FORCE_CASE_STYLE = true;
+
 function getLocalityStyle(locality: EditorMapLocality | null, selected: boolean): Style {
   const palette =
     locality?.status === "archived"
@@ -241,6 +243,15 @@ export function EditorMapCanvas({
         visible: casesVisibleRef.current,
       },
     );
+
+    if (DEBUG_FORCE_CASE_STYLE) {
+      casesLayer.setStyle(
+        new Style({
+          fill: new Fill({ color: "rgba(0, 180, 255, 0.18)" }),
+          stroke: new Stroke({ color: "rgba(0, 180, 255, 0.95)", width: 2 }),
+        }),
+      );
+    }
 
     const localitiesSource = new VectorSource();
     const localitiesLayer = new VectorLayer({
