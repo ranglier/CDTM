@@ -150,6 +150,10 @@ export function EditorMapCanvas({
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
   const selectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
   const previousSelectedLocalityIdRef = useRef<string | null>(selectedLocalityId);
+  const onSelectLocalityRef = useRef(onSelectLocality);
+  const onCaseFeaturesLoadRef = useRef(onCaseFeaturesLoad);
+  const onCaseLayerErrorRef = useRef(onCaseLayerError);
+  const onCaseLayerDebugChangeRef = useRef(onCaseLayerDebugChange);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(casePropertiesById);
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
   const casesVisibleRef = useRef(casesVisible);
@@ -159,14 +163,14 @@ export function EditorMapCanvas({
     const source = casesSourceRef.current;
     const layer = casesLayerRef.current;
 
-    onCaseLayerDebugChange?.({
+    onCaseLayerDebugChangeRef.current?.({
       debugEnabled: DEBUG_FORCE_EDITOR_CASE_STYLE,
       sourceFeatureCount: source?.getFeatures().length ?? 0,
       propCasesVisible: casesVisibleRef.current,
       layerVisible: layer?.getVisible() ?? null,
       layerOpacity: layer?.getOpacity() ?? null,
     });
-  }, [onCaseLayerDebugChange]);
+  }, []);
 
   const view = useMemo(
     () =>
@@ -221,6 +225,22 @@ export function EditorMapCanvas({
       source.getFeatureById(selectedLocalityId)?.changed();
     }
   }, [selectedLocalityId]);
+
+  useEffect(() => {
+    onSelectLocalityRef.current = onSelectLocality;
+  }, [onSelectLocality]);
+
+  useEffect(() => {
+    onCaseFeaturesLoadRef.current = onCaseFeaturesLoad;
+  }, [onCaseFeaturesLoad]);
+
+  useEffect(() => {
+    onCaseLayerErrorRef.current = onCaseLayerError;
+  }, [onCaseLayerError]);
+
+  useEffect(() => {
+    onCaseLayerDebugChangeRef.current = onCaseLayerDebugChange;
+  }, [onCaseLayerDebugChange]);
 
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
@@ -318,12 +338,12 @@ export function EditorMapCanvas({
       ) as Feature<Point> | null;
 
       if (!feature) {
-        onSelectLocality(null);
+        onSelectLocalityRef.current(null);
         return;
       }
 
       const localityId = feature.getId();
-      onSelectLocality(typeof localityId === "string" ? localityId : null);
+      onSelectLocalityRef.current(typeof localityId === "string" ? localityId : null);
     });
 
     const pointerMoveKey = map.on("pointermove", (rawEvent: unknown) => {
@@ -389,7 +409,7 @@ export function EditorMapCanvas({
       casesLayerRef.current = null;
       mapRef.current = null;
     };
-  }, [emitCaseLayerDebugState, onSelectLocality, view]);
+  }, [emitCaseLayerDebugState, view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -415,8 +435,8 @@ export function EditorMapCanvas({
         casesSourceRef.current.clear(true);
         casesSourceRef.current.addFeatures(features);
 
-        onCaseFeaturesLoad?.(features.length);
-        onCaseLayerError?.(null);
+        onCaseFeaturesLoadRef.current?.(features.length);
+        onCaseLayerErrorRef.current?.(null);
         emitCaseLayerDebugState();
       } catch (error) {
         if (cancelled) {
@@ -424,8 +444,8 @@ export function EditorMapCanvas({
         }
 
         casesSourceRef.current?.clear(true);
-        onCaseFeaturesLoad?.(0);
-        onCaseLayerError?.(
+        onCaseFeaturesLoadRef.current?.(0);
+        onCaseLayerErrorRef.current?.(
           error instanceof Error ? error.message : "Impossible de charger la couche des cases.",
         );
         emitCaseLayerDebugState();
@@ -438,7 +458,7 @@ export function EditorMapCanvas({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, emitCaseLayerDebugState, onCaseFeaturesLoad, onCaseLayerError]);
+  }, [dataUrl, emitCaseLayerDebugState]);
 
   useEffect(() => {
     const source = localitiesSourceRef.current;

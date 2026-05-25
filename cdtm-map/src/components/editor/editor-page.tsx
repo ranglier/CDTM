@@ -161,6 +161,13 @@ export function EditorPage() {
     }
   }, []);
 
+  const handleMapSelectLocality = useCallback(
+    (localityId: string | null) => {
+      handleSelectLocality(localityId, false);
+    },
+    [handleSelectLocality],
+  );
+
   const handleRefocusSelected = useCallback(() => {
     if (!selectedLocalityId) {
       return;
@@ -264,7 +271,7 @@ export function EditorPage() {
               onCaseFeaturesLoad={setCaseFeatureCount}
               onCaseLayerError={setCaseLayerError}
               onCaseLayerDebugChange={setCaseLayerDebug}
-              onSelectLocality={(localityId) => handleSelectLocality(localityId, false)}
+              onSelectLocality={handleMapSelectLocality}
             />
           )}
         </div>
