@@ -117,27 +117,47 @@ const LOCKED_REFERENCE_FIELDS = new Set([
 
 function CollapsibleSidebarSection({
   title,
+  selected,
+  onSelect,
   open,
   onToggle,
   children,
 }: {
   title: string;
+  selected: boolean;
+  onSelect: () => void;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
 }) {
   return (
     <div className="rounded-[18px] border border-border/60 bg-background/25">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-        onClick={onToggle}
-      >
-        <span className="text-sm font-semibold text-foreground">{title}</span>
-        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          {open ? "Ouvert" : "Ferme"}
-        </span>
-      </button>
+      <div className="flex items-center gap-2 px-3 py-3">
+        <button
+          type="button"
+          className={`min-w-0 flex-1 rounded-[12px] px-2 py-1 text-left text-sm font-semibold transition ${
+            selected
+              ? "bg-primary/10 text-foreground"
+              : "text-foreground hover:bg-background/45"
+          }`}
+          onClick={onSelect}
+        >
+          {title}
+        </button>
+        <button
+          type="button"
+          aria-label={open ? `Replier ${title}` : `Deplier ${title}`}
+          className="flex h-8 w-8 items-center justify-center rounded-[10px] text-muted-foreground transition hover:bg-background/45 hover:text-foreground"
+          onClick={onToggle}
+        >
+          <span
+            className={`text-sm transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden="true"
+          >
+            &gt;
+          </span>
+        </button>
+      </div>
       {open ? <div className="border-t border-border/50 p-3">{children}</div> : null}
     </div>
   );
@@ -759,6 +779,7 @@ export function TechnicalAdminPage() {
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   const [referenceStatuses, setReferenceStatuses] = useState<ReferenceTableStatus[]>([]);
+  const [activeSidebarRootId, setActiveSidebarRootId] = useState<string | null>(null);
   const [activeReferenceViewId, setActiveReferenceViewId] = useState<string | null>(null);
   const [referenceRows, setReferenceRows] = useState<EditableRow[]>([]);
   const [selectedReferenceRowId, setSelectedReferenceRowId] = useState<string | null>(null);
@@ -975,6 +996,13 @@ export function TechnicalAdminPage() {
         .flatMap((section) => section.views)
         .find((view) => view.id === activeReferenceViewId) ?? null,
     [activeReferenceViewId, referenceViewSections],
+  );
+  const activeReferenceSection = useMemo(
+    () =>
+      activeTab === "references" && activeSidebarRootId
+        ? referenceViewSections.find((section) => section.id === activeSidebarRootId) ?? null
+        : null,
+    [activeSidebarRootId, activeTab, referenceViewSections],
   );
   const activeReference = useMemo(
     () =>
@@ -1326,6 +1354,18 @@ export function TechnicalAdminPage() {
     setReferenceSearch("");
     setReferenceSearchInput("");
   }, [activeReferenceViewId]);
+
+  useEffect(() => {
+    if (activeTab === "references" && activeReferenceViewId) {
+      const owningSection = referenceViewSections.find((section) =>
+        section.views.some((view) => view.id === activeReferenceViewId),
+      );
+
+      if (owningSection) {
+        setActiveSidebarRootId(owningSection.id);
+      }
+    }
+  }, [activeReferenceViewId, activeTab, referenceViewSections]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2022,6 +2062,31 @@ export function TechnicalAdminPage() {
               <CollapsibleSidebarSection
                 key={section.id}
                 title={section.title}
+                selected={
+                  (activeTab === "references" && activeSidebarRootId === section.id) ||
+                  (activeTab === "schema" && section.id === "schema") ||
+                  (activeTab === "accounts" && section.id === "accounts")
+                }
+                onSelect={() => {
+                  setActiveSidebarRootId(section.id);
+
+                  if (referenceViewSections.some((referenceSection) => referenceSection.id === section.id)) {
+                    setActiveTab("references");
+                    setActiveReferenceViewId(null);
+                    return;
+                  }
+
+                  if (section.id === "schema") {
+                    setActiveTab("schema");
+                    setActiveSchemaKey(null);
+                    return;
+                  }
+
+                  if (section.id === "accounts") {
+                    setActiveTab("accounts");
+                    setActiveAccountId(null);
+                  }
+                }}
                 open={sidebarSectionOpenState[section.id] ?? activeSidebarSectionIds.includes(section.id)}
                 onToggle={() =>
                   setSidebarSectionOpenState((current) => ({
@@ -2051,17 +2116,20 @@ export function TechnicalAdminPage() {
                         onClick={() => {
                           if (item.kind === "reference") {
                             setActiveTab("references");
+                            setActiveSidebarRootId(section.id);
                             setActiveReferenceViewId(item.id);
                             return;
                           }
 
                           if (item.kind === "schema") {
                             setActiveTab("schema");
+                            setActiveSidebarRootId("schema");
                             setActiveSchemaKey(item.id === "__schema__" ? null : item.id);
                             return;
                           }
 
                           setActiveTab("accounts");
+                          setActiveSidebarRootId("accounts");
                           setActiveAccountId(item.id === "__accounts__" ? null : Number(item.id));
                         }}
                       >
@@ -2525,6 +2593,37 @@ export function TechnicalAdminPage() {
                   )}
                 </div>
               </>
+            ) : activeReferenceSection ? (
+              <>
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-2xl font-semibold text-foreground">{activeReferenceSection.title}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Selectionne une liste dans cette categorie.
+                  </p>
+                </div>
+
+                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                  <div className="space-y-3">
+                    {activeReferenceSection.views.map((view) => (
+                      <button
+                        key={view.id}
+                        type="button"
+                        className="w-full rounded-[16px] border border-border/70 bg-background/35 px-4 py-4 text-left transition hover:border-primary/25 hover:bg-background/50"
+                        onClick={() => setActiveReferenceViewId(view.id)}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-foreground">{view.title}</span>
+                          {view.rowCount !== null ? (
+                            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                              {view.rowCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">Aucune liste de valeurs selectionnee.</p>
             )
@@ -2911,9 +3010,30 @@ export function TechnicalAdminPage() {
                 </section>
               </>
               ) : (
-                <p className="mt-6 text-sm text-muted-foreground">
-                  Aucune categorie d&apos;informations selectionnee.
-                </p>
+                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Selectionne une categorie de champs personnalises dans le panneau lateral.
+                  </p>
+                  {schemaSummaries.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      {schemaSummaries.map((table) => (
+                        <button
+                          key={table.table_key}
+                          type="button"
+                          className="w-full rounded-[16px] border border-border/70 bg-background/35 px-4 py-4 text-left transition hover:border-primary/25 hover:bg-background/50"
+                          onClick={() => setActiveSchemaKey(table.table_key)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-foreground">{table.title}</span>
+                            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                              {table.field_count}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
               )}
             </>
           ) : (
@@ -3051,7 +3171,30 @@ export function TechnicalAdminPage() {
               </details>
                 </>
               ) : (
-                <p className="mt-6 text-sm text-muted-foreground">Aucun compte staff selectionne.</p>
+                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Selectionne un utilisateur dans le panneau lateral.
+                  </p>
+                  {staffAccounts.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      {staffAccounts.map((account) => (
+                        <button
+                          key={account.id}
+                          type="button"
+                          className="w-full rounded-[16px] border border-border/70 bg-background/35 px-4 py-4 text-left transition hover:border-primary/25 hover:bg-background/50"
+                          onClick={() => setActiveAccountId(account.id)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-foreground">{account.username}</span>
+                            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                              {account.is_active ? "actif" : "inactif"}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
               )}
             </>
           )}
