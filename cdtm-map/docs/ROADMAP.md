@@ -4,6 +4,7 @@
 
 - finaliser l'administration technique epuree
 - etendre l'editeur cartographique OpenLayers a partir du lot lecture seule des localites et de l'overlay Influence
+- garder l'overlay Influence comme contexte de carte distinct des filtres de statut des localites
 - enrichir les champs dynamiques de case
 - clarifier a part le futur module d'emplacements de case, sans le melanger aux localites, landmarks ou forces
 

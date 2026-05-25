@@ -50,6 +50,8 @@ Le premier lot UI repose deja sur une carte OpenLayers en lecture seule :
 - filtre local par statut
 - overlay optionnel `Influence` pour afficher les cases selon la meme logique que la carte publique
 - couche Influence rendue sous les objets editeur
+- overlay `Influence` traite comme une option d'affichage de carte, distincte du filtre de statut des localites
+- overlay active par defaut pour donner un contexte strategique immediat
 
 Ce lot ne fait aucune ecriture en base.
 Il ne modifie pas non plus les cases ni leurs styles publics.

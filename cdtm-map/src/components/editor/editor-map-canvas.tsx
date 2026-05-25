@@ -45,6 +45,7 @@ type EditorMapCanvasProps = {
   casePropertiesById: Record<string, StableCaseProperties>;
   publicMapStyles: PublicMapStyles;
   showInfluenceOverlay: boolean;
+  influenceOverlayMessage: string | null;
   selectedLocalityId: string | null;
   focusLocalityId: string | null;
   focusRequest: number;
@@ -109,6 +110,7 @@ export function EditorMapCanvas({
   casePropertiesById,
   publicMapStyles,
   showInfluenceOverlay,
+  influenceOverlayMessage,
   selectedLocalityId,
   focusLocalityId,
   focusRequest,
@@ -406,9 +408,14 @@ export function EditorMapCanvas({
         className="h-[calc(100svh-2rem)] w-full xl:h-full"
         aria-label="Carte editeur des localites"
       />
-      {localities.length === 0 ? (
-        <div className="pointer-events-none absolute inset-x-6 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-          Aucune localite a afficher.
+      <div className="pointer-events-none absolute right-6 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+        {showInfluenceOverlay ? "Influence affichee" : "Zones d’influence masquees"}
+      </div>
+      {localities.length === 0 || influenceOverlayMessage ? (
+        <div className="pointer-events-none absolute left-20 top-6 z-20 rounded-[18px] border border-border/70 bg-background/88 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+          {localities.length === 0 ? "Aucune localite a afficher." : null}
+          {localities.length === 0 && influenceOverlayMessage ? " " : null}
+          {influenceOverlayMessage}
         </div>
       ) : null}
       {hoverInfo ? (

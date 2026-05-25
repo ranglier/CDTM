@@ -62,7 +62,7 @@ export function EditorPage() {
   const [listFilter, setListFilter] = useState("");
   const [focusLocalityId, setFocusLocalityId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [showInfluenceOverlay, setShowInfluenceOverlay] = useState(false);
+  const [showInfluenceOverlay, setShowInfluenceOverlay] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,6 +248,7 @@ export function EditorPage() {
               casePropertiesById={casePropertiesById}
               publicMapStyles={publicMapStyles}
               showInfluenceOverlay={showInfluenceOverlay}
+              influenceOverlayMessage={showInfluenceOverlay ? influenceOverlayMessage : null}
               selectedLocalityId={effectiveSelectedLocalityId}
               focusLocalityId={focusLocalityId}
               focusRequest={focusRequest}
@@ -269,41 +270,64 @@ export function EditorPage() {
             </Button>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant={showInfluenceOverlay ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowInfluenceOverlay((current) => !current)}
-            >
-              Influence
-            </Button>
-            {(
-              [
-                { value: "all", label: "Tous" },
-                { value: "draft", label: "Brouillons" },
-                { value: "published", label: "Publies" },
-                { value: "archived", label: "Archives" },
-              ] as const
-            ).map((option) => (
+          <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Affichage carte</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Affiche ou masque les zones d&apos;influence en arriere-plan.
+                </p>
+              </div>
               <Button
-                key={option.value}
                 type="button"
-                variant={statusFilter === option.value ? "default" : "outline"}
+                variant={showInfluenceOverlay ? "default" : "outline"}
                 size="sm"
-                onClick={() => setStatusFilter(option.value)}
+                onClick={() => setShowInfluenceOverlay((current) => !current)}
               >
-                {option.label}
+                {showInfluenceOverlay ? "Influence active" : "Afficher influence"}
               </Button>
-            ))}
-          </div>
+            </div>
 
-          <p className="mt-3 text-sm text-muted-foreground">
-            Influence : controleur prioritaire, sinon faction. Affiche les cases colorees sous les localites.
-          </p>
-          {showInfluenceOverlay && influenceOverlayMessage ? (
-            <p className="mt-2 text-sm text-muted-foreground">{influenceOverlayMessage}</p>
-          ) : null}
+            <p className="mt-3 text-sm text-muted-foreground">
+              Overlay influence : {showInfluenceOverlay ? "actif" : "inactif"}.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Affiche les cases colorees selon les controleurs, avec fallback sur les factions.
+            </p>
+            {showInfluenceOverlay ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {influenceOverlayMessage ?? "Les zones d’influence sont visibles sous les localites."}
+              </p>
+            ) : null}
+          </section>
+
+          <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+            <h2 className="text-lg font-semibold text-foreground">Filtre des localites</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Filtre uniquement les marqueurs de localites. Les zones d&apos;influence ne sont pas affectees.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(
+                [
+                  { value: "all", label: "Tous" },
+                  { value: "draft", label: "Brouillons" },
+                  { value: "published", label: "Publies" },
+                  { value: "archived", label: "Archives" },
+                ] as const
+              ).map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={statusFilter === option.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </section>
 
           {selectedLocality ? (
             <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
