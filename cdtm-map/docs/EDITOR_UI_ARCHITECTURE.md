@@ -47,6 +47,14 @@ Le lot 7 :
 - utilise `PATCH /api/admin/editor/localities/[id]` ;
 - ne permet pas encore deplacer, supprimer, drag-and-drop ou icones reelles.
 
+Le lot 8 :
+- ajoute le deplacement direct des localites par drag-and-drop ;
+- sauvegarde uniquement au relachement via `PATCH /api/admin/editor/localities/[id]` ;
+- envoie seulement `x`, `y`, `id_case_detected` pour ce deplacement ;
+- ne sauvegarde rien pendant le mouvement ;
+- restaure la position precedente si la sauvegarde echoue ;
+- ne concerne toujours pas landmarks, forces ou routes.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;

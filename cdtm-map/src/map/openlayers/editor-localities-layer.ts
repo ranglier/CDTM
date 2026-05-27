@@ -122,6 +122,44 @@ export function upsertEditorLocalityFeature(
   source.addFeature(createLocalityFeature(locality));
 }
 
+export function updateEditorLocalityFeature(
+  feature: Feature<Geometry>,
+  locality: EditorMapLocality,
+): void {
+  feature.set("locality", locality);
+  feature.setId(locality.id_locality);
+  feature.changed();
+}
+
+export function getEditorLocalityFeatureCoordinates(
+  feature: Feature<Geometry>,
+): [number, number] | null {
+  const geometry = feature.getGeometry();
+
+  if (!(geometry instanceof Point)) {
+    return null;
+  }
+
+  const coordinates = geometry.getCoordinates();
+
+  if (coordinates.length < 2) {
+    return null;
+  }
+
+  return [coordinates[0], coordinates[1]];
+}
+
+export function setEditorLocalityFeatureCoordinates(
+  feature: Feature<Geometry>,
+  coordinates: [number, number],
+): void {
+  const geometry = feature.getGeometry();
+
+  if (geometry instanceof Point) {
+    geometry.setCoordinates(coordinates);
+  }
+}
+
 export function syncEditorLocalitiesLayerVisibility(
   layer: VectorLayer | null,
   visible: boolean,

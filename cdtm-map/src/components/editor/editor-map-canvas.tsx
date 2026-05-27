@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import Collection from "ol/Collection";
 import Feature from "ol/Feature";
 import type Geometry from "ol/geom/Geometry";
 import type Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
+import type { EventsKey } from "ol/events";
+import Translate from "ol/interaction/Translate";
 
 import type {
   PublicCaseIndexResponse,
@@ -36,9 +39,12 @@ import {
 import {
   createEditorLocalitiesVectorLayer,
   createEditorLocalitiesVectorSource,
+  getEditorLocalityFeatureCoordinates,
   getEditorLocalityFromFeature,
   replaceEditorLocalityFeatures,
+  setEditorLocalityFeatureCoordinates,
   syncEditorLocalitiesLayerVisibility,
+  updateEditorLocalityFeature,
   upsertEditorLocalityFeature,
 } from "@/map/openlayers/editor-localities-layer";
 import {
@@ -137,6 +143,22 @@ function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
   return JSON.stringify(draft);
 }
 
+function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
+  if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
+    return null;
+  }
+
+  const featuresValue = (rawEvent as { features?: unknown }).features;
+
+  if (!(featuresValue instanceof Collection)) {
+    return null;
+  }
+
+  const feature = featuresValue.getArray()[0];
+
+  return feature instanceof Feature ? (feature as Feature<Geometry>) : null;
+}
+
 export function EditorMapCanvas() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -153,6 +175,15 @@ export function EditorMapCanvas() {
   const selectedCaseIdRef = useRef<string | null>(null);
   const selectedLocalityIdRef = useRef<string | null>(null);
   const editorToolRef = useRef<EditorTool>("select");
+  const localityDraftOpenRef = useRef(false);
+  const localityDraggingRef = useRef(false);
+  const localityMoveSavingRef = useRef(false);
+  const localityTranslateInteractionRef = useRef<Translate | null>(null);
+  const localityDragOriginRef = useRef<{
+    id_locality: string;
+    coordinates: [number, number];
+    locality: EditorMapLocality;
+  } | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
@@ -177,6 +208,14 @@ export function EditorMapCanvas() {
   const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
   const [localityEditSaving, setLocalityEditSaving] = useState(false);
   const [localityEditError, setLocalityEditError] = useState<string | null>(null);
+  const [localityDragging, setLocalityDragging] = useState(false);
+  const [localityMoveSaving, setLocalityMoveSaving] = useState(false);
+  const [localityMoveError, setLocalityMoveError] = useState<string | null>(null);
+
+  const localityEditDirty =
+    localityEditDraft && localityEditSnapshot
+      ? getLocalityEditSnapshot(localityEditDraft) !== localityEditSnapshot
+      : false;
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -199,6 +238,18 @@ export function EditorMapCanvas() {
   useEffect(() => {
     editorToolRef.current = editorTool;
   }, [editorTool]);
+
+  useEffect(() => {
+    localityDraftOpenRef.current = localityDraft !== null;
+  }, [localityDraft]);
+
+  useEffect(() => {
+    localityDraggingRef.current = localityDragging;
+  }, [localityDragging]);
+
+  useEffect(() => {
+    localityMoveSavingRef.current = localityMoveSaving;
+  }, [localityMoveSaving]);
 
   useEffect(() => {
     referenceDataRef.current = referenceData;
@@ -226,6 +277,22 @@ export function EditorMapCanvas() {
       source.getFeatureById(selectedCaseId)?.changed();
     }
   }, [selectedCaseId]);
+
+  useEffect(() => {
+    const interaction = localityTranslateInteractionRef.current;
+
+    if (!interaction) {
+      return;
+    }
+
+    interaction.setActive(
+      localitiesVisible &&
+        editorTool === "select" &&
+        !localityDraft &&
+        !localityMoveSaving &&
+        !localityEditDirty,
+    );
+  }, [editorTool, localityDraft, localityEditDirty, localityMoveSaving, localitiesVisible]);
 
   function handleCloseLocalitySelection() {
     setSelectedLocality(null);
@@ -257,6 +324,103 @@ export function EditorMapCanvas() {
     setEditorTool("select");
   }
 
+  const detectCaseIdAtCoordinate = useCallback(
+    (
+    map: Map | null,
+    coordinate: [number, number],
+  ): string | null => {
+    if (!map || !casesVisibleRef.current || !casesLayerRef.current) {
+      // For this lot, hidden cases mean we skip case detection during drag save.
+      return null;
+    }
+
+    const pixel = map.getPixelFromCoordinate(coordinate);
+    const feature = map.forEachFeatureAtPixel(
+      pixel,
+      (candidate) => {
+        if (candidate instanceof Feature) {
+          return candidate as Feature<Geometry>;
+        }
+
+        return null;
+      },
+      {
+        layerFilter: (candidateLayer) => candidateLayer === casesLayerRef.current,
+      },
+    );
+    const id = feature?.getId();
+
+    return typeof id === "string" ? id : null;
+    },
+    [],
+  );
+
+  const handleLocalityTranslateEnd = useCallback(async (rawEvent: unknown) => {
+    const origin = localityDragOriginRef.current;
+    localityDragOriginRef.current = null;
+    setLocalityDragging(false);
+
+    const feature = getFirstTranslatedFeature(rawEvent);
+
+    if (!origin || !feature) {
+      return;
+    }
+
+    const locality = getEditorLocalityFromFeature(feature);
+    const coordinates = getEditorLocalityFeatureCoordinates(feature);
+
+    if (!locality || !coordinates) {
+      setEditorLocalityFeatureCoordinates(feature, origin.coordinates);
+      updateEditorLocalityFeature(feature, origin.locality);
+      return;
+    }
+
+    const [x, y] = coordinates;
+
+    if (x === origin.coordinates[0] && y === origin.coordinates[1]) {
+      return;
+    }
+
+    const idCaseDetected = detectCaseIdAtCoordinate(mapRef.current, [x, y]);
+
+    setLocalityMoveSaving(true);
+    setLocalityMoveError(null);
+
+    try {
+      const updated = await fetchJson<EditorMapLocality>(
+        `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            x,
+            y,
+            id_case_detected: idCaseDetected,
+          } satisfies Pick<EditorMapLocalityPatch, "x" | "y" | "id_case_detected">),
+        },
+      );
+
+      if (localitiesSourceRef.current) {
+        upsertEditorLocalityFeature(localitiesSourceRef.current, updated);
+      }
+
+      if (selectedLocalityIdRef.current === updated.id_locality) {
+        const nextDraft = createLocalityEditDraft(updated);
+
+        setSelectedLocality(updated);
+        setLocalityEditDraft(nextDraft);
+        setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+      }
+    } catch (error) {
+      setEditorLocalityFeatureCoordinates(feature, origin.coordinates);
+      updateEditorLocalityFeature(feature, origin.locality);
+      setLocalityMoveError(
+        error instanceof Error ? error.message : "Deplacement de localite impossible.",
+      );
+    } finally {
+      setLocalityMoveSaving(false);
+    }
+  }, [detectCaseIdAtCoordinate]);
+
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
       return;
@@ -287,19 +451,55 @@ export function EditorMapCanvas() {
       casesLayer,
       localitiesLayer,
     ]);
+    const translateInteraction = new Translate({
+      layers: [localitiesLayer],
+    });
 
     casesSourceRef.current = casesSource;
     casesLayerRef.current = casesLayer;
     localitiesSourceRef.current = localitiesSource;
     localitiesLayerRef.current = localitiesLayer;
+    localityTranslateInteractionRef.current = translateInteraction;
     mapRef.current = map;
     fitCdtmCasesExtent(map, 0);
+    map.addInteraction(translateInteraction);
 
     const resizeObserver = new ResizeObserver(() => {
       map.updateSize();
     });
 
     resizeObserver.observe(mapElementRef.current);
+
+    const translateStartKey = translateInteraction.on("translatestart", (event: unknown) => {
+      const feature = getFirstTranslatedFeature(event);
+
+      if (!(feature instanceof Feature)) {
+        localityDragOriginRef.current = null;
+        return;
+      }
+
+      const locality = getEditorLocalityFromFeature(feature as Feature<Geometry>);
+      const coordinates = getEditorLocalityFeatureCoordinates(feature as Feature<Geometry>);
+
+      if (!locality || !coordinates) {
+        localityDragOriginRef.current = null;
+        return;
+      }
+
+      localityDragOriginRef.current = {
+        id_locality: locality.id_locality,
+        coordinates,
+        locality,
+      };
+      setHoverInfo(null);
+      setLocalityDragging(true);
+      setLocalityMoveError(null);
+      selectLocality(locality);
+    }) as EventsKey;
+
+    const translateEndKey = translateInteraction.on("translateend", (event: unknown) => {
+      void handleLocalityTranslateEnd(event);
+    }) as EventsKey;
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -409,6 +609,12 @@ export function EditorMapCanvas() {
     const pointerMoveHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
+
+      if (localityDraggingRef.current) {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
 
       if (!casesVisibleRef.current && !localitiesVisibleRef.current) {
         target.style.cursor = "";
@@ -614,17 +820,21 @@ export function EditorMapCanvas() {
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
+      unByKey(translateStartKey);
+      unByKey(translateEndKey);
       unByKey(singleClickKey);
       unByKey(pointerMoveKey);
+      map.removeInteraction(translateInteraction);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
       casesSourceRef.current = null;
       casesLayerRef.current = null;
       localitiesSourceRef.current = null;
       localitiesLayerRef.current = null;
+      localityTranslateInteractionRef.current = null;
       mapRef.current = null;
     };
-  }, []);
+  }, [handleLocalityTranslateEnd]);
 
   async function handleCreateLocality() {
     if (!localityDraft) {
@@ -680,11 +890,6 @@ export function EditorMapCanvas() {
       setLocalitySaving(false);
     }
   }
-
-  const localityEditDirty =
-    localityEditDraft && localityEditSnapshot
-      ? getLocalityEditSnapshot(localityEditDraft) !== localityEditSnapshot
-      : false;
 
   async function handleSaveLocalityEdit() {
     if (!selectedLocality || !localityEditDraft) {
@@ -812,6 +1017,22 @@ export function EditorMapCanvas() {
               ? `Case selectionnee : ${selectedCaseId}`
               : "Aucune case selectionnee"}
           </p>
+          {localityEditDirty ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Enregistrez ou annulez les modifications avant de deplacer la localite.
+            </p>
+          ) : null}
+          {localityDragging ? (
+            <p className="mt-2 text-xs text-muted-foreground">Deplacement en cours...</p>
+          ) : null}
+          {localityMoveSaving ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Sauvegarde du deplacement...
+            </p>
+          ) : null}
+          {localityMoveError ? (
+            <p className="mt-2 text-xs text-destructive">{localityMoveError}</p>
+          ) : null}
           {selectedCaseId ? (
             <Button
               type="button"
