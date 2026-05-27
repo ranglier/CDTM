@@ -62,6 +62,7 @@ import {
   type StableCaseFeatureCollection,
   type StableCaseProperties,
 } from "@/map/types";
+import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 
 type HoverInfo = {
   x: number;
@@ -147,16 +148,19 @@ function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
 function resolveSelectedLocalityIconDiagnostics(
   locality: EditorMapLocality | null,
   referenceData: EditorReferenceData | null,
+  iconSourceByKey: Record<string, string>,
 ): {
   defaultIconKey: string | null;
   effectiveIconKey: string | null;
   imagePath: string | null;
+  iconSource: string | null;
 } {
   if (!locality) {
     return {
       defaultIconKey: null,
       effectiveIconKey: null,
       imagePath: null,
+      iconSource: null,
     };
   }
 
@@ -168,11 +172,13 @@ function resolveSelectedLocalityIconDiagnostics(
     effectiveIconKey
       ? referenceData?.map_icons.find((icon) => icon.value === effectiveIconKey)?.image_path ?? null
       : null;
+  const iconSource = effectiveIconKey ? iconSourceByKey[effectiveIconKey] ?? null : null;
 
   return {
     defaultIconKey,
     effectiveIconKey,
     imagePath,
+    iconSource,
   };
 }
 
@@ -219,6 +225,7 @@ export function EditorMapCanvas() {
   } | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
+  const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
   const localityDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
@@ -232,6 +239,7 @@ export function EditorMapCanvas() {
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
   const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [mapIconSourceByKey, setMapIconSourceByKey] = useState<Record<string, string>>({});
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedLocality, setSelectedLocality] = useState<EditorMapLocality | null>(null);
@@ -247,9 +255,12 @@ export function EditorMapCanvas() {
   const [localityMoveSaving, setLocalityMoveSaving] = useState(false);
   const [localityMoveError, setLocalityMoveError] = useState<string | null>(null);
 
+  const [, setIconSourceDiagnosticsVersion] = useState(0);
+
   const selectedLocalityIconDiagnostics = resolveSelectedLocalityIconDiagnostics(
     selectedLocality,
     referenceData,
+    mapIconSourceByKey,
   );
 
   const localityEditDirty =
@@ -292,14 +303,9 @@ export function EditorMapCanvas() {
   }, [localityMoveSaving]);
 
   useEffect(() => {
+    let cancelled = false;
+
     referenceDataRef.current = referenceData;
-
-    mapIconImagePathByKeyRef.current = Object.fromEntries(
-      (referenceData?.map_icons ?? [])
-        .filter((icon) => typeof icon.image_path === "string" && icon.image_path.trim().length > 0)
-        .map((icon) => [icon.value, icon.image_path!.trim()]),
-    );
-
     localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
       (referenceData?.locality_types ?? [])
         .filter(
@@ -310,14 +316,53 @@ export function EditorMapCanvas() {
         .map((type) => [type.value, type.default_icon_key!.trim()]),
     );
 
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[editor-icons]", {
-        icons: Object.keys(mapIconImagePathByKeyRef.current).length,
-        localityTypeDefaults: Object.keys(localityDefaultIconKeyByTypeRef.current).length,
-      });
+    async function loadIconSources() {
+      const iconsWithPath = (referenceData?.map_icons ?? [])
+        .filter((icon) => typeof icon.image_path === "string" && icon.image_path.trim().length > 0)
+        .map((icon) => [icon.value, icon.image_path!.trim()] as const);
+
+      mapIconImagePathByKeyRef.current = Object.fromEntries(iconsWithPath);
+
+      const entries = await Promise.all(
+        iconsWithPath.map(async ([iconKey, imagePath]) => {
+          try {
+            const source = imagePath.toLowerCase().endsWith(".svg")
+              ? await getNormalizedSvgIconSource(imagePath)
+              : imagePath;
+
+            return [iconKey, source] as const;
+          } catch (error) {
+            console.error("Icone SVG impossible a normaliser.", { icon: iconKey, imagePath, error });
+            return null;
+          }
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      mapIconSourceByKeyRef.current = Object.fromEntries(
+        entries.filter((entry): entry is readonly [string, string] => entry !== null),
+      );
+      setMapIconSourceByKey(mapIconSourceByKeyRef.current);
+
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[editor-icons]", {
+          icons: Object.keys(mapIconImagePathByKeyRef.current).length,
+          localityTypeDefaults: Object.keys(localityDefaultIconKeyByTypeRef.current).length,
+        });
+      }
+
+      setIconSourceDiagnosticsVersion((value) => value + 1);
+      localitiesLayerRef.current?.changed();
     }
 
-    localitiesLayerRef.current?.changed();
+    void loadIconSources();
+
+    return () => {
+      cancelled = true;
+    };
   }, [referenceData]);
 
   useEffect(() => {
@@ -511,7 +556,7 @@ export function EditorMapCanvas() {
     const localitiesLayer = createEditorLocalitiesVectorLayer(localitiesSource, {
       context: {
         getIconImagePath: (iconKey) =>
-          iconKey ? mapIconImagePathByKeyRef.current[iconKey] ?? null : null,
+          iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
         getDefaultIconKeyForType: (typeKey) =>
           localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
       },
@@ -1244,11 +1289,26 @@ export function EditorMapCanvas() {
                 <p className="break-all text-xs text-muted-foreground">
                   image_path : {selectedLocalityIconDiagnostics.imagePath ?? "aucun"}
                 </p>
+                <p className="break-all text-xs text-muted-foreground">
+                  icon_source : {selectedLocalityIconDiagnostics.iconSource ?? "aucune"}
+                </p>
                 {selectedLocalityIconDiagnostics.imagePath ? (
                   <div className="rounded-lg border border-border/70 bg-background/70 p-2">
                     <Image
                       src={selectedLocalityIconDiagnostics.imagePath}
-                      alt={selectedLocality.name}
+                      alt={`${selectedLocality.name} brut`}
+                      width={32}
+                      height={32}
+                      unoptimized
+                      className="h-8 w-8 object-contain"
+                    />
+                  </div>
+                ) : null}
+                {selectedLocalityIconDiagnostics.iconSource ? (
+                  <div className="rounded-lg border border-border/70 bg-background/70 p-2">
+                    <Image
+                      src={selectedLocalityIconDiagnostics.iconSource}
+                      alt={`${selectedLocality.name} normalise`}
                       width={32}
                       height={32}
                       unoptimized

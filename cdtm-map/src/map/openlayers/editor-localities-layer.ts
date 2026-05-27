@@ -35,14 +35,6 @@ const archivedStyle = new Style({
   }),
 });
 
-const localityIconBadgeStyle = new Style({
-  image: new CircleStyle({
-    radius: 11,
-    fill: new Fill({ color: "rgba(245, 221, 150, 0.92)" }),
-    stroke: new Stroke({ color: "rgba(35, 24, 12, 0.9)", width: 1.5 }),
-  }),
-});
-
 type EditorLocalitiesLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
   getDefaultIconKeyForType: (typeKey: string) => string | null;
@@ -95,7 +87,7 @@ function getFallbackLocalityStyle(locality: EditorMapLocality | null): Style {
 }
 
 function createIconStyles(
-  imagePath: string,
+  iconSource: string,
   locality: EditorMapLocality,
 ): Style[] {
   const opacity =
@@ -110,26 +102,30 @@ function createIconStyles(
 
   const iconStyle = new Style({
     image: new Icon({
-      src: imagePath,
+      src: iconSource,
       opacity,
-      scale: 0.055,
+      scale: 1,
       anchor: [0.5, 0.5],
-      crossOrigin: "anonymous",
+      ...(iconSource.startsWith("data:")
+        ? {}
+        : {
+            crossOrigin: "anonymous" as const,
+          }),
     }),
   });
 
-  return [localityIconBadgeStyle, hitAreaStyle, iconStyle];
+  return [hitAreaStyle, iconStyle];
 }
 
-function getIconStyles(imagePath: string, locality: EditorMapLocality): Style[] {
-  const key = `${imagePath}:${locality.status}`;
+function getIconStyles(iconSource: string, locality: EditorMapLocality): Style[] {
+  const key = `${iconSource}:${locality.status}`;
   const cached = iconStyleCache.get(key);
 
   if (cached) {
     return cached;
   }
 
-  const styles = createIconStyles(imagePath, locality);
+  const styles = createIconStyles(iconSource, locality);
   iconStyleCache.set(key, styles);
   return styles;
 }
@@ -147,13 +143,13 @@ function getLocalityStyleWithContext(
 
   const effectiveIconKey =
     locality.icon_key ?? context?.getDefaultIconKeyForType(locality.type_key) ?? null;
-  const imagePath = context?.getIconImagePath(effectiveIconKey) ?? null;
+  const iconSource = context?.getIconImagePath(effectiveIconKey) ?? null;
 
-  if (!imagePath) {
+  if (!iconSource) {
     return fallbackStyle;
   }
 
-  return getIconStyles(imagePath, locality);
+  return getIconStyles(iconSource, locality);
 }
 
 export function createEditorLocalitiesVectorSource(): VectorSource {
