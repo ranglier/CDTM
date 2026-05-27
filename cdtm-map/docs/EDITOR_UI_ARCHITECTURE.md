@@ -13,8 +13,13 @@ Le lot 2 ajoute ensuite :
 - la couche des cases en lecture seule ;
 - un bouton simple pour afficher ou masquer les cases.
 
+Le lot 3 :
+- retire le bloc explicatif au-dessus de la carte pour les `tech_admin` ;
+- ajoute une selection simple de case par clic ;
+- affiche seulement l'identifiant de la case selectionnee ;
+- n'ajoute pas encore de panneau detail ni d'edition.
+
 Il n'ajoute toujours :
-- aucune selection de case ;
 - aucune localite ;
 - aucun landmark ;
 - aucune force.

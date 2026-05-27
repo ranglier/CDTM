@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import Feature from "ol/Feature";
+import type Geometry from "ol/geom/Geometry";
 import type Map from "ol/Map";
+import type MapBrowserEvent from "ol/MapBrowserEvent";
+import { unByKey } from "ol/Observable";
 
 import { Button } from "@/components/ui/button";
 import { loadJsonData } from "@/data/loaders";
@@ -31,15 +35,36 @@ export function EditorMapCanvas() {
   const casesSourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
   const casesVisibleRef = useRef(true);
+  const selectedCaseIdRef = useRef<string | null>(null);
   const [casesVisible, setCasesVisible] = useState(true);
   const [casesCount, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
   }, [casesVisible]);
+
+  useEffect(() => {
+    const previousCaseId = selectedCaseIdRef.current;
+    selectedCaseIdRef.current = selectedCaseId;
+
+    const source = casesSourceRef.current;
+
+    if (!source) {
+      return;
+    }
+
+    if (previousCaseId) {
+      source.getFeatureById(previousCaseId)?.changed();
+    }
+
+    if (selectedCaseId) {
+      source.getFeatureById(selectedCaseId)?.changed();
+    }
+  }, [selectedCaseId]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
@@ -54,7 +79,8 @@ export function EditorMapCanvas() {
         getDisplayMode: () => "influence",
         getCasePropertiesById: () => ({}),
         getPublicMapStyles: () => createEmptyPublicMapStyles(),
-        getSelectionState: () => "default",
+        getSelectionState: (idCase) =>
+          idCase && idCase === selectedCaseIdRef.current ? "active" : "default",
       },
       {
         visible: casesVisibleRef.current,
@@ -73,6 +99,38 @@ export function EditorMapCanvas() {
     });
 
     resizeObserver.observe(mapElementRef.current);
+
+    const singleClickHandler = (rawEvent: unknown) => {
+      const event = rawEvent as MapBrowserEvent<PointerEvent>;
+
+      if (!casesVisibleRef.current) {
+        return;
+      }
+
+      const feature = map.forEachFeatureAtPixel(
+        event.pixel,
+        (candidate) => {
+          if (candidate instanceof Feature) {
+            return candidate as Feature<Geometry>;
+          }
+
+          return null;
+        },
+        {
+          layerFilter: (candidateLayer) => candidateLayer === casesLayer,
+        },
+      );
+
+      if (!feature) {
+        setSelectedCaseId(null);
+        return;
+      }
+
+      const id = feature.getId();
+      setSelectedCaseId(typeof id === "string" ? id : null);
+    };
+
+    const singleClickKey = map.on("singleclick", singleClickHandler);
 
     let cancelled = false;
 
@@ -119,6 +177,7 @@ export function EditorMapCanvas() {
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
+      unByKey(singleClickKey);
       map.setTarget(undefined);
       casesSourceRef.current = null;
       casesLayerRef.current = null;
@@ -127,7 +186,7 @@ export function EditorMapCanvas() {
   }, []);
 
   return (
-    <section className="relative h-[calc(100svh-8rem)] overflow-hidden rounded-[28px] bg-background/70">
+    <section className="relative min-h-[calc(100svh-5rem)] overflow-hidden rounded-[28px] bg-background/70">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
         <div className="pointer-events-auto rounded-[20px] border border-border/80 bg-background/90 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
           <Button
@@ -144,10 +203,30 @@ export function EditorMapCanvas() {
                 ? `${casesCount} cases chargees`
                 : "Cases non chargees"}
           </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {selectedCaseId
+              ? `Case selectionnee : ${selectedCaseId}`
+              : "Aucune case selectionnee"}
+          </p>
+          {selectedCaseId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setSelectedCaseId(null)}
+            >
+              Deselectionner
+            </Button>
+          ) : null}
           {casesError ? <p className="mt-2 text-xs text-destructive">{casesError}</p> : null}
         </div>
       </div>
-      <div ref={mapElementRef} className="h-full w-full" aria-label="Carte editeur" />
+      <div
+        ref={mapElementRef}
+        className="h-[calc(100svh-5rem)] w-full"
+        aria-label="Carte editeur"
+      />
     </section>
   );
 }
