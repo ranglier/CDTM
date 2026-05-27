@@ -185,6 +185,8 @@ export function EditorMapCanvas() {
     locality: EditorMapLocality;
   } | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
+  const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
+  const localityDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
   const [casesVisible, setCasesVisible] = useState(true);
@@ -253,6 +255,23 @@ export function EditorMapCanvas() {
 
   useEffect(() => {
     referenceDataRef.current = referenceData;
+
+    mapIconImagePathByKeyRef.current = Object.fromEntries(
+      (referenceData?.map_icons ?? [])
+        .filter((icon) => typeof icon.image_path === "string" && icon.image_path.length > 0)
+        .map((icon) => [icon.value, icon.image_path as string]),
+    );
+
+    localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
+      (referenceData?.locality_types ?? [])
+        .filter(
+          (type) =>
+            typeof type.default_icon_key === "string" && type.default_icon_key.length > 0,
+        )
+        .map((type) => [type.value, type.default_icon_key as string]),
+    );
+
+    localitiesLayerRef.current?.changed();
   }, [referenceData]);
 
   useEffect(() => {
@@ -444,6 +463,12 @@ export function EditorMapCanvas() {
       },
     );
     const localitiesLayer = createEditorLocalitiesVectorLayer(localitiesSource, {
+      context: {
+        getIconImagePath: (iconKey) =>
+          iconKey ? mapIconImagePathByKeyRef.current[iconKey] ?? null : null,
+        getDefaultIconKeyForType: (typeKey) =>
+          localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
+      },
       visible: localitiesVisibleRef.current,
     });
     const map = createCdtmMap(mapElementRef.current, [

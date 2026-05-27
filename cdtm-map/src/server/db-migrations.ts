@@ -965,6 +965,81 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "006",
+    name: "landmark_type_categories_and_seeds",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'landmark'
+      `);
+      await client.query(`
+        UPDATE reference_landmark_types
+        SET category = 'landmark'
+        WHERE category IS NULL
+           OR category NOT IN ('landmark', 'unique')
+      `);
+      await client.query(`
+        INSERT INTO reference_landmark_types (
+          type_key,
+          label,
+          description,
+          category,
+          is_active
+        )
+        VALUES
+          (
+            'pont',
+            'Pont',
+            'Passage construit permettant de franchir un obstacle.',
+            'landmark',
+            TRUE
+          ),
+          (
+            'gue',
+            'Gue',
+            'Passage praticable a travers un cours d''eau.',
+            'landmark',
+            TRUE
+          ),
+          (
+            'mine',
+            'Mine',
+            'Exploitation miniere ou site d''extraction.',
+            'landmark',
+            TRUE
+          ),
+          (
+            'port',
+            'Port',
+            'Port, embarcadere ou point d''acces fluvial/maritime.',
+            'landmark',
+            TRUE
+          ),
+          (
+            'col_montagne',
+            'Col de montagne',
+            'Passage notable a travers une chaine montagneuse.',
+            'landmark',
+            TRUE
+          ),
+          (
+            'lieu_unique',
+            'Lieu unique',
+            'Lieu nomme ou remarquable propre a la Terre du Milieu, distinct des types generiques.',
+            'unique',
+            TRUE
+          )
+        ON CONFLICT (type_key) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          description = EXCLUDED.description,
+          category = EXCLUDED.category,
+          is_active = TRUE,
+          updated_at = NOW()
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

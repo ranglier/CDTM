@@ -54,6 +54,12 @@ Les types associes sont eux aussi separes :
 - `reference_landmark_types`
 - `reference_force_types`
 
+`reference_landmark_types` porte des categories metier :
+- `landmark` pour les types generiques comme `pont`, `gue`, `mine`, `port`, `col_montagne`
+- `unique` pour les lieux nommes uniques via le type `lieu_unique`
+
+Les lieux uniques restent stockes dans `map_landmarks` avec `type_key = lieu_unique`.
+
 Le statut des objets cartographiques est limite a :
 - `draft`
 - `published`

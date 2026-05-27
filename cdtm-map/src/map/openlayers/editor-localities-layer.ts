@@ -5,6 +5,7 @@ import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
 import CircleStyle from "ol/style/Circle";
 import Fill from "ol/style/Fill";
+import Icon from "ol/style/Icon";
 import Stroke from "ol/style/Stroke";
 import Style from "ol/style/Style";
 
@@ -34,6 +35,13 @@ const archivedStyle = new Style({
   }),
 });
 
+type EditorLocalitiesLayerContext = {
+  getIconImagePath: (iconKey: string | null) => string | null;
+  getDefaultIconKeyForType: (typeKey: string) => string | null;
+};
+
+const iconStyleCache = new Map<string, Style>();
+
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -62,11 +70,49 @@ function createLocalityFeature(locality: EditorMapLocality): Feature<Point> {
   return feature;
 }
 
-function getLocalityStyle(feature: Feature<Geometry>) {
+function createIconStyle(imagePath: string, locality: EditorMapLocality): Style {
+  const opacity =
+    locality.status === "archived" ? 0.45 : locality.status === "draft" ? 0.65 : 1;
+
+  return new Style({
+    image: new Icon({
+      src: imagePath,
+      opacity,
+      scale: 0.08,
+      anchor: [0.5, 1],
+    }),
+  });
+}
+
+function getIconStyle(imagePath: string, locality: EditorMapLocality): Style {
+  const key = `${imagePath}:${locality.status}`;
+  const cached = iconStyleCache.get(key);
+
+  if (cached) {
+    return cached;
+  }
+
+  const style = createIconStyle(imagePath, locality);
+  iconStyleCache.set(key, style);
+  return style;
+}
+
+function getLocalityStyleWithContext(
+  feature: Feature<Geometry>,
+  context?: EditorLocalitiesLayerContext,
+) {
   const locality = getEditorLocalityFromFeature(feature);
 
   if (!locality) {
     return publishedStyle;
+  }
+
+  const effectiveIconKey =
+    locality.icon_key ?? context?.getDefaultIconKeyForType(locality.type_key) ?? null;
+  const imagePath = context?.getIconImagePath(effectiveIconKey) ?? null;
+
+  if (imagePath) {
+    return getIconStyle(imagePath, locality);
   }
 
   if (locality.status === "draft") {
@@ -86,7 +132,7 @@ export function createEditorLocalitiesVectorSource(): VectorSource {
 
 export function createEditorLocalitiesVectorLayer(
   source: VectorSource,
-  options: { visible?: boolean } = {},
+  options: { visible?: boolean; context?: EditorLocalitiesLayerContext } = {},
 ): VectorLayer {
   return new VectorLayer({
     source,
@@ -96,7 +142,7 @@ export function createEditorLocalitiesVectorLayer(
         return undefined;
       }
 
-      return getLocalityStyle(feature as Feature<Geometry>);
+      return getLocalityStyleWithContext(feature as Feature<Geometry>, options.context);
     },
   });
 }
