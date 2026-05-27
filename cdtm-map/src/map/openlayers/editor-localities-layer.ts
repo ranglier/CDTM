@@ -41,6 +41,7 @@ type EditorLocalitiesLayerContext = {
 };
 
 const iconStyleCache = new Map<string, Style>();
+const iconHitAreaStyleCache = new Map<string, Style[]>();
 
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -78,23 +79,37 @@ function createIconStyle(imagePath: string, locality: EditorMapLocality): Style 
     image: new Icon({
       src: imagePath,
       opacity,
-      scale: 0.08,
+      scale: locality.status === "archived" ? 0.16 : locality.status === "draft" ? 0.18 : 0.2,
       anchor: [0.5, 1],
     }),
   });
 }
 
-function getIconStyle(imagePath: string, locality: EditorMapLocality): Style {
+function getIconStyles(imagePath: string, locality: EditorMapLocality): Style[] {
   const key = `${imagePath}:${locality.status}`;
-  const cached = iconStyleCache.get(key);
+  const cached = iconHitAreaStyleCache.get(key);
 
   if (cached) {
     return cached;
   }
 
-  const style = createIconStyle(imagePath, locality);
-  iconStyleCache.set(key, style);
-  return style;
+  let iconStyle = iconStyleCache.get(key);
+
+  if (!iconStyle) {
+    iconStyle = createIconStyle(imagePath, locality);
+    iconStyleCache.set(key, iconStyle);
+  }
+
+  const hitAreaStyle = new Style({
+    image: new CircleStyle({
+      radius: 12,
+      fill: new Fill({ color: "rgba(0, 0, 0, 0.01)" }),
+      stroke: new Stroke({ color: "rgba(0, 0, 0, 0.01)", width: 1 }),
+    }),
+  });
+  const styles = [hitAreaStyle, iconStyle];
+  iconHitAreaStyleCache.set(key, styles);
+  return styles;
 }
 
 function getLocalityStyleWithContext(
@@ -112,7 +127,7 @@ function getLocalityStyleWithContext(
   const imagePath = context?.getIconImagePath(effectiveIconKey) ?? null;
 
   if (imagePath) {
-    return getIconStyle(imagePath, locality);
+    return getIconStyles(imagePath, locality);
   }
 
   if (locality.status === "draft") {
