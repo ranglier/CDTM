@@ -14,6 +14,7 @@ import type {
 } from "@/admin/types";
 import { Button } from "@/components/ui/button";
 import { loadJsonData } from "@/data/loaders";
+import type { EditorMapLocality } from "@/editor/types";
 import { buildCasePropertiesById, getStableCasesFromCollection, mergeStableCases } from "@/map/case-data";
 import { buildCaseHoverRows } from "@/map/case-hover";
 import {
@@ -23,6 +24,13 @@ import {
   resolveCaseFeatureProperties,
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
+import {
+  createEditorLocalitiesVectorLayer,
+  createEditorLocalitiesVectorSource,
+  getEditorLocalityFromFeature,
+  replaceEditorLocalityFeatures,
+  syncEditorLocalitiesLayerVisibility,
+} from "@/map/openlayers/editor-localities-layer";
 import {
   cdtmProjection,
   createCdtmBackgroundLayer,
@@ -91,7 +99,14 @@ export function EditorMapCanvas() {
   const mapRef = useRef<Map | null>(null);
   const casesSourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
+  const localitiesSourceRef = useRef<ReturnType<typeof createEditorLocalitiesVectorSource> | null>(
+    null,
+  );
+  const localitiesLayerRef = useRef<ReturnType<typeof createEditorLocalitiesVectorLayer> | null>(
+    null,
+  );
   const casesVisibleRef = useRef(true);
+  const localitiesVisibleRef = useRef(true);
   const selectedCaseIdRef = useRef<string | null>(null);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
@@ -99,6 +114,10 @@ export function EditorMapCanvas() {
   const [casesCount, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [localitiesVisible, setLocalitiesVisible] = useState(true);
+  const [localitiesCount, setLocalitiesCount] = useState<number | null>(null);
+  const [localitiesLoading, setLocalitiesLoading] = useState(false);
+  const [localitiesError, setLocalitiesError] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
@@ -110,6 +129,11 @@ export function EditorMapCanvas() {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
     }
   }, [casesVisible]);
+
+  useEffect(() => {
+    localitiesVisibleRef.current = localitiesVisible;
+    syncEditorLocalitiesLayerVisibility(localitiesLayerRef.current, localitiesVisible);
+  }, [localitiesVisible]);
 
   useEffect(() => {
     const previousCaseId = selectedCaseIdRef.current;
@@ -137,6 +161,7 @@ export function EditorMapCanvas() {
 
     const backgroundLayer = createCdtmBackgroundLayer();
     const casesSource = createCasesVectorSource();
+    const localitiesSource = createEditorLocalitiesVectorSource();
     const casesLayer = createCasesVectorLayer(
       casesSource,
       {
@@ -151,10 +176,19 @@ export function EditorMapCanvas() {
         fallbackWhenUnstyled: true,
       },
     );
-    const map = createCdtmMap(mapElementRef.current, [backgroundLayer, casesLayer]);
+    const localitiesLayer = createEditorLocalitiesVectorLayer(localitiesSource, {
+      visible: localitiesVisibleRef.current,
+    });
+    const map = createCdtmMap(mapElementRef.current, [
+      backgroundLayer,
+      casesLayer,
+      localitiesLayer,
+    ]);
 
     casesSourceRef.current = casesSource;
     casesLayerRef.current = casesLayer;
+    localitiesSourceRef.current = localitiesSource;
+    localitiesLayerRef.current = localitiesLayer;
     mapRef.current = map;
     fitCdtmCasesExtent(map, 0);
 
@@ -195,9 +229,71 @@ export function EditorMapCanvas() {
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
+
+    function getTooltipPosition(originalEvent: PointerEvent): { x: number; y: number } {
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+      const preferredX = originalEvent.clientX + 18;
+      const preferredY = originalEvent.clientY + 18;
+      const tooltipWidth = 240;
+      const tooltipHeight = 120;
+
+      return {
+        x: viewportWidth > 0 ? Math.min(preferredX, viewportWidth - tooltipWidth) : preferredX,
+        y:
+          viewportHeight > 0 ? Math.min(preferredY, viewportHeight - tooltipHeight) : preferredY,
+      };
+    }
+
     const pointerMoveHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
+
+      if (!casesVisibleRef.current && !localitiesVisibleRef.current) {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
+      if (localitiesVisibleRef.current) {
+        const localityFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
+          },
+        );
+
+        if (localityFeature) {
+          const locality = getEditorLocalityFromFeature(localityFeature as Feature<Geometry>);
+
+          if (locality) {
+            target.style.cursor = "pointer";
+            const position = getTooltipPosition(event.originalEvent);
+
+            setHoverInfo({
+              x: position.x,
+              y: position.y,
+              title: locality.name,
+              rows: [
+                { label: "Type", value: locality.type_key },
+                { label: "Statut", value: locality.status },
+                locality.id_case_detected
+                  ? { label: "Case", value: locality.id_case_detected }
+                  : null,
+              ].filter((row): row is { label: string; value: string } => row !== null),
+            });
+
+            return;
+          }
+        }
+      }
 
       if (!casesVisibleRef.current) {
         target.style.cursor = "";
@@ -238,17 +334,11 @@ export function EditorMapCanvas() {
       }
 
       target.style.cursor = "pointer";
-      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
-      const originalEvent = event.originalEvent;
-      const preferredX = originalEvent.clientX + 18;
-      const preferredY = originalEvent.clientY + 18;
-      const tooltipWidth = 240;
-      const tooltipHeight = 120;
+      const position = getTooltipPosition(event.originalEvent);
 
       setHoverInfo({
-        x: viewportWidth > 0 ? Math.min(preferredX, viewportWidth - tooltipWidth) : preferredX,
-        y: viewportHeight > 0 ? Math.min(preferredY, viewportHeight - tooltipHeight) : preferredY,
+        x: position.x,
+        y: position.y,
         title: resolvedCase?.id_case ?? "Case",
         rows,
       });
@@ -309,7 +399,38 @@ export function EditorMapCanvas() {
       }
     }
 
+    async function loadLocalities() {
+      setLocalitiesLoading(true);
+      setLocalitiesError(null);
+
+      try {
+        const items = await fetchJson<EditorMapLocality[]>("/api/admin/editor/localities?limit=1000");
+
+        if (cancelled || !localitiesSourceRef.current) {
+          return;
+        }
+
+        replaceEditorLocalityFeatures(localitiesSourceRef.current, items);
+        setLocalitiesCount(items.length);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Impossible de charger les localites dans l'editeur.", error);
+        setLocalitiesCount(0);
+        setLocalitiesError(
+          error instanceof Error ? error.message : "Chargement des localites impossible.",
+        );
+      } finally {
+        if (!cancelled) {
+          setLocalitiesLoading(false);
+        }
+      }
+    }
+
     void loadCases();
+    void loadLocalities();
 
     return () => {
       cancelled = true;
@@ -320,6 +441,8 @@ export function EditorMapCanvas() {
       map.setTarget(undefined);
       casesSourceRef.current = null;
       casesLayerRef.current = null;
+      localitiesSourceRef.current = null;
+      localitiesLayerRef.current = null;
       mapRef.current = null;
     };
   }, []);
@@ -343,12 +466,27 @@ export function EditorMapCanvas() {
           >
             {casesVisible ? "Masquer les cases" : "Afficher les cases"}
           </Button>
+          <Button
+            type="button"
+            variant={localitiesVisible ? "secondary" : "outline"}
+            className="mt-2"
+            onClick={() => setLocalitiesVisible((visible) => !visible)}
+          >
+            {localitiesVisible ? "Masquer les localites" : "Afficher les localites"}
+          </Button>
           <p className="mt-2 text-xs text-muted-foreground">
             {casesLoading
               ? "Chargement des cases..."
               : casesCount !== null
                 ? `${casesCount} cases chargees`
                 : "Cases non chargees"}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {localitiesLoading
+              ? "Chargement des localites..."
+              : localitiesCount !== null
+                ? `${localitiesCount} localites chargees`
+                : "Localites non chargees"}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {selectedCaseId
@@ -367,6 +505,9 @@ export function EditorMapCanvas() {
             </Button>
           ) : null}
           {casesError ? <p className="mt-2 text-xs text-destructive">{casesError}</p> : null}
+          {localitiesError ? (
+            <p className="mt-2 text-xs text-destructive">{localitiesError}</p>
+          ) : null}
         </div>
       </div>
       <div

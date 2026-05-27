@@ -26,6 +26,13 @@ Le lot 4 :
 - ne charge toujours aucun objet cartographique ;
 - ne permet toujours aucune edition.
 
+Le lot 5 :
+- charge les localites depuis `/api/admin/editor/localities` ;
+- les affiche en lecture seule au-dessus des cases ;
+- ajoute un bouton pour afficher ou masquer les localites ;
+- ajoute un hover localite simple ;
+- ne permet pas encore de creer, modifier ou deplacer les localites.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;
