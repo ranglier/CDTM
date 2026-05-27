@@ -19,6 +19,13 @@ Le lot 3 :
 - affiche seulement l'identifiant de la case selectionnee ;
 - n'ajoute pas encore de panneau detail ni d'edition.
 
+Le lot 4 :
+- charge les styles publics et les proprietes publiques des cases ;
+- affiche l'editeur en mode influence ;
+- ajoute le tooltip de survol identique a la carte publique ;
+- ne charge toujours aucun objet cartographique ;
+- ne permet toujours aucune edition.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;

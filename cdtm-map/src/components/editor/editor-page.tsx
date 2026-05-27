@@ -133,26 +133,11 @@ export function EditorPage() {
         onAdminAction={() => {}}
         onAdminLogout={() => void handleLogout()}
       />
-
-      <SectionPanel className="p-6">
-        <h1 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
-          Editeur cartographique
-        </h1>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground">
-          Ce premier lot reactive uniquement le fond de carte dans l’editeur. Les couches de cases,
-          les objets cartographiques et les outils d’edition reviendront dans les lots suivants.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <Link href="/">Retour a la carte</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/admin/tech">Administration technique</Link>
-          </Button>
-        </div>
-        {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
-      </SectionPanel>
-
+      {error ? (
+        <SectionPanel className="p-6">
+          <p className="text-sm text-destructive">{error}</p>
+        </SectionPanel>
+      ) : null}
       <EditorMapCanvas />
     </AppShell>
   );

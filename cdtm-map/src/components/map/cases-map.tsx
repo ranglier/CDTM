@@ -10,6 +10,7 @@ import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
+import { buildCaseHoverRows } from "@/map/case-hover";
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
   cdtmProjection,
@@ -65,30 +66,6 @@ type HoverInfo = {
     value: string;
   }>;
 };
-
-function buildHoverRows(displayMode: MapDisplayMode, properties: StableCaseProperties | null) {
-  if (!properties) {
-    return [];
-  }
-
-  if (displayMode === "faction") {
-    return properties.faction ? [{ label: "Faction", value: properties.faction }] : [];
-  }
-
-  if (displayMode === "influence") {
-    return properties.controleur
-      ? [{ label: "Controleur", value: properties.controleur }]
-      : properties.faction
-        ? [{ label: "Faction", value: properties.faction }]
-        : [];
-  }
-
-  return [
-    properties.terrain_cat ? { label: "Categorie", value: properties.terrain_cat } : null,
-    properties.terrain_type ? { label: "Terrain", value: properties.terrain_type } : null,
-    properties.relief ? { label: "Relief", value: properties.relief } : null,
-  ].filter((row): row is { label: string; value: string } => row !== null);
-}
 
 export function CasesMap({
   dataUrl,
@@ -356,7 +333,7 @@ export function CasesMap({
         feature as Feature<Geometry>,
         casePropertiesByIdRef.current,
       );
-      const rows = buildHoverRows(displayModeRef.current, resolvedCase);
+      const rows = buildCaseHoverRows(displayModeRef.current, resolvedCase);
 
       if (rows.length === 0) {
         target.style.cursor = "";
