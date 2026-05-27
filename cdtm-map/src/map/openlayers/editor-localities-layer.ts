@@ -109,6 +109,19 @@ export function replaceEditorLocalityFeatures(
   source.addFeatures(localities.map(createLocalityFeature));
 }
 
+export function upsertEditorLocalityFeature(
+  source: VectorSource,
+  locality: EditorMapLocality,
+): void {
+  const existingFeature = source.getFeatureById(locality.id_locality);
+
+  if (existingFeature) {
+    source.removeFeature(existingFeature);
+  }
+
+  source.addFeature(createLocalityFeature(locality));
+}
+
 export function syncEditorLocalitiesLayerVisibility(
   layer: VectorLayer | null,
   visible: boolean,

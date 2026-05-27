@@ -14,8 +14,16 @@ import type {
 } from "@/admin/types";
 import { Button } from "@/components/ui/button";
 import { loadJsonData } from "@/data/loaders";
-import type { EditorMapLocality } from "@/editor/types";
-import { buildCasePropertiesById, getStableCasesFromCollection, mergeStableCases } from "@/map/case-data";
+import type {
+  EditorMapLocality,
+  EditorMapLocalityInput,
+  EditorReferenceData,
+} from "@/editor/types";
+import {
+  buildCasePropertiesById,
+  getStableCasesFromCollection,
+  mergeStableCases,
+} from "@/map/case-data";
 import { buildCaseHoverRows } from "@/map/case-hover";
 import {
   createCasesVectorLayer,
@@ -30,6 +38,7 @@ import {
   getEditorLocalityFromFeature,
   replaceEditorLocalityFeatures,
   syncEditorLocalitiesLayerVisibility,
+  upsertEditorLocalityFeature,
 } from "@/map/openlayers/editor-localities-layer";
 import {
   cdtmProjection,
@@ -54,6 +63,17 @@ type HoverInfo = {
     label: string;
     value: string;
   }>;
+};
+
+type EditorTool = "select" | "create-locality";
+
+type LocalityCreateDraft = {
+  x: number;
+  y: number;
+  id_case_detected: string | null;
+  name: string;
+  type_key: string;
+  description: string;
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -108,6 +128,8 @@ export function EditorMapCanvas() {
   const casesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
   const selectedCaseIdRef = useRef<string | null>(null);
+  const editorToolRef = useRef<EditorTool>("select");
+  const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
   const [casesVisible, setCasesVisible] = useState(true);
@@ -118,8 +140,14 @@ export function EditorMapCanvas() {
   const [localitiesCount, setLocalitiesCount] = useState<number | null>(null);
   const [localitiesLoading, setLocalitiesLoading] = useState(false);
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
+  const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [localityDraft, setLocalityDraft] = useState<LocalityCreateDraft | null>(null);
+  const [localitySaving, setLocalitySaving] = useState(false);
+  const [localitySaveError, setLocalitySaveError] = useState<string | null>(null);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -134,6 +162,14 @@ export function EditorMapCanvas() {
     localitiesVisibleRef.current = localitiesVisible;
     syncEditorLocalitiesLayerVisibility(localitiesLayerRef.current, localitiesVisible);
   }, [localitiesVisible]);
+
+  useEffect(() => {
+    editorToolRef.current = editorTool;
+  }, [editorTool]);
+
+  useEffect(() => {
+    referenceDataRef.current = referenceData;
+  }, [referenceData]);
 
   useEffect(() => {
     const previousCaseId = selectedCaseIdRef.current;
@@ -200,6 +236,37 @@ export function EditorMapCanvas() {
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
+
+      if (editorToolRef.current === "create-locality") {
+        const [x, y] = event.coordinate;
+        const caseFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === casesLayer,
+          },
+        );
+        const caseId = caseFeature?.getId();
+        const firstType = referenceDataRef.current?.locality_types[0]?.value ?? "";
+
+        setLocalityDraft({
+          x,
+          y,
+          id_case_detected: typeof caseId === "string" ? caseId : null,
+          name: "",
+          type_key: firstType,
+          description: "",
+        });
+        setLocalitySaveError(null);
+
+        return;
+      }
 
       if (!casesVisibleRef.current) {
         return;
@@ -429,8 +496,26 @@ export function EditorMapCanvas() {
       }
     }
 
+    async function loadReferenceData() {
+      try {
+        const data = await fetchJson<EditorReferenceData>("/api/admin/editor/reference-data");
+
+        if (!cancelled) {
+          setReferenceData(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Impossible de charger les referentiels editeur.", error);
+          setReferenceError(
+            error instanceof Error ? error.message : "Chargement des referentiels impossible.",
+          );
+        }
+      }
+    }
+
     void loadCases();
     void loadLocalities();
+    void loadReferenceData();
 
     return () => {
       cancelled = true;
@@ -446,6 +531,62 @@ export function EditorMapCanvas() {
       mapRef.current = null;
     };
   }, []);
+
+  async function handleCreateLocality() {
+    if (!localityDraft) {
+      return;
+    }
+
+    const trimmedName = localityDraft.name.trim();
+
+    if (!trimmedName) {
+      setLocalitySaveError("Le nom est obligatoire.");
+      return;
+    }
+
+    if (!localityDraft.type_key) {
+      setLocalitySaveError("Le type est obligatoire.");
+      return;
+    }
+
+    setLocalitySaving(true);
+    setLocalitySaveError(null);
+
+    try {
+      const payload: EditorMapLocalityInput = {
+        name: trimmedName,
+        type_key: localityDraft.type_key,
+        icon_key: null,
+        x: localityDraft.x,
+        y: localityDraft.y,
+        id_case_detected: localityDraft.id_case_detected,
+        faction: null,
+        controleur: null,
+        status: "draft",
+        depends_on_locality_id: null,
+        description: localityDraft.description.trim() || null,
+      };
+
+      const created = await fetchJson<EditorMapLocality>("/api/admin/editor/localities", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (localitiesSourceRef.current) {
+        upsertEditorLocalityFeature(localitiesSourceRef.current, created);
+      }
+
+      setLocalitiesCount((count) => (count === null ? 1 : count + 1));
+      setLocalityDraft(null);
+      setEditorTool("select");
+    } catch (error) {
+      setLocalitySaveError(
+        error instanceof Error ? error.message : "Creation de localite impossible.",
+      );
+    } finally {
+      setLocalitySaving(false);
+    }
+  }
 
   return (
     <section className="relative min-h-[calc(100svh-5rem)] overflow-hidden rounded-[28px] bg-background/70">
@@ -465,6 +606,19 @@ export function EditorMapCanvas() {
             }
           >
             {casesVisible ? "Masquer les cases" : "Afficher les cases"}
+          </Button>
+          <Button
+            type="button"
+            variant={editorTool === "create-locality" ? "secondary" : "outline"}
+            className="mt-2"
+            disabled={!referenceData || referenceData.locality_types.length === 0}
+            onClick={() => {
+              setEditorTool((tool) => (tool === "create-locality" ? "select" : "create-locality"));
+              setLocalityDraft(null);
+              setLocalitySaveError(null);
+            }}
+          >
+            {editorTool === "create-locality" ? "Annuler la creation" : "Creer une localite"}
           </Button>
           <Button
             type="button"
@@ -488,6 +642,11 @@ export function EditorMapCanvas() {
                 ? `${localitiesCount} localites chargees`
                 : "Localites non chargees"}
           </p>
+          {editorTool === "create-locality" ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cliquez sur la carte pour placer la localite.
+            </p>
+          ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
             {selectedCaseId
               ? `Case selectionnee : ${selectedCaseId}`
@@ -507,6 +666,89 @@ export function EditorMapCanvas() {
           {casesError ? <p className="mt-2 text-xs text-destructive">{casesError}</p> : null}
           {localitiesError ? (
             <p className="mt-2 text-xs text-destructive">{localitiesError}</p>
+          ) : null}
+          {referenceError ? (
+            <p className="mt-2 text-xs text-destructive">{referenceError}</p>
+          ) : null}
+          {localityDraft ? (
+            <form
+              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleCreateLocality();
+              }}
+            >
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Nom</span>
+                <input
+                  value={localityDraft.name}
+                  onChange={(event) =>
+                    setLocalityDraft((draft) =>
+                      draft ? { ...draft, name: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Type</span>
+                <select
+                  value={localityDraft.type_key}
+                  onChange={(event) =>
+                    setLocalityDraft((draft) =>
+                      draft ? { ...draft, type_key: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  {referenceData?.locality_types.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Description</span>
+                <textarea
+                  value={localityDraft.description}
+                  onChange={(event) =>
+                    setLocalityDraft((draft) =>
+                      draft ? { ...draft, description: event.target.value } : draft,
+                    )
+                  }
+                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Coordonnees : {Math.round(localityDraft.x)}, {Math.round(localityDraft.y)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {localityDraft.id_case_detected
+                  ? `Case detectee : ${localityDraft.id_case_detected}`
+                  : "Aucune case detectee"}
+              </p>
+              {localitySaveError ? (
+                <p className="text-xs text-destructive">{localitySaveError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" size="sm" disabled={localitySaving}>
+                  {localitySaving ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setLocalityDraft(null);
+                    setLocalitySaveError(null);
+                    setEditorTool("select");
+                  }}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </form>
           ) : null}
         </div>
       </div>

@@ -33,6 +33,14 @@ Le lot 5 :
 - ajoute un hover localite simple ;
 - ne permet pas encore de creer, modifier ou deplacer les localites.
 
+Le lot 6 :
+- ajoute un mode minimal `Creer une localite` ;
+- permet de cliquer sur la carte pour choisir une position ;
+- affiche un petit formulaire de creation ;
+- envoie un `POST /api/admin/editor/localities` ;
+- affiche immediatement la localite creee sur la carte ;
+- ne permet toujours pas d'editer, supprimer ou deplacer une localite.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;
