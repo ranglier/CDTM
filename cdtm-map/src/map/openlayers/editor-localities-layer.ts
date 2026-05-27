@@ -5,6 +5,7 @@ import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
 import CircleStyle from "ol/style/Circle";
 import Fill from "ol/style/Fill";
+import Icon from "ol/style/Icon";
 import Stroke from "ol/style/Stroke";
 import Style from "ol/style/Style";
 
@@ -34,6 +35,13 @@ const archivedStyle = new Style({
   }),
 });
 
+type EditorLocalitiesLayerContext = {
+  getIconImagePath: (iconKey: string | null) => string | null;
+  getDefaultIconKeyForType: (typeKey: string) => string | null;
+};
+
+const iconStyleCache = new Map<string, Style[]>();
+
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -62,9 +70,7 @@ function createLocalityFeature(locality: EditorMapLocality): Feature<Point> {
   return feature;
 }
 
-function getLocalityStyle(feature: Feature<Geometry>) {
-  const locality = getEditorLocalityFromFeature(feature);
-
+function getFallbackLocalityStyle(locality: EditorMapLocality | null): Style {
   if (!locality) {
     return publishedStyle;
   }
@@ -80,13 +86,77 @@ function getLocalityStyle(feature: Feature<Geometry>) {
   return publishedStyle;
 }
 
+function createIconStyles(
+  imagePath: string,
+  locality: EditorMapLocality,
+  fallbackStyle: Style,
+): Style[] {
+  const opacity =
+    locality.status === "archived" ? 0.45 : locality.status === "draft" ? 0.75 : 1;
+
+  const hitAreaStyle = new Style({
+    image: new CircleStyle({
+      radius: 14,
+      fill: new Fill({ color: "rgba(0, 0, 0, 0.01)" }),
+    }),
+  });
+
+  const iconStyle = new Style({
+    image: new Icon({
+      src: imagePath,
+      opacity,
+      width: 24,
+      height: 24,
+      anchor: [0.5, 0.5],
+      crossOrigin: "anonymous",
+    }),
+  });
+
+  return [fallbackStyle, hitAreaStyle, iconStyle];
+}
+
+function getIconStyles(imagePath: string, locality: EditorMapLocality, fallbackStyle: Style): Style[] {
+  const key = `${imagePath}:${locality.status}`;
+  const cached = iconStyleCache.get(key);
+
+  if (cached) {
+    return cached;
+  }
+
+  const styles = createIconStyles(imagePath, locality, fallbackStyle);
+  iconStyleCache.set(key, styles);
+  return styles;
+}
+
+function getLocalityStyleWithContext(
+  feature: Feature<Geometry>,
+  context?: EditorLocalitiesLayerContext,
+): Style | Style[] {
+  const locality = getEditorLocalityFromFeature(feature);
+  const fallbackStyle = getFallbackLocalityStyle(locality);
+
+  if (!locality) {
+    return fallbackStyle;
+  }
+
+  const effectiveIconKey =
+    locality.icon_key ?? context?.getDefaultIconKeyForType(locality.type_key) ?? null;
+  const imagePath = context?.getIconImagePath(effectiveIconKey) ?? null;
+
+  if (!imagePath) {
+    return fallbackStyle;
+  }
+
+  return getIconStyles(imagePath, locality, fallbackStyle);
+}
+
 export function createEditorLocalitiesVectorSource(): VectorSource {
   return new VectorSource();
 }
 
 export function createEditorLocalitiesVectorLayer(
   source: VectorSource,
-  options: { visible?: boolean } = {},
+  options: { visible?: boolean; context?: EditorLocalitiesLayerContext } = {},
 ): VectorLayer {
   return new VectorLayer({
     source,
@@ -96,7 +166,7 @@ export function createEditorLocalitiesVectorLayer(
         return undefined;
       }
 
-      return getLocalityStyle(feature as Feature<Geometry>);
+      return getLocalityStyleWithContext(feature as Feature<Geometry>, options.context);
     },
   });
 }

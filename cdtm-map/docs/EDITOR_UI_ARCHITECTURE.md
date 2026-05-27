@@ -55,6 +55,14 @@ Le lot 8 :
 - restaure la position precedente si la sauvegarde echoue ;
 - ne concerne toujours pas landmarks, forces ou routes.
 
+Le lot 9 :
+- enrichit `reference-data` avec les metadonnees d'icones utiles aux localites ;
+- affiche une icone si `icon_key` est defini sur la localite ;
+- sinon utilise `default_icon_key` du type de localite si disponible ;
+- sinon garde le fallback rond actuel ;
+- conserve hover, selection, edition et drag des localites ;
+- ne traite toujours pas landmarks, uniques ou forces.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;
