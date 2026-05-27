@@ -41,6 +41,12 @@ Le lot 6 :
 - affiche immediatement la localite creee sur la carte ;
 - ne permet toujours pas d'editer, supprimer ou deplacer une localite.
 
+Le lot 7 :
+- ajoute la selection de localite ;
+- ajoute l'edition simple de nom, type, statut, description ;
+- utilise `PATCH /api/admin/editor/localities/[id]` ;
+- ne permet pas encore deplacer, supprimer, drag-and-drop ou icones reelles.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;

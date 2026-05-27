@@ -17,6 +17,7 @@ import { loadJsonData } from "@/data/loaders";
 import type {
   EditorMapLocality,
   EditorMapLocalityInput,
+  EditorMapLocalityPatch,
   EditorReferenceData,
 } from "@/editor/types";
 import {
@@ -76,6 +77,14 @@ type LocalityCreateDraft = {
   description: string;
 };
 
+type LocalityEditDraft = {
+  id_locality: string;
+  name: string;
+  type_key: string;
+  status: "draft" | "published" | "archived";
+  description: string;
+};
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -114,6 +123,20 @@ function buildEditorCasePropertiesById(
   return buildCasePropertiesById(mergeStableCases(stableCases, publicCases));
 }
 
+function createLocalityEditDraft(locality: EditorMapLocality): LocalityEditDraft {
+  return {
+    id_locality: locality.id_locality,
+    name: locality.name,
+    type_key: locality.type_key,
+    status: locality.status,
+    description: locality.description ?? "",
+  };
+}
+
+function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
+  return JSON.stringify(draft);
+}
+
 export function EditorMapCanvas() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -128,6 +151,7 @@ export function EditorMapCanvas() {
   const casesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
   const selectedCaseIdRef = useRef<string | null>(null);
+  const selectedLocalityIdRef = useRef<string | null>(null);
   const editorToolRef = useRef<EditorTool>("select");
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
@@ -144,10 +168,15 @@ export function EditorMapCanvas() {
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [selectedLocality, setSelectedLocality] = useState<EditorMapLocality | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [localityDraft, setLocalityDraft] = useState<LocalityCreateDraft | null>(null);
   const [localitySaving, setLocalitySaving] = useState(false);
   const [localitySaveError, setLocalitySaveError] = useState<string | null>(null);
+  const [localityEditDraft, setLocalityEditDraft] = useState<LocalityEditDraft | null>(null);
+  const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
+  const [localityEditSaving, setLocalityEditSaving] = useState(false);
+  const [localityEditError, setLocalityEditError] = useState<string | null>(null);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -172,6 +201,10 @@ export function EditorMapCanvas() {
   }, [referenceData]);
 
   useEffect(() => {
+    selectedLocalityIdRef.current = selectedLocality?.id_locality ?? null;
+  }, [selectedLocality]);
+
+  useEffect(() => {
     const previousCaseId = selectedCaseIdRef.current;
     selectedCaseIdRef.current = selectedCaseId;
 
@@ -189,6 +222,36 @@ export function EditorMapCanvas() {
       source.getFeatureById(selectedCaseId)?.changed();
     }
   }, [selectedCaseId]);
+
+  function handleCloseLocalitySelection() {
+    setSelectedLocality(null);
+    setLocalityEditDraft(null);
+    setLocalityEditSnapshot(null);
+    setLocalityEditError(null);
+  }
+
+  function handleCancelLocalityEdit() {
+    if (!selectedLocality) {
+      return;
+    }
+
+    const draft = createLocalityEditDraft(selectedLocality);
+
+    setLocalityEditDraft(draft);
+    setLocalityEditSnapshot(getLocalityEditSnapshot(draft));
+    setLocalityEditError(null);
+  }
+
+  function selectLocality(locality: EditorMapLocality) {
+    const draft = createLocalityEditDraft(locality);
+
+    setSelectedLocality(locality);
+    setLocalityEditDraft(draft);
+    setLocalityEditSnapshot(getLocalityEditSnapshot(draft));
+    setLocalityEditError(null);
+    setLocalityDraft(null);
+    setEditorTool("select");
+  }
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
@@ -268,6 +331,31 @@ export function EditorMapCanvas() {
         return;
       }
 
+      if (localitiesVisibleRef.current) {
+        const localityFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
+          },
+        );
+
+        if (localityFeature) {
+          const locality = getEditorLocalityFromFeature(localityFeature as Feature<Geometry>);
+
+          if (locality) {
+            selectLocality(locality);
+            return;
+          }
+        }
+      }
+
       if (!casesVisibleRef.current) {
         return;
       }
@@ -287,10 +375,12 @@ export function EditorMapCanvas() {
       );
 
       if (!feature) {
+        handleCloseLocalitySelection();
         setSelectedCaseId(null);
         return;
       }
 
+      handleCloseLocalitySelection();
       const id = feature.getId();
       setSelectedCaseId(typeof id === "string" ? id : null);
     };
@@ -577,14 +667,71 @@ export function EditorMapCanvas() {
       }
 
       setLocalitiesCount((count) => (count === null ? 1 : count + 1));
-      setLocalityDraft(null);
-      setEditorTool("select");
+      selectLocality(created);
     } catch (error) {
       setLocalitySaveError(
         error instanceof Error ? error.message : "Creation de localite impossible.",
       );
     } finally {
       setLocalitySaving(false);
+    }
+  }
+
+  const localityEditDirty =
+    localityEditDraft && localityEditSnapshot
+      ? getLocalityEditSnapshot(localityEditDraft) !== localityEditSnapshot
+      : false;
+
+  async function handleSaveLocalityEdit() {
+    if (!selectedLocality || !localityEditDraft) {
+      return;
+    }
+
+    const name = localityEditDraft.name.trim();
+    const typeKey = localityEditDraft.type_key.trim();
+
+    if (!name || !typeKey) {
+      setLocalityEditError("Le nom et le type sont obligatoires.");
+      return;
+    }
+
+    setLocalityEditSaving(true);
+    setLocalityEditError(null);
+
+    try {
+      const patch: EditorMapLocalityPatch = {
+        name,
+        type_key: typeKey,
+        status: localityEditDraft.status,
+        description:
+          localityEditDraft.description.trim().length > 0
+            ? localityEditDraft.description.trim()
+            : null,
+      };
+
+      const updated = await fetchJson<EditorMapLocality>(
+        `/api/admin/editor/localities/${encodeURIComponent(selectedLocality.id_locality)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      );
+
+      if (localitiesSourceRef.current) {
+        upsertEditorLocalityFeature(localitiesSourceRef.current, updated);
+      }
+
+      const nextDraft = createLocalityEditDraft(updated);
+
+      setSelectedLocality(updated);
+      setLocalityEditDraft(nextDraft);
+      setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+    } catch (error) {
+      setLocalityEditError(
+        error instanceof Error ? error.message : "Mise a jour de localite impossible.",
+      );
+    } finally {
+      setLocalityEditSaving(false);
     }
   }
 
@@ -613,6 +760,7 @@ export function EditorMapCanvas() {
             className="mt-2"
             disabled={!referenceData || referenceData.locality_types.length === 0}
             onClick={() => {
+              handleCloseLocalitySelection();
               setEditorTool((tool) => (tool === "create-locality" ? "select" : "create-locality"));
               setLocalityDraft(null);
               setLocalitySaveError(null);
@@ -746,6 +894,125 @@ export function EditorMapCanvas() {
                   }}
                 >
                   Annuler
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          {selectedLocality && localityEditDraft ? (
+            <form
+              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveLocalityEdit();
+              }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Localite selectionnee
+              </p>
+              <p className="text-sm font-semibold text-foreground">{selectedLocality.name}</p>
+              <p className="text-xs text-muted-foreground">
+                Position : {Math.round(selectedLocality.x)}, {Math.round(selectedLocality.y)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Case : {selectedLocality.id_case_detected ?? "non detectee"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ID : {selectedLocality.id_locality}
+              </p>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Nom</span>
+                <input
+                  value={localityEditDraft.name}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft ? { ...draft, name: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Type</span>
+                <select
+                  value={localityEditDraft.type_key}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft ? { ...draft, type_key: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  {referenceData?.locality_types.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Statut</span>
+                <select
+                  value={localityEditDraft.status}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            status: event.target.value as LocalityEditDraft["status"],
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="draft">draft</option>
+                  <option value="published">published</option>
+                  <option value="archived">archived</option>
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Description</span>
+                <textarea
+                  value={localityEditDraft.description}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft ? { ...draft, description: event.target.value } : draft,
+                    )
+                  }
+                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                />
+              </label>
+              {localityEditError ? (
+                <p className="text-xs text-destructive">{localityEditError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    localityEditSaving ||
+                    localityEditDraft.name.trim().length === 0 ||
+                    localityEditDraft.type_key.trim().length === 0 ||
+                    !localityEditDirty
+                  }
+                >
+                  {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelLocalityEdit}
+                >
+                  Annuler modifications
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseLocalitySelection}
+                >
+                  Fermer selection
                 </Button>
               </div>
             </form>
