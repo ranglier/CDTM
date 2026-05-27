@@ -8,8 +8,13 @@ Le lot 1 reintroduit seulement :
 - un noyau OpenLayers commun avec la carte publique ;
 - le fond de carte dans `/editeur`.
 
-Il ne recharge encore :
-- aucune case ;
+Le lot 2 ajoute ensuite :
+- le chargement de `cases.geojson` dans l'editeur ;
+- la couche des cases en lecture seule ;
+- un bouton simple pour afficher ou masquer les cases.
+
+Il n'ajoute toujours :
+- aucune selection de case ;
 - aucune localite ;
 - aucun landmark ;
 - aucune force.
