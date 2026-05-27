@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import Image from "next/image";
 import Collection from "ol/Collection";
 import Feature from "ol/Feature";
 import type Geometry from "ol/geom/Geometry";
@@ -143,6 +144,38 @@ function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
   return JSON.stringify(draft);
 }
 
+function resolveSelectedLocalityIconDiagnostics(
+  locality: EditorMapLocality | null,
+  referenceData: EditorReferenceData | null,
+): {
+  defaultIconKey: string | null;
+  effectiveIconKey: string | null;
+  imagePath: string | null;
+} {
+  if (!locality) {
+    return {
+      defaultIconKey: null,
+      effectiveIconKey: null,
+      imagePath: null,
+    };
+  }
+
+  const defaultIconKey =
+    referenceData?.locality_types.find((type) => type.value === locality.type_key)?.default_icon_key ??
+    null;
+  const effectiveIconKey = locality.icon_key ?? defaultIconKey ?? null;
+  const imagePath =
+    effectiveIconKey
+      ? referenceData?.map_icons.find((icon) => icon.value === effectiveIconKey)?.image_path ?? null
+      : null;
+
+  return {
+    defaultIconKey,
+    effectiveIconKey,
+    imagePath,
+  };
+}
+
 function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
@@ -213,6 +246,11 @@ export function EditorMapCanvas() {
   const [localityDragging, setLocalityDragging] = useState(false);
   const [localityMoveSaving, setLocalityMoveSaving] = useState(false);
   const [localityMoveError, setLocalityMoveError] = useState<string | null>(null);
+
+  const selectedLocalityIconDiagnostics = resolveSelectedLocalityIconDiagnostics(
+    selectedLocality,
+    referenceData,
+  );
 
   const localityEditDirty =
     localityEditDraft && localityEditSnapshot
@@ -1187,6 +1225,38 @@ export function EditorMapCanvas() {
               <p className="text-xs text-muted-foreground">
                 ID : {selectedLocality.id_locality}
               </p>
+              <div className="space-y-1 rounded-xl border border-border/70 bg-background/50 px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Diagnostic icone
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  icon_key : {selectedLocality.icon_key ?? "aucune"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  type_key : {selectedLocality.type_key}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  default_icon_key : {selectedLocalityIconDiagnostics.defaultIconKey ?? "aucune"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  effective_icon_key : {selectedLocalityIconDiagnostics.effectiveIconKey ?? "aucune"}
+                </p>
+                <p className="break-all text-xs text-muted-foreground">
+                  image_path : {selectedLocalityIconDiagnostics.imagePath ?? "aucun"}
+                </p>
+                {selectedLocalityIconDiagnostics.imagePath ? (
+                  <div className="rounded-lg border border-border/70 bg-background/70 p-2">
+                    <Image
+                      src={selectedLocalityIconDiagnostics.imagePath}
+                      alt={selectedLocality.name}
+                      width={32}
+                      height={32}
+                      unoptimized
+                      className="h-8 w-8 object-contain"
+                    />
+                  </div>
+                ) : null}
+              </div>
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Nom</span>
                 <input

@@ -35,6 +35,14 @@ const archivedStyle = new Style({
   }),
 });
 
+const localityIconBadgeStyle = new Style({
+  image: new CircleStyle({
+    radius: 11,
+    fill: new Fill({ color: "rgba(245, 221, 150, 0.92)" }),
+    stroke: new Stroke({ color: "rgba(35, 24, 12, 0.9)", width: 1.5 }),
+  }),
+});
+
 type EditorLocalitiesLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
   getDefaultIconKeyForType: (typeKey: string) => string | null;
@@ -89,7 +97,6 @@ function getFallbackLocalityStyle(locality: EditorMapLocality | null): Style {
 function createIconStyles(
   imagePath: string,
   locality: EditorMapLocality,
-  fallbackStyle: Style,
 ): Style[] {
   const opacity =
     locality.status === "archived" ? 0.45 : locality.status === "draft" ? 0.75 : 1;
@@ -105,17 +112,16 @@ function createIconStyles(
     image: new Icon({
       src: imagePath,
       opacity,
-      width: 24,
-      height: 24,
+      scale: 0.055,
       anchor: [0.5, 0.5],
       crossOrigin: "anonymous",
     }),
   });
 
-  return [fallbackStyle, hitAreaStyle, iconStyle];
+  return [localityIconBadgeStyle, hitAreaStyle, iconStyle];
 }
 
-function getIconStyles(imagePath: string, locality: EditorMapLocality, fallbackStyle: Style): Style[] {
+function getIconStyles(imagePath: string, locality: EditorMapLocality): Style[] {
   const key = `${imagePath}:${locality.status}`;
   const cached = iconStyleCache.get(key);
 
@@ -123,7 +129,7 @@ function getIconStyles(imagePath: string, locality: EditorMapLocality, fallbackS
     return cached;
   }
 
-  const styles = createIconStyles(imagePath, locality, fallbackStyle);
+  const styles = createIconStyles(imagePath, locality);
   iconStyleCache.set(key, styles);
   return styles;
 }
@@ -147,7 +153,7 @@ function getLocalityStyleWithContext(
     return fallbackStyle;
   }
 
-  return getIconStyles(imagePath, locality, fallbackStyle);
+  return getIconStyles(imagePath, locality);
 }
 
 export function createEditorLocalitiesVectorSource(): VectorSource {
