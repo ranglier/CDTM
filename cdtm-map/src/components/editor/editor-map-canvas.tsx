@@ -190,6 +190,10 @@ export function EditorMapCanvas() {
   useEffect(() => {
     localitiesVisibleRef.current = localitiesVisible;
     syncEditorLocalitiesLayerVisibility(localitiesLayerRef.current, localitiesVisible);
+
+    if (!localitiesVisible) {
+      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+    }
   }, [localitiesVisible]);
 
   useEffect(() => {
@@ -772,7 +776,15 @@ export function EditorMapCanvas() {
             type="button"
             variant={localitiesVisible ? "secondary" : "outline"}
             className="mt-2"
-            onClick={() => setLocalitiesVisible((visible) => !visible)}
+            onClick={() =>
+              setLocalitiesVisible((visible) => {
+                if (visible) {
+                  setHoverInfo(null);
+                }
+
+                return !visible;
+              })
+            }
           >
             {localitiesVisible ? "Masquer les localites" : "Afficher les localites"}
           </Button>
@@ -1024,7 +1036,7 @@ export function EditorMapCanvas() {
         className="h-[calc(100svh-5rem)] w-full"
         aria-label="Carte editeur"
       />
-      {hoverInfo && casesVisible ? (
+      {hoverInfo && (casesVisible || localitiesVisible) ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{
