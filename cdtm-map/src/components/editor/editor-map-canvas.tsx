@@ -742,7 +742,7 @@ export function EditorMapCanvas() {
   return (
     <section className="relative min-h-[calc(100svh-5rem)] overflow-hidden rounded-[28px] bg-background/70">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
-        <div className="pointer-events-auto rounded-[20px] border border-border/80 bg-background/90 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+        <div className="pointer-events-auto max-h-[calc(100svh-8rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[20px] border border-border/80 bg-background/90 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
           <Button
             type="button"
             variant={casesVisible ? "secondary" : "outline"}
@@ -888,25 +888,27 @@ export function EditorMapCanvas() {
                   ? `Case detectee : ${localityDraft.id_case_detected}`
                   : "Aucune case detectee"}
               </p>
-              {localitySaveError ? (
-                <p className="text-xs text-destructive">{localitySaveError}</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" size="sm" disabled={localitySaving}>
-                  {localitySaving ? "Enregistrement..." : "Enregistrer"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setLocalityDraft(null);
-                    setLocalitySaveError(null);
-                    setEditorTool("select");
-                  }}
-                >
-                  Annuler
-                </Button>
+              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+                {localitySaveError ? (
+                  <p className="text-xs text-destructive">{localitySaveError}</p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" size="sm" disabled={localitySaving}>
+                    {localitySaving ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setLocalityDraft(null);
+                      setLocalitySaveError(null);
+                      setEditorTool("select");
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                </div>
               </div>
             </form>
           ) : null}
@@ -994,38 +996,42 @@ export function EditorMapCanvas() {
                   className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
                 />
               </label>
-              {localityEditError ? (
-                <p className="text-xs text-destructive">{localityEditError}</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={
-                    localityEditSaving ||
-                    localityEditDraft.name.trim().length === 0 ||
-                    localityEditDraft.type_key.trim().length === 0 ||
-                    !localityEditDirty
-                  }
-                >
-                  {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancelLocalityEdit}
-                >
-                  Annuler modifications
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCloseLocalitySelection}
-                >
-                  Fermer selection
-                </Button>
+              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+                {localityEditError ? (
+                  <p className="text-xs text-destructive">{localityEditError}</p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={
+                      localityEditSaving ||
+                      localityEditDraft.name.trim().length === 0 ||
+                      localityEditDraft.type_key.trim().length === 0 ||
+                      !localityEditDirty
+                    }
+                  >
+                    {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={localityEditSaving || !localityEditDirty}
+                    onClick={handleCancelLocalityEdit}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={localityEditSaving}
+                    onClick={handleCloseLocalitySelection}
+                  >
+                    Fermer
+                  </Button>
+                </div>
               </div>
             </form>
           ) : null}
