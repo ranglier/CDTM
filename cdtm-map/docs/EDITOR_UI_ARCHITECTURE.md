@@ -55,19 +55,6 @@ Le lot 8 :
 - restaure la position precedente si la sauvegarde echoue ;
 - ne concerne toujours pas landmarks, forces ou routes.
 
-Le lot 9 :
-- enrichit les referentiels editeur avec les metadonnees d'icones utiles au rendu ;
-- affiche les icones sur les localites quand elles sont disponibles ;
-- utilise `icon_key`, puis `default_icon_key` du type, puis un fallback rond ;
-- conserve hover, selection, edition et drag ;
-- ne permet pas encore de choisir manuellement une icone dans le formulaire.
-
-Le lot 10 :
-- conserve `map_landmarks` comme table des landmarks et des lieux uniques ;
-- ajoute une categorie `landmark` ou `unique` sur `reference_landmark_types` ;
-- prepare le type `lieu_unique` pour des lieux nommes comme Barad-dur ou Fondcombe ;
-- ne change pas encore l'affichage OpenLayers ni la creation des landmarks.
-
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;
@@ -88,10 +75,6 @@ Le modele reste separe par famille d'objets :
 - `map_landmarks`
 - `map_forces`
 - `map_routes` plus tard
-
-Les types de landmarks restent centralises dans `reference_landmark_types`, avec :
-- `category = landmark` pour les points remarquables generiques ;
-- `category = unique` pour les lieux uniques nommes.
 
 Les statuts restent :
 - `draft`

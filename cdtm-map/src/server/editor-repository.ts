@@ -569,71 +569,23 @@ async function listReferenceOptions(
   return result.rows;
 }
 
-async function listEditorLocalityTypeOptions(
-  client: PoolClient,
-): Promise<EditorReferenceOption[]> {
-  const result = await client.query<EditorReferenceOption>(
-    `
-      SELECT
-        type_key AS value,
-        COALESCE(label, type_key) AS label,
-        default_icon_key
-      FROM reference_locality_types
-      WHERE is_active = TRUE
-      ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
-    `,
-  );
-
-  return result.rows;
-}
-
-async function listEditorLandmarkTypeOptions(
-  client: PoolClient,
-): Promise<EditorReferenceOption[]> {
-  const result = await client.query<EditorReferenceOption>(
-    `
-      SELECT
-        type_key AS value,
-        COALESCE(label, type_key) AS label,
-        category,
-        default_icon_key
-      FROM reference_landmark_types
-      WHERE is_active = TRUE
-      ORDER BY
-        LOWER(COALESCE(category, 'landmark')) ASC,
-        LOWER(COALESCE(label, type_key)) ASC,
-        type_key ASC
-    `,
-  );
-
-  return result.rows;
-}
-
-async function listEditorMapIconOptions(
-  client: PoolClient,
-): Promise<EditorReferenceOption[]> {
-  const result = await client.query<EditorReferenceOption>(
-    `
-      SELECT
-        icon_key AS value,
-        COALESCE(label, icon_key) AS label,
-        category,
-        image_path,
-        image_alt
-      FROM reference_map_icons
-      WHERE is_active = TRUE
-      ORDER BY LOWER(COALESCE(label, icon_key)) ASC, icon_key ASC
-    `,
-  );
-
-  return result.rows;
-}
-
 async function getEditorReferenceDataInternal(client: PoolClient): Promise<EditorReferenceData> {
   const [localityTypes, landmarkTypes, forceTypes, mapIcons, factions, controleurs] =
     await Promise.all([
-      listEditorLocalityTypeOptions(client),
-      listEditorLandmarkTypeOptions(client),
+      listReferenceOptions(
+        client,
+        "reference_locality_types",
+        "type_key",
+        "COALESCE(label, type_key)",
+        "WHERE is_active = TRUE",
+      ),
+      listReferenceOptions(
+        client,
+        "reference_landmark_types",
+        "type_key",
+        "COALESCE(label, type_key)",
+        "WHERE is_active = TRUE",
+      ),
       listReferenceOptions(
         client,
         "reference_force_types",
@@ -641,7 +593,13 @@ async function getEditorReferenceDataInternal(client: PoolClient): Promise<Edito
         "COALESCE(label, type_key)",
         "WHERE is_active = TRUE",
       ),
-      listEditorMapIconOptions(client),
+      listReferenceOptions(
+        client,
+        "reference_map_icons",
+        "icon_key",
+        "COALESCE(label, icon_key)",
+        "WHERE is_active = TRUE",
+      ),
       listReferenceOptions(client, "reference_factions", "id_faction", "COALESCE(nom, id_faction)"),
       listReferenceOptions(
         client,

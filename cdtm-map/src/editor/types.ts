@@ -4,10 +4,6 @@ export type MapObjectStatus = (typeof MAP_OBJECT_STATUSES)[number];
 export type EditorReferenceOption = {
   value: string;
   label: string;
-  category?: string | null;
-  image_path?: string | null;
-  image_alt?: string | null;
-  default_icon_key?: string | null;
 };
 
 export type EditorMapLocality = {
