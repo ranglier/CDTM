@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import type { AdminSession } from "@/admin/types";
+import { EditorMapCanvas } from "@/components/editor/editor-map-canvas";
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -138,9 +139,8 @@ export function EditorPage() {
           Editeur cartographique
         </h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-muted-foreground">
-          L’editeur cartographique est temporairement desactive. Les fondations serveur, les tables
-          et les referentiels sont conserves, mais l’interface sera reconstruite proprement dans un
-          prochain lot.
+          Ce premier lot reactive uniquement le fond de carte dans l’editeur. Les couches de cases,
+          les objets cartographiques et les outils d’edition reviendront dans les lots suivants.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild variant="outline">
@@ -152,6 +152,8 @@ export function EditorPage() {
         </div>
         {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
       </SectionPanel>
+
+      <EditorMapCanvas />
     </AppShell>
   );
 }

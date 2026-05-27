@@ -4,25 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
 import type Geometry from "ol/geom/Geometry";
-import ImageLayer from "ol/layer/Image";
 import Map from "ol/Map";
-import { addProjection } from "ol/proj";
-import Projection from "ol/proj/Projection";
-import ImageStatic from "ol/source/ImageStatic";
-import View from "ol/View";
-import { defaults as defaultControls } from "ol/control/defaults";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
+import { MAP_MAX_ZOOM } from "@/map/config";
 import {
-  CASES_EXTENT,
-  MAP_BACKGROUND_PATH,
-  MAP_EXTENT,
-  MAP_MAX_ZOOM,
-  MAP_PROJECTION_CODE,
-} from "@/map/config";
+  cdtmProjection,
+  createCdtmBackgroundLayer,
+  createCdtmMap,
+  createCdtmView,
+  fitCdtmCasesExtent,
+} from "@/map/openlayers/map-core";
 import {
   createCasesVectorLayer,
   createCasesVectorSource,
@@ -70,14 +65,6 @@ type HoverInfo = {
     value: string;
   }>;
 };
-
-const casesProjection = new Projection({
-  code: MAP_PROJECTION_CODE,
-  extent: MAP_EXTENT,
-  units: "pixels",
-});
-
-addProjection(casesProjection);
 
 function buildHoverRows(displayMode: MapDisplayMode, properties: StableCaseProperties | null) {
   if (!properties) {
@@ -133,24 +120,14 @@ export function CasesMap({
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
-  const view = useMemo(
-    () =>
-      new View({
-        projection: casesProjection,
-        center: [1600, -2000],
-        extent: MAP_EXTENT,
-        maxZoom: MAP_MAX_ZOOM,
-        showFullExtent: true,
-      }),
-    [],
-  );
+  const view = useMemo(() => createCdtmView(), []);
 
   function fitCasesExtent(duration = 200) {
-    mapRef.current?.getView().fit(CASES_EXTENT, {
-      duration,
-      padding: [24, 24, 24, 24],
-      maxZoom: MAP_MAX_ZOOM,
-    });
+    if (!mapRef.current) {
+      return;
+    }
+
+    fitCdtmCasesExtent(mapRef.current, duration);
   }
 
   const focusCaseById = useCallback(
@@ -285,14 +262,7 @@ export function CasesMap({
       return;
     }
 
-    const backgroundLayer = new ImageLayer({
-      source: new ImageStatic({
-        url: MAP_BACKGROUND_PATH,
-        imageExtent: MAP_EXTENT,
-        projection: casesProjection,
-      }),
-    });
-
+    const backgroundLayer = createCdtmBackgroundLayer();
     const source = createCasesVectorSource();
     const layer = createCasesVectorLayer(source, {
       getDisplayMode: () => displayModeRef.current,
@@ -308,15 +278,8 @@ export function CasesMap({
       visible: casesVisibleRef.current,
     });
 
-    const map = new Map({
-      target: mapElementRef.current,
-      layers: [backgroundLayer, layer],
-      controls: defaultControls({
-        attribution: false,
-        rotate: false,
-      }),
-      view,
-    });
+    const map = createCdtmMap(mapElementRef.current, [backgroundLayer, layer]);
+    map.setView(view);
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -461,7 +424,7 @@ export function CasesMap({
           return;
         }
 
-        const features = readCaseFeatures(collection, casesProjection);
+        const features = readCaseFeatures(collection, cdtmProjection);
 
         sourceRef.current.clear(true);
         sourceRef.current.addFeatures(features);

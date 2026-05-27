@@ -2,11 +2,17 @@
 
 ## Etat actuel
 
-L'interface cartographique de `/editeur` a ete retiree.
+L'interface cartographique de `/editeur` est en reconstruction progressive.
 
-La route existe toujours, reste reservee aux comptes `tech_admin`, mais elle affiche
-pour l'instant une page d'attente simple sans carte OpenLayers, sans chargement des
-cases et sans chargement des objets cartographiques.
+Le lot 1 reintroduit seulement :
+- un noyau OpenLayers commun avec la carte publique ;
+- le fond de carte dans `/editeur`.
+
+Il ne recharge encore :
+- aucune case ;
+- aucune localite ;
+- aucun landmark ;
+- aucune force.
 
 ## Ce qui reste en place
 
