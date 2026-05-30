@@ -311,21 +311,34 @@ async function seedLocalityTypes(client: PoolClient): Promise<void> {
 }
 
 async function seedLandmarkTypes(client: PoolClient): Promise<void> {
-  for (const typeKey of ["ruines", "port", "pont", "mine", "barad_dur", "moria", "hauts_des_galgals"] as const) {
+  for (const [typeKey, label, description, category] of [
+    ["pont", "Pont", "Passage construit permettant de franchir un obstacle.", "landmark"],
+    ["gue", "Gue", "Passage praticable a travers un cours d'eau.", "landmark"],
+    ["mine", "Mine", "Exploitation miniere ou site d'extraction.", "landmark"],
+    ["port", "Port", "Port, embarcadere ou point d'acces fluvial ou maritime.", "landmark"],
+    ["col_montagne", "Col de montagne", "Passage notable a travers une chaine montagneuse.", "landmark"],
+    ["lieu_unique", "Lieu unique", "Lieu nomme ou remarquable propre a la Terre du Milieu.", "unique"],
+  ] as const) {
     await client.query(
       `
         INSERT INTO reference_landmark_types (
           type_key,
           label,
-          default_icon_key
+          description,
+          category,
+          default_icon_key,
+          is_active
         )
-        VALUES ($1, $2, NULL)
+        VALUES ($1, $2, $3, $4, NULL, TRUE)
         ON CONFLICT (type_key) DO UPDATE
         SET
           label = EXCLUDED.label,
+          description = EXCLUDED.description,
+          category = EXCLUDED.category,
+          is_active = TRUE,
           updated_at = NOW()
       `,
-      [typeKey, typeKey],
+      [typeKey, label, description, category],
     );
   }
 }

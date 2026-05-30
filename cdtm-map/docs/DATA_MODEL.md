@@ -54,12 +54,29 @@ Les types associes sont eux aussi separes :
 - `reference_landmark_types`
 - `reference_force_types`
 
+`reference_locality_types` ne porte pas de categorie fonctionnelle.
+
+`reference_landmark_types` porte un champ `category` reserve aux landmarks :
+- `landmark` pour les points remarquables generiques
+- `unique` pour les lieux nommes ou exceptionnels
+
+Les lieux uniques restent stockes dans `map_landmarks`.
+Ils utilisent le type technique `type_key = 'lieu_unique'`.
+
 Le statut des objets cartographiques est limite a :
 - `draft`
 - `published`
 - `archived`
 
 L'API d'edition cible ces tables separees directement. `map_points` et `reference_map_point_types` ne font plus partie du modele actif et ne subsistent que comme heritage de migration.
+
+Dans l'editeur cartographique, la creation de point distingue :
+- `Localite`, stockee dans `map_localities`
+- `Landmark`, stocke dans `map_landmarks`
+- `Lieu unique`, egalement stocke dans `map_landmarks`
+
+Les localites et landmarks utilisent par defaut l'icone definie sur leur type.
+Les lieux uniques peuvent choisir manuellement une icone de `reference_map_icons`.
 
 ## Supprime
 

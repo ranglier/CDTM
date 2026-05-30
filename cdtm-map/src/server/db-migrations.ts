@@ -965,6 +965,22 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "006",
+    name: "landmark_type_categories",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'landmark'
+      `);
+      await client.query(`
+        UPDATE reference_landmark_types
+        SET category = 'landmark'
+        WHERE category IS NULL
+           OR category NOT IN ('landmark', 'unique')
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

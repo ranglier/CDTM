@@ -69,10 +69,22 @@ Le rendu actuel des localites ajoute aussi :
 - une taille d'icone liee au zoom, plus grande de pres et reduite au dezoom ;
 - la suppression du diagnostic d'icone dans l'UI.
 
-Il n'ajoute toujours :
-- aucune localite ;
-- aucun landmark ;
-- aucune force.
+Le lot courant ajoute :
+- la lecture seule des landmarks au-dessus des cases et des localites ;
+- une creation unifiee `Creer un point` avec trois familles :
+  - `Localite`
+  - `Landmark`
+  - `Lieu unique`
+- le stockage des lieux uniques dans `map_landmarks` avec `type_key = 'lieu_unique'` ;
+- un champ `category` reserve a `reference_landmark_types` pour distinguer `landmark` et `unique` ;
+- l'utilisation de l'icone du type par defaut pour les localites et landmarks ;
+- un choix manuel d'icone pour les lieux uniques.
+
+Le lot ne fait toujours pas :
+- d'edition de landmarks ;
+- de drag de landmarks ;
+- de gestion des forces ;
+- de gestion des routes.
 
 ## Ce qui reste en place
 

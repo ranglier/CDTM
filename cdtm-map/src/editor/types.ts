@@ -7,6 +7,7 @@ export type EditorReferenceOption = {
   image_path?: string | null;
   image_alt?: string | null;
   default_icon_key?: string | null;
+  category?: string | null;
 };
 
 export type EditorMapLocality = {

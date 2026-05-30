@@ -49,7 +49,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function getIconScaleForResolution(resolution: number): number {
   const safeResolution = Number.isFinite(resolution) && resolution > 0 ? resolution : 1;
-  return clamp(1 / Math.sqrt(Math.max(safeResolution, 1)), 0.45, 1);
+  return clamp(1 / Math.sqrt(Math.max(safeResolution, 1)), 0.4, 1);
 }
 
 function getScaleBucket(scale: number): number {

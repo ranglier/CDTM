@@ -587,6 +587,28 @@ async function listEditorLocalityTypeOptions(
   return result.rows;
 }
 
+async function listEditorLandmarkTypeOptions(
+  client: PoolClient,
+): Promise<EditorReferenceOption[]> {
+  const result = await client.query<EditorReferenceOption>(
+    `
+      SELECT
+        type_key AS value,
+        COALESCE(label, type_key) AS label,
+        category,
+        default_icon_key
+      FROM reference_landmark_types
+      WHERE is_active = TRUE
+      ORDER BY
+        LOWER(COALESCE(category, 'landmark')) ASC,
+        LOWER(COALESCE(label, type_key)) ASC,
+        type_key ASC
+    `,
+  );
+
+  return result.rows;
+}
+
 async function listEditorMapIconOptions(
   client: PoolClient,
 ): Promise<EditorReferenceOption[]> {
@@ -610,13 +632,7 @@ async function getEditorReferenceDataInternal(client: PoolClient): Promise<Edito
   const [localityTypes, landmarkTypes, forceTypes, mapIcons, factions, controleurs] =
     await Promise.all([
       listEditorLocalityTypeOptions(client),
-      listReferenceOptions(
-        client,
-        "reference_landmark_types",
-        "type_key",
-        "COALESCE(label, type_key)",
-        "WHERE is_active = TRUE",
-      ),
+      listEditorLandmarkTypeOptions(client),
       listReferenceOptions(
         client,
         "reference_force_types",
