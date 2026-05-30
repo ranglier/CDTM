@@ -2,36 +2,38 @@
 
 ## Objectif
 
-Prevoir une interface reservee au staff pour consulter des informations supplementaires et, plus tard, outiller la gestion cartographique.
+Documenter l'interface reservee au staff et aux administrateurs techniques pour consulter, corriger et enrichir les donnees cartographiques.
 
-## Elements prevus
+## Elements actifs
 
-### Notes staff
+### Carte staff
 
-- Affichage de notes internes associees aux cases ou aux localites.
+- Lecture publique et staff sur la meme carte, avec bascule de mode admin.
+- Selection simple ou multiple de cases.
+- Edition staff des champs de case prevus par le modele actif.
 
-### Couches privees
+### Administration technique
 
-- Calques non publics pour le suivi interne.
-- Exemple : annotations, zones de travail, couches de verification.
+- Gestion des referentiels globaux.
+- Gestion des tables metier dynamiques.
+- Gestion des comptes `staff` et `tech_admin`.
 
-### Filtres avances
+### Editeur cartographique
 
-- Combinaisons de filtres supplementaires.
-- Recherche par identifiant ou attribut metier.
+- Carte OpenLayers reservee aux `tech_admin`.
+- Gestion progressive des objets cartographiques :
+  - localites
+  - landmarks
+  - lieux uniques
+- Creation, selection, edition et deplacement des points deja pris en charge selon les lots implementes.
 
-### Edition future
+### Separation des donnees
 
-- Aucune edition n'est implementee pour le moment.
-- Cette interface pourra accueillir plus tard des outils de mise a jour.
+- Les routes publiques ne doivent jamais exposer les champs reserves au staff.
+- Les routes admin doivent rester protegees par session.
+- Les donnees de reference et d'edition doivent rester separees du mode public quand elles ne sont pas utiles au rendu visiteur.
 
-## Precautions sur les donnees secretes
+## Evolutions prevues
 
-- Isoler clairement les donnees staff des donnees publiques.
-- Eviter tout chargement inutile de donnees sensibles cote public.
-- Documenter les regles d'acces avant toute mise en ligne.
-
-## TODO
-
-- Definir quels champs seront strictement staff.
-- Prevoir une strategie de separation des exports publics et prives.
+- Etendre l'editeur aux forces puis aux routes.
+- Continuer a simplifier les outils staff sans reintroduire de donnees obsoletes comme les notes internes.

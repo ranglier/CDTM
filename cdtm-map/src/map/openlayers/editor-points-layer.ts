@@ -12,8 +12,8 @@ import Style from "ol/style/Style";
 
 import type { EditorMapLandmark, EditorMapLocality } from "@/editor/types";
 
-export type EditorPointFamily = "locality" | "landmark";
-export type EditorPointRecord =
+type EditorPointFamily = "locality" | "landmark";
+type EditorPointRecord =
   | { family: "locality"; locality: EditorMapLocality }
   | { family: "landmark"; landmark: EditorMapLandmark };
 

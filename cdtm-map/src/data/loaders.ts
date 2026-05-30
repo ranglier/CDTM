@@ -1,5 +1,4 @@
 export async function loadJsonData<T = unknown>(path: string): Promise<T> {
-  // TODO: ajouter la gestion d'erreurs et la validation de schema.
   const response = await fetch(path);
 
   if (!response.ok) {

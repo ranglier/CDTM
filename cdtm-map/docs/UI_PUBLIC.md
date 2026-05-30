@@ -48,8 +48,8 @@ Les booleens d'eau sont rendus en `Oui` ou `Non`.
 - Ne pas projeter le GeoJSON comme s'il etait en longitude/latitude.
 - Ne pas utiliser `EPSG:3857` ni un fond cartographique web standard pour cette couche.
 
-## TODO
+## Evolutions prevues
 
-- Ajouter plus tard les filtres publics utiles.
-- Introduire ensuite une legende adaptee aux futures couches metier publiques.
-- Conserver un panneau lateral simple tant que la carte reste sur la seule couche stable.
+- Ajouter ensuite les filtres publics utiles.
+- Introduire une legende adaptee aux couches publiques metier.
+- Conserver un panneau lateral simple tant qu'il reste plus lisible qu'une popup.

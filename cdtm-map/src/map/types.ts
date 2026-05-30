@@ -20,7 +20,7 @@ export type MapStyleTargetType =
   | "terrain_type"
   | "relief";
 
-export const MAP_PATTERN_TYPES = [
+const MAP_PATTERN_TYPES = [
   "diagonal",
   "diagonal_reverse",
   "crosshatch",
@@ -98,7 +98,7 @@ export function normalizePatternType(value: unknown): MapPatternType | null {
   return null;
 }
 
-export type StableCaseGeometry =
+type StableCaseGeometry =
   | {
       type: "Polygon";
       coordinates: number[][][];
@@ -108,7 +108,7 @@ export type StableCaseGeometry =
       coordinates: number[][][][];
     };
 
-export type StableCaseFeature = {
+type StableCaseFeature = {
   type: "Feature";
   properties: StableCaseProperties;
   geometry: StableCaseGeometry;
@@ -135,7 +135,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export function isStableCaseProperties(value: unknown): value is StableCaseProperties {
+function isStableCaseProperties(value: unknown): value is StableCaseProperties {
   if (!isPlainObject(value)) {
     return false;
   }

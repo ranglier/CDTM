@@ -68,7 +68,7 @@ export function toSnakeCaseIdentifier(value: string): string {
     .replace(/_+/g, "_");
 }
 
-export function shouldReplaceAutoValue(currentValue: string, previousSuggestedValue: string): boolean {
+function shouldReplaceAutoValue(currentValue: string, previousSuggestedValue: string): boolean {
   const normalizedCurrent = currentValue.trim();
   return normalizedCurrent.length === 0 || normalizedCurrent === previousSuggestedValue;
 }
@@ -439,7 +439,7 @@ export function getFriendlyFieldLabel(fieldName: string): string {
   }
 }
 
-export function getOptionLabel(options: ReferenceOption[] | undefined, value: string): string {
+function getOptionLabel(options: ReferenceOption[] | undefined, value: string): string {
   return options?.find((option) => option.value === value)?.label ?? value;
 }
 

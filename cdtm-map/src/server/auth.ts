@@ -14,14 +14,14 @@ type StaffUserRow = {
   is_active: boolean;
 };
 
-export type AuthenticatedStaffUser = {
+type AuthenticatedStaffUser = {
   userId: number;
   username: string;
   role: AdminRole;
   isActive: boolean;
 };
 
-export type StaffLoginResult = {
+type StaffLoginResult = {
   session: AdminSession;
   sessionToken: string;
   expiresAt: Date;
@@ -35,7 +35,7 @@ function getSessionExpirationDate(): Date {
   return new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 }
 
-export function clearAdminSessionCookie(response: NextResponse): void {
+function clearAdminSessionCookie(response: NextResponse): void {
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: "",

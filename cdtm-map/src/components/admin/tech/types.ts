@@ -2,12 +2,9 @@ import type { ReactNode } from "react";
 
 import type {
   DynamicCaseTableFieldType,
-  MapIconUploadMetadata,
   ReferenceOption,
-  ReferenceStyleValue,
   ReferenceTableDefinition,
   ReferenceTableKey,
-  ReferenceTableRow,
 } from "@/admin/tech-types";
 import type { MapStyleTargetType } from "@/map/types";
 
@@ -112,15 +109,3 @@ export type ReferenceAutoFillTableKey =
   | "locality_types"
   | "landmark_types"
   | "force_types";
-
-export type ReferenceUploadResult = MapIconUploadMetadata;
-
-export type RowWithStyle = {
-  row: EditableRow;
-  style: ReferenceStyleValue | null;
-};
-
-export type ToEditableRowInput = {
-  definition: ReferenceTableDefinition;
-  row: ReferenceTableRow;
-};

@@ -20,11 +20,11 @@ import {
 
 type CaseLayerSelectionState = "default" | "selected" | "active";
 
-export type CaseLayerSelectionStateResolver = (
+type CaseLayerSelectionStateResolver = (
   idCase: string | null,
 ) => CaseLayerSelectionState;
 
-export type CaseLayerStyleContext = {
+type CaseLayerStyleContext = {
   getDisplayMode: () => MapDisplayMode;
   getCasePropertiesById: () => Record<string, StableCaseProperties>;
   getPublicMapStyles: () => PublicMapStyles;
@@ -155,20 +155,6 @@ export function readCaseFeatures(
   }
 
   return features;
-}
-
-export function replaceCaseFeatures(
-  source: VectorSource,
-  collection: StableCaseFeatureCollection | null,
-  projection: Projection,
-): void {
-  source.clear(true);
-
-  if (!collection) {
-    return;
-  }
-
-  source.addFeatures(readCaseFeatures(collection, projection));
 }
 
 export function syncCaseLayerVisibility(

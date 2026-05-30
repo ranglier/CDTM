@@ -21,8 +21,8 @@ import {
   type PublicCaseProperties,
 } from "@/admin/types";
 import { loadJsonData } from "@/data/loaders";
-import { getBaseLayers } from "@/map/layers";
 import {
+  CASES_DATA_URL,
   type CaseSelectionIntent,
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
@@ -358,7 +358,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function HomePage() {
   const [totalCases, setTotalCases] = useState(0);
-  const [, casesLayer] = getBaseLayers();
   const [casesVisible, setCasesVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
@@ -899,7 +898,7 @@ export default function HomePage() {
     async function loadStableCases() {
       try {
         const [collection, publicCases] = await Promise.all([
-          loadJsonData<StableCaseFeatureCollection>(casesLayer.sourcePath),
+          loadJsonData<StableCaseFeatureCollection>(CASES_DATA_URL),
           fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(() => ({
             cases: [] as PublicCaseProperties[],
             styles: createEmptyPublicMapStyles(),
@@ -931,7 +930,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [casesLayer.sourcePath]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1057,7 +1056,7 @@ export default function HomePage() {
         aria-label="Carte publique des cases"
       >
         <CasesMap
-          dataUrl={casesLayer.sourcePath}
+          dataUrl={CASES_DATA_URL}
           activeCaseId={activeCaseId}
           selectedCaseIds={selectedCaseIds}
           casePropertiesById={stableCasesByRegistryId}

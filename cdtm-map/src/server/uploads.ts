@@ -12,7 +12,7 @@ const ALLOWED_MAP_ICON_MIME_TYPES = new Map([
 ]);
 const MAX_MAP_ICON_SIZE_BYTES = 1024 * 1024;
 
-export type MapIconUploadResult = {
+type MapIconUploadResult = {
   image_path: string;
   image_original_name: string;
   image_mime_type: string;
@@ -112,11 +112,11 @@ function validateSvgContent(content: string): string {
   return trimmed;
 }
 
-export function getUploadsDir(): string {
+function getUploadsDir(): string {
   return getServerEnv().uploadsDir;
 }
 
-export function getMapIconUploadsDir(): string {
+function getMapIconUploadsDir(): string {
   return path.join(getUploadsDir(), MAP_ICON_UPLOAD_SUBDIR);
 }
 

@@ -40,18 +40,18 @@ export type AdminReferenceData = {
   control_type_options: ReferenceOption[];
 };
 
-export type AdminPublicCaseRecord = PublicCaseProperties & {
+type AdminPublicCaseRecord = PublicCaseProperties & {
   meta: AdminBlockMeta;
 };
 
-export type AdminTerrainRecord = {
+type AdminTerrainRecord = {
   terrain_cat: string | null;
   terrain_type: string | null;
   relief: string | null;
   meta: AdminBlockMeta;
 };
 
-export type AdminControlRecord = {
+type AdminControlRecord = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
@@ -104,7 +104,7 @@ export type AdminCaseDraft = {
   dynamic: Record<string, Record<string, string>>;
 };
 
-export type AdminBulkEditFieldState = {
+type AdminBulkEditFieldState = {
   value: string;
   touched: boolean;
   mixed: boolean;

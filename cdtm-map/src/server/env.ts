@@ -1,4 +1,4 @@
-export type ServerEnv = {
+type ServerEnv = {
   appEnv: string;
   databaseUrl: string | null;
   bootstrapAdminUsername: string | null;

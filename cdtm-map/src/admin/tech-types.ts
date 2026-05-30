@@ -1,7 +1,7 @@
 import type { AdminRole } from "@/admin/roles";
 import type { MapPatternType, MapStyleRecord, MapStyleTargetType } from "@/map/types";
 
-export type TechFieldType =
+type TechFieldType =
   | "text"
   | "textarea"
   | "boolean"
