@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import Collection from "ol/Collection";
 import Feature from "ol/Feature";
+import Point from "ol/geom/Point";
 import type Geometry from "ol/geom/Geometry";
 import type Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
@@ -55,6 +56,13 @@ import {
   updateEditorPointFeature,
   upsertEditorPointFeature,
 } from "@/map/openlayers/editor-points-layer";
+import {
+  clearEditorRouteVertexFeatures,
+  createEditorRouteVerticesVectorLayer,
+  createEditorRouteVerticesVectorSource,
+  getEditorRouteVertexFromFeature,
+  replaceEditorRouteVertexFeatures,
+} from "@/map/openlayers/editor-route-vertices-layer";
 import {
   clearEditorRoutePreview,
   createEditorRoutePreviewVectorLayer,
@@ -148,6 +156,13 @@ type RouteEditDraft = {
   status: "draft" | "published" | "archived";
   description: string;
 };
+
+type RouteGeometryEditDraft = {
+  id_route: string;
+  points: Array<[number, number]>;
+};
+
+type RouteGeometryTool = "select-vertex" | "append-vertex" | "insert-vertex";
 
 type DragOrigin =
   | {
@@ -385,6 +400,17 @@ function getRouteEditSnapshot(draft: RouteEditDraft): string {
   return JSON.stringify(draft);
 }
 
+function createRouteGeometryDraft(route: EditorMapRoute): RouteGeometryEditDraft {
+  return {
+    id_route: route.id_route,
+    points: route.points.map(([x, y]) => [x, y]),
+  };
+}
+
+function getRouteGeometrySnapshot(points: Array<[number, number]>): string {
+  return JSON.stringify(points);
+}
+
 function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
@@ -410,6 +436,10 @@ export function EditorMapCanvas() {
   const routesLayerRef = useRef<ReturnType<typeof createEditorRoutesVectorLayer> | null>(null);
   const routePreviewSourceRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorSource> | null>(null);
   const routePreviewLayerRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorLayer> | null>(null);
+  const routeVerticesSourceRef =
+    useRef<ReturnType<typeof createEditorRouteVerticesVectorSource> | null>(null);
+  const routeVerticesLayerRef =
+    useRef<ReturnType<typeof createEditorRouteVerticesVectorLayer> | null>(null);
   const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
     null,
   );
@@ -425,11 +455,16 @@ export function EditorMapCanvas() {
   const selectedLocalityIdRef = useRef<string | null>(null);
   const selectedLandmarkIdRef = useRef<string | null>(null);
   const selectedRouteIdRef = useRef<string | null>(null);
+  const routeGeometryDraftRef = useRef<RouteGeometryEditDraft | null>(null);
+  const routeGeometryToolRef = useRef<RouteGeometryTool>("select-vertex");
+  const selectedRouteVertexIndexRef = useRef<number | null>(null);
+  const routeGeometryDraggingRef = useRef(false);
   const editorToolRef = useRef<EditorTool>("select");
   const localityDraftOpenRef = useRef(false);
   const localityDraggingRef = useRef(false);
   const localityMoveSavingRef = useRef(false);
   const localityTranslateInteractionRef = useRef<Translate | null>(null);
+  const routeVertexTranslateInteractionRef = useRef<Translate | null>(null);
   const localityDragOriginRef = useRef<DragOrigin | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
@@ -475,6 +510,16 @@ export function EditorMapCanvas() {
   const [routeEditSnapshot, setRouteEditSnapshot] = useState<string | null>(null);
   const [routeEditSaving, setRouteEditSaving] = useState(false);
   const [routeEditError, setRouteEditError] = useState<string | null>(null);
+  const [routeGeometryDraft, setRouteGeometryDraft] = useState<RouteGeometryEditDraft | null>(
+    null,
+  );
+  const [routeGeometrySnapshot, setRouteGeometrySnapshot] = useState<string | null>(null);
+  const [selectedRouteVertexIndex, setSelectedRouteVertexIndex] = useState<number | null>(null);
+  const [routeGeometrySaving, setRouteGeometrySaving] = useState(false);
+  const [routeGeometryError, setRouteGeometryError] = useState<string | null>(null);
+  const [routeGeometryDragging, setRouteGeometryDragging] = useState(false);
+  const [routeGeometryTool, setRouteGeometryTool] =
+    useState<RouteGeometryTool>("select-vertex");
   const [localityEditDraft, setLocalityEditDraft] = useState<LocalityEditDraft | null>(null);
   const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
   const [landmarkEditDraft, setLandmarkEditDraft] = useState<LandmarkEditDraft | null>(null);
@@ -496,6 +541,10 @@ export function EditorMapCanvas() {
   const routeEditDirty =
     routeEditDraft && routeEditSnapshot
       ? getRouteEditSnapshot(routeEditDraft) !== routeEditSnapshot
+      : false;
+  const routeGeometryDirty =
+    routeGeometryDraft && routeGeometrySnapshot
+      ? getRouteGeometrySnapshot(routeGeometryDraft.points) !== routeGeometrySnapshot
       : false;
   const routeColorValid = routeDraft ? isValidRouteColor(routeDraft.stroke_color) : true;
   const routeEditColorValid = routeEditDraft
@@ -554,13 +603,28 @@ export function EditorMapCanvas() {
       return;
     }
 
-    if (!routeDraft || routeDraft.points.length === 0) {
-      clearEditorRoutePreview(routePreviewSourceRef.current);
+    if (routeDraft && routeDraft.points.length > 0) {
+      replaceEditorRoutePreviewFeatures(routePreviewSourceRef.current, {
+        ...routeDraft,
+        status: "draft",
+      });
       return;
     }
 
-    replaceEditorRoutePreviewFeatures(routePreviewSourceRef.current, routeDraft);
-  }, [routeDraft]);
+    if (routeGeometryDraft && selectedRoute) {
+      replaceEditorRoutePreviewFeatures(routePreviewSourceRef.current, {
+        ...selectedRoute,
+        points: routeGeometryDraft.points,
+        geometry_mode: routeEditDraft?.geometry_mode ?? selectedRoute.geometry_mode,
+        stroke_style: routeEditDraft?.stroke_style ?? selectedRoute.stroke_style,
+        stroke_width: routeEditDraft?.stroke_width ?? selectedRoute.stroke_width,
+        stroke_color: routeEditDraft?.stroke_color ?? selectedRoute.stroke_color ?? "",
+      });
+      return;
+    }
+
+    clearEditorRoutePreview(routePreviewSourceRef.current);
+  }, [routeDraft, routeGeometryDraft, routeEditDraft, selectedRoute]);
 
   useEffect(() => {
     localityDraftOpenRef.current = pointDraft !== null;
@@ -573,6 +637,27 @@ export function EditorMapCanvas() {
   useEffect(() => {
     localityMoveSavingRef.current = localityMoveSaving;
   }, [localityMoveSaving]);
+
+  useEffect(() => {
+    if (!routeVerticesSourceRef.current || !routeVerticesLayerRef.current) {
+      return;
+    }
+
+    if (!routeGeometryDraft || !selectedRoute) {
+      clearEditorRouteVertexFeatures(routeVerticesSourceRef.current);
+      routeVerticesLayerRef.current.setVisible(false);
+      return;
+    }
+
+    replaceEditorRouteVertexFeatures(
+      routeVerticesSourceRef.current,
+      routeGeometryDraft.id_route,
+      routeGeometryDraft.points,
+      selectedRouteVertexIndex,
+    );
+    routeVerticesLayerRef.current.setVisible(true);
+    routeVerticesLayerRef.current.changed();
+  }, [routeGeometryDraft, selectedRoute, selectedRouteVertexIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -657,6 +742,22 @@ export function EditorMapCanvas() {
   }, [selectedRoute]);
 
   useEffect(() => {
+    routeGeometryDraftRef.current = routeGeometryDraft;
+  }, [routeGeometryDraft]);
+
+  useEffect(() => {
+    routeGeometryToolRef.current = routeGeometryTool;
+  }, [routeGeometryTool]);
+
+  useEffect(() => {
+    selectedRouteVertexIndexRef.current = selectedRouteVertexIndex;
+  }, [selectedRouteVertexIndex]);
+
+  useEffect(() => {
+    routeGeometryDraggingRef.current = routeGeometryDragging;
+  }, [routeGeometryDragging]);
+
+  useEffect(() => {
     const previousCaseId = selectedCaseIdRef.current;
     selectedCaseIdRef.current = selectedCaseId;
 
@@ -686,6 +787,7 @@ export function EditorMapCanvas() {
       (localitiesVisible || landmarksVisible) &&
         editorTool === "select" &&
         !pointDraft &&
+        !routeGeometryDraft &&
         !localityMoveSaving &&
         !localityEditDirty &&
         !landmarkEditDirty,
@@ -693,11 +795,36 @@ export function EditorMapCanvas() {
   }, [
     editorTool,
     pointDraft,
+    routeGeometryDraft,
     localityEditDirty,
     landmarkEditDirty,
     localityMoveSaving,
     localitiesVisible,
     landmarksVisible,
+  ]);
+
+  useEffect(() => {
+    const interaction = routeVertexTranslateInteractionRef.current;
+
+    if (!interaction) {
+      return;
+    }
+
+    interaction.setActive(
+      routeGeometryDraft !== null &&
+        routeGeometryTool === "select-vertex" &&
+        editorTool === "select" &&
+        !pointDraft &&
+        !routeDraft &&
+        !routeGeometrySaving,
+    );
+  }, [
+    editorTool,
+    pointDraft,
+    routeDraft,
+    routeGeometryDraft,
+    routeGeometrySaving,
+    routeGeometryTool,
   ]);
 
   const handleCloseLocalitySelection = useCallback(() => {
@@ -715,7 +842,65 @@ export function EditorMapCanvas() {
     setRouteEditDraft(null);
     setRouteEditSnapshot(null);
     setRouteEditError(null);
+    setRouteGeometryDraft(null);
+    setRouteGeometrySnapshot(null);
+    setSelectedRouteVertexIndex(null);
+    setRouteGeometryError(null);
+    setRouteGeometryTool("select-vertex");
   }, []);
+
+  const handleEnterRouteGeometryEdit = useCallback(() => {
+    if (!selectedRoute) {
+      return;
+    }
+
+    const draft = createRouteGeometryDraft(selectedRoute);
+
+    setRouteGeometryDraft(draft);
+    setRouteGeometrySnapshot(getRouteGeometrySnapshot(draft.points));
+    setSelectedRouteVertexIndex(null);
+    setRouteGeometryError(null);
+    setRouteGeometryTool("select-vertex");
+  }, [selectedRoute]);
+
+  const handleCancelRouteGeometryEdit = useCallback(() => {
+    if (selectedRoute) {
+      const draft = createRouteGeometryDraft(selectedRoute);
+      setRouteGeometryDraft(draft);
+      setRouteGeometrySnapshot(getRouteGeometrySnapshot(draft.points));
+    } else {
+      setRouteGeometryDraft(null);
+      setRouteGeometrySnapshot(null);
+    }
+
+    setSelectedRouteVertexIndex(null);
+    setRouteGeometryError(null);
+    setRouteGeometryTool("select-vertex");
+  }, [selectedRoute]);
+
+  const handleCloseRouteGeometryEdit = useCallback(() => {
+    setRouteGeometryDraft(null);
+    setRouteGeometrySnapshot(null);
+    setSelectedRouteVertexIndex(null);
+    setRouteGeometryError(null);
+    setRouteGeometryTool("select-vertex");
+  }, []);
+
+  function handleToolChangeBlockedByRouteGeometry(): boolean {
+    if (!routeGeometryDraft) {
+      return false;
+    }
+
+    if (routeGeometryDirty) {
+      setRouteGeometryError(
+        "Enregistrez ou annulez la geometrie avant de changer d'outil.",
+      );
+      return true;
+    }
+
+    handleCloseRouteGeometryEdit();
+    return false;
+  }
 
   function handleCancelRouteCreate() {
     setRouteDraft(null);
@@ -802,6 +987,7 @@ export function EditorMapCanvas() {
     const draft = createRouteEditDraft(route);
 
     handleCloseLocalitySelection();
+    handleCloseRouteGeometryEdit();
     setSelectedRoute(route);
     setRouteEditDraft(draft);
     setRouteEditSnapshot(getRouteEditSnapshot(draft));
@@ -814,7 +1000,7 @@ export function EditorMapCanvas() {
     }
     setSelectedCaseId(null);
     setEditorTool("select");
-  }, [handleCloseLocalitySelection]);
+  }, [handleCloseLocalitySelection, handleCloseRouteGeometryEdit]);
 
   const detectCaseIdAtCoordinate = useCallback(
     (
@@ -970,6 +1156,56 @@ export function EditorMapCanvas() {
     }
   }, [detectCaseIdAtCoordinate]);
 
+  const handleRouteVertexTranslateEnd = useCallback((rawEvent: unknown) => {
+    const feature = getFirstTranslatedFeature(rawEvent);
+
+    setRouteGeometryDragging(false);
+
+    if (!(feature instanceof Feature)) {
+      return;
+    }
+
+    const routeVertex = getEditorRouteVertexFromFeature(feature as Feature<Geometry>);
+    const geometry = feature.getGeometry();
+
+    if (!routeVertex || !(geometry instanceof Point)) {
+      return;
+    }
+
+    const currentDraft = routeGeometryDraftRef.current;
+
+    if (!currentDraft || routeVertex.routeId !== currentDraft.id_route) {
+      return;
+    }
+
+    const coordinates = geometry.getCoordinates();
+
+    if (
+      !Array.isArray(coordinates) ||
+      coordinates.length < 2 ||
+      !Number.isFinite(coordinates[0]) ||
+      !Number.isFinite(coordinates[1])
+    ) {
+      return;
+    }
+
+    setRouteGeometryDraft((draft) => {
+      if (!draft || draft.id_route !== routeVertex.routeId) {
+        return draft;
+      }
+
+      return {
+        ...draft,
+        points: draft.points.map((point, index) =>
+          index === routeVertex.vertexIndex
+            ? [coordinates[0], coordinates[1]]
+            : point,
+        ),
+      };
+    });
+    setSelectedRouteVertexIndex(routeVertex.vertexIndex);
+  }, []);
+
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
       return;
@@ -979,6 +1215,7 @@ export function EditorMapCanvas() {
     const casesSource = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
     const routePreviewSource = createEditorRoutePreviewVectorSource();
+    const routeVerticesSource = createEditorRouteVerticesVectorSource();
     const pointsSource = createEditorPointsVectorSource();
     const casesLayer = createCasesVectorLayer(
       casesSource,
@@ -1015,15 +1252,22 @@ export function EditorMapCanvas() {
     const routePreviewLayer = createEditorRoutePreviewVectorLayer(routePreviewSource, {
       visible: true,
     });
+    const routeVerticesLayer = createEditorRouteVerticesVectorLayer(routeVerticesSource, {
+      visible: false,
+    });
     const map = createCdtmMap(mapElementRef.current, [
       backgroundLayer,
       casesLayer,
       routesLayer,
       routePreviewLayer,
       pointsLayer,
+      routeVerticesLayer,
     ]);
     const translateInteraction = new Translate({
       layers: [pointsLayer],
+    });
+    const routeVertexTranslateInteraction = new Translate({
+      layers: [routeVerticesLayer],
     });
 
     casesSourceRef.current = casesSource;
@@ -1032,12 +1276,16 @@ export function EditorMapCanvas() {
     routesLayerRef.current = routesLayer;
     routePreviewSourceRef.current = routePreviewSource;
     routePreviewLayerRef.current = routePreviewLayer;
+    routeVerticesSourceRef.current = routeVerticesSource;
+    routeVerticesLayerRef.current = routeVerticesLayer;
     pointsSourceRef.current = pointsSource;
     pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
+    routeVertexTranslateInteractionRef.current = routeVertexTranslateInteraction;
     mapRef.current = map;
     fitCdtmCasesExtent(map, 0);
     map.addInteraction(translateInteraction);
+    map.addInteraction(routeVertexTranslateInteraction);
 
     const resizeObserver = new ResizeObserver(() => {
       map.updateSize();
@@ -1094,6 +1342,35 @@ export function EditorMapCanvas() {
       void handleLocalityTranslateEnd(event);
     }) as EventsKey;
 
+    const routeVertexTranslateStartKey = routeVertexTranslateInteraction.on(
+      "translatestart",
+      (event: unknown) => {
+        const feature = getFirstTranslatedFeature(event);
+
+        if (!(feature instanceof Feature)) {
+          return;
+        }
+
+        const routeVertex = getEditorRouteVertexFromFeature(feature as Feature<Geometry>);
+
+        if (!routeVertex || routeVertex.routeId !== selectedRouteIdRef.current) {
+          return;
+        }
+
+        setSelectedRouteVertexIndex(routeVertex.vertexIndex);
+        setRouteGeometryDragging(true);
+        setRouteGeometryError(null);
+        setHoverInfo(null);
+      },
+    ) as EventsKey;
+
+    const routeVertexTranslateEndKey = routeVertexTranslateInteraction.on(
+      "translateend",
+      (event: unknown) => {
+        handleRouteVertexTranslateEnd(event);
+      },
+    ) as EventsKey;
+
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
 
@@ -1138,6 +1415,79 @@ export function EditorMapCanvas() {
         handleCloseRouteSelection();
         setLocalitySaveError(null);
 
+        return;
+      }
+
+      const currentRouteGeometryDraft = routeGeometryDraftRef.current;
+      const currentRouteGeometryTool = routeGeometryToolRef.current;
+      const currentSelectedRouteVertexIndex = selectedRouteVertexIndexRef.current;
+
+      if (currentRouteGeometryDraft) {
+        const vertexFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === routeVerticesLayer,
+            hitTolerance: 10,
+          },
+        );
+
+        if (vertexFeature) {
+          const routeVertex = getEditorRouteVertexFromFeature(
+            vertexFeature as Feature<Geometry>,
+          );
+
+          if (routeVertex && routeVertex.routeId === currentRouteGeometryDraft.id_route) {
+            setSelectedRouteVertexIndex(routeVertex.vertexIndex);
+            setRouteGeometryTool("select-vertex");
+            setRouteGeometryError(null);
+            return;
+          }
+        }
+
+        if (currentRouteGeometryTool === "append-vertex") {
+          const [x, y] = event.coordinate;
+          const nextIndex = currentRouteGeometryDraft.points.length;
+
+          setRouteGeometryDraft({
+            ...currentRouteGeometryDraft,
+            points: [...currentRouteGeometryDraft.points, [x, y]],
+          });
+          setSelectedRouteVertexIndex(nextIndex);
+          setRouteGeometryTool("select-vertex");
+          setRouteGeometryError(null);
+          setHoverInfo(null);
+          return;
+        }
+
+        if (
+          currentRouteGeometryTool === "insert-vertex" &&
+          currentSelectedRouteVertexIndex !== null
+        ) {
+          const [x, y] = event.coordinate;
+          const nextIndex = currentSelectedRouteVertexIndex + 1;
+          const nextPoints = [...currentRouteGeometryDraft.points];
+
+          nextPoints.splice(nextIndex, 0, [x, y]);
+          setRouteGeometryDraft({
+            ...currentRouteGeometryDraft,
+            points: nextPoints,
+          });
+          setSelectedRouteVertexIndex(nextIndex);
+          setRouteGeometryTool("select-vertex");
+          setRouteGeometryError(null);
+          setHoverInfo(null);
+          return;
+        }
+
+        setSelectedRouteVertexIndex(null);
+        setHoverInfo(null);
         return;
       }
 
@@ -1263,8 +1613,45 @@ export function EditorMapCanvas() {
         return;
       }
 
+      if (routeGeometryDraggingRef.current) {
+        target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
       if (editorToolRef.current === "create-route") {
         target.style.cursor = "crosshair";
+        setHoverInfo(null);
+        return;
+      }
+
+      if (routeGeometryDraftRef.current && routeGeometryToolRef.current !== "select-vertex") {
+        target.style.cursor = "crosshair";
+        setHoverInfo(null);
+        return;
+      }
+
+      if (routeGeometryDraftRef.current) {
+        const vertexFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === routeVerticesLayer,
+            hitTolerance: 10,
+          },
+        );
+
+        if (vertexFeature) {
+          target.style.cursor = "pointer";
+        } else {
+          target.style.cursor = "";
+        }
         setHoverInfo(null);
         return;
       }
@@ -1620,9 +2007,12 @@ export function EditorMapCanvas() {
       resizeObserver.disconnect();
       unByKey(translateStartKey);
       unByKey(translateEndKey);
+      unByKey(routeVertexTranslateStartKey);
+      unByKey(routeVertexTranslateEndKey);
       unByKey(singleClickKey);
       unByKey(pointerMoveKey);
       map.removeInteraction(translateInteraction);
+      map.removeInteraction(routeVertexTranslateInteraction);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
       casesSourceRef.current = null;
@@ -1631,15 +2021,19 @@ export function EditorMapCanvas() {
       routesLayerRef.current = null;
       routePreviewSourceRef.current = null;
       routePreviewLayerRef.current = null;
+      routeVerticesSourceRef.current = null;
+      routeVerticesLayerRef.current = null;
       pointsSourceRef.current = null;
       pointsLayerRef.current = null;
       localityTranslateInteractionRef.current = null;
+      routeVertexTranslateInteractionRef.current = null;
       mapRef.current = null;
     };
   }, [
     handleCloseLocalitySelection,
     handleCloseRouteSelection,
     handleLocalityTranslateEnd,
+    handleRouteVertexTranslateEnd,
     selectLandmark,
     selectLocality,
     selectRoute,
@@ -2007,6 +2401,95 @@ export function EditorMapCanvas() {
     }
   }
 
+  function handleDeleteSelectedRouteVertex() {
+    if (!routeGeometryDraft || selectedRouteVertexIndex === null || routeGeometryDraft.points.length <= 2) {
+      return;
+    }
+
+    const nextPoints = routeGeometryDraft.points.filter(
+      (_, index) => index !== selectedRouteVertexIndex,
+    );
+    const nextSelectedIndex =
+      nextPoints.length === 0
+        ? null
+        : Math.min(selectedRouteVertexIndex, nextPoints.length - 1);
+
+    setRouteGeometryDraft({
+      ...routeGeometryDraft,
+      points: nextPoints,
+    });
+    setSelectedRouteVertexIndex(nextSelectedIndex);
+    setRouteGeometryTool("select-vertex");
+    setRouteGeometryError(null);
+  }
+
+  async function handleSaveRouteGeometry() {
+    if (!selectedRoute || !routeGeometryDraft) {
+      return;
+    }
+
+    if (routeGeometryDraft.points.length < 2) {
+      setRouteGeometryError("Deux points minimum sont requis.");
+      return;
+    }
+
+    if (
+      routeGeometryDraft.points.some(
+        (point) =>
+          !Array.isArray(point) ||
+          point.length < 2 ||
+          !Number.isFinite(point[0]) ||
+          !Number.isFinite(point[1]),
+      )
+    ) {
+      setRouteGeometryError("La geometrie de route est invalide.");
+      return;
+    }
+
+    setRouteGeometrySaving(true);
+    setRouteGeometryError(null);
+
+    try {
+      const updated = await fetchJson<EditorMapRoute>(
+        `/api/admin/editor/routes/${encodeURIComponent(selectedRoute.id_route)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            points: routeGeometryDraft.points,
+          } satisfies Pick<EditorMapRoutePatch, "points">),
+        },
+      );
+
+      if (routesSourceRef.current) {
+        upsertEditorRouteFeature(routesSourceRef.current, updated);
+      }
+
+      const geometryDraft = createRouteGeometryDraft(updated);
+      const geometrySnapshot = getRouteGeometrySnapshot(geometryDraft.points);
+      const routeDraftIsDirty =
+        routeEditDraft && routeEditSnapshot
+          ? getRouteEditSnapshot(routeEditDraft) !== routeEditSnapshot
+          : false;
+
+      setSelectedRoute(updated);
+      if (!routeDraftIsDirty) {
+        const nextDraft = createRouteEditDraft(updated);
+        setRouteEditDraft(nextDraft);
+        setRouteEditSnapshot(getRouteEditSnapshot(nextDraft));
+      }
+      setRouteGeometryDraft(geometryDraft);
+      setRouteGeometrySnapshot(geometrySnapshot);
+      setSelectedRouteVertexIndex(null);
+      setRouteGeometryTool("select-vertex");
+    } catch (error) {
+      setRouteGeometryError(
+        error instanceof Error ? error.message : "Mise a jour de geometrie impossible.",
+      );
+    } finally {
+      setRouteGeometrySaving(false);
+    }
+  }
+
   const selectedLandmarkTypeOption =
     selectedLandmark && landmarkEditDraft
       ? referenceData?.landmark_types.find((option) => option.value === landmarkEditDraft.type_key) ??
@@ -2043,6 +2526,9 @@ export function EditorMapCanvas() {
                 referenceData.landmark_types.length === 0)
             }
             onClick={() => {
+              if (handleToolChangeBlockedByRouteGeometry()) {
+                return;
+              }
               handleCloseLocalitySelection();
               handleCloseRouteSelection();
               setRouteDraft(null);
@@ -2062,6 +2548,9 @@ export function EditorMapCanvas() {
             variant={editorTool === "create-route" ? "secondary" : "outline"}
             className="mt-2"
             onClick={() => {
+              if (handleToolChangeBlockedByRouteGeometry()) {
+                return;
+              }
               handleCloseLocalitySelection();
               handleCloseRouteSelection();
               setPointDraft(null);
@@ -2180,6 +2669,16 @@ export function EditorMapCanvas() {
               Cliquez sur la carte pour ajouter des points. Deux points minimum.
             </p>
           ) : null}
+          {routeGeometryDraft ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Edition geometrique active :{" "}
+              {routeGeometryTool === "append-vertex"
+                ? "ajout en fin"
+                : routeGeometryTool === "insert-vertex"
+                  ? "insertion apres le sommet selectionne"
+                  : "selection et deplacement des sommets"}
+            </p>
+          ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
             {selectedCaseId
               ? `Case selectionnee : ${selectedCaseId}`
@@ -2203,6 +2702,11 @@ export function EditorMapCanvas() {
           ) : null}
           {localityMoveError ? (
             <p className="mt-2 text-xs text-destructive">{localityMoveError}</p>
+          ) : null}
+          {routeGeometryDragging ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Deplacement de sommet en cours...
+            </p>
           ) : null}
           {selectedCaseId ? (
             <Button
@@ -2409,10 +2913,110 @@ export function EditorMapCanvas() {
               </p>
               <p className="text-sm font-semibold text-foreground">{selectedRoute.name}</p>
               <p className="text-xs text-muted-foreground">
-                {selectedRoute.points.length} point
-                {selectedRoute.points.length > 1 ? "s" : ""} de controle
+                {(routeGeometryDraft?.points.length ?? selectedRoute.points.length)} point
+                {(routeGeometryDraft?.points.length ?? selectedRoute.points.length) > 1 ? "s" : ""} de controle
               </p>
               <p className="text-xs text-muted-foreground">ID : {selectedRoute.id_route}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={routeGeometryDraft ? "secondary" : "outline"}
+                  size="sm"
+                  disabled={routeGeometrySaving || routeSaving}
+                  onClick={() => {
+                    if (routeGeometryDraft) {
+                      handleCloseRouteGeometryEdit();
+                      return;
+                    }
+                    handleEnterRouteGeometryEdit();
+                  }}
+                >
+                  {routeGeometryDraft ? "Fermer l'edition geometrique" : "Editer la geometrie"}
+                </Button>
+                {routeGeometryDraft ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant={routeGeometryTool === "append-vertex" ? "secondary" : "outline"}
+                      size="sm"
+                      disabled={routeGeometrySaving}
+                      onClick={() => {
+                        setRouteGeometryTool("append-vertex");
+                        setRouteGeometryError(null);
+                      }}
+                    >
+                      Ajouter un sommet a la fin
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={routeGeometryTool === "insert-vertex" ? "secondary" : "outline"}
+                      size="sm"
+                      disabled={routeGeometrySaving || selectedRouteVertexIndex === null}
+                      onClick={() => {
+                        setRouteGeometryTool("insert-vertex");
+                        setRouteGeometryError(null);
+                      }}
+                    >
+                      Inserer apres ce sommet
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        routeGeometrySaving ||
+                        selectedRouteVertexIndex === null ||
+                        routeGeometryDraft.points.length <= 2
+                      }
+                      onClick={handleDeleteSelectedRouteVertex}
+                    >
+                      Supprimer le sommet
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              {routeGeometryDraft ? (
+                <div className="space-y-2 rounded-2xl border border-border/70 bg-background/60 px-3 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {selectedRouteVertexIndex !== null
+                      ? `Sommet selectionne : ${selectedRouteVertexIndex + 1} / ${routeGeometryDraft.points.length}`
+                      : `${routeGeometryDraft.points.length} sommets visibles`}
+                  </p>
+                  {routeGeometryDirty ? (
+                    <p className="text-xs text-muted-foreground">
+                      Sauvegardez ou annulez la geometrie avant de modifier les autres champs.
+                    </p>
+                  ) : null}
+                  {routeGeometryError ? (
+                    <p className="text-xs text-destructive">{routeGeometryError}</p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={
+                        routeGeometrySaving ||
+                        routeGeometryDraft.points.length < 2 ||
+                        !routeGeometryDirty
+                      }
+                      onClick={() => {
+                        void handleSaveRouteGeometry();
+                      }}
+                    >
+                      {routeGeometrySaving ? "Enregistrement..." : "Enregistrer la geometrie"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={routeGeometrySaving || !routeGeometryDirty}
+                      onClick={handleCancelRouteGeometryEdit}
+                    >
+                      Annuler les modifications geometriques
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Nom</span>
                 <input
@@ -2584,6 +3188,8 @@ export function EditorMapCanvas() {
                     size="sm"
                     disabled={
                       routeEditSaving ||
+                      routeGeometryDirty ||
+                      routeGeometrySaving ||
                       routeEditDraft.name.trim().length === 0 ||
                       routeEditDraft.route_type.trim().length === 0 ||
                       routeEditDraft.stroke_width < 1 ||

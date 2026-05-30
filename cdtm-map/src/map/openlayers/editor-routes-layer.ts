@@ -35,7 +35,14 @@ const routePreviewLastPointStyle = new Style({
 
 type EditorRoutePreview = Pick<
   EditorMapRoute,
-  "name" | "route_type" | "points" | "geometry_mode" | "stroke_style" | "stroke_width" | "stroke_color"
+  | "name"
+  | "route_type"
+  | "points"
+  | "geometry_mode"
+  | "stroke_style"
+  | "stroke_width"
+  | "stroke_color"
+  | "status"
 >;
 
 function isEditorMapRoute(value: unknown): value is EditorMapRoute {
@@ -109,6 +116,24 @@ function getStrokeSpec(
   return { lineDash: undefined, lineCap: "round" };
 }
 
+function getRouteWidthScale(resolution: number | undefined): number {
+  if (!Number.isFinite(resolution) || typeof resolution !== "number") {
+    return 1;
+  }
+
+  if (resolution <= 8) {
+    return 1;
+  }
+
+  if (resolution >= 32) {
+    return 0.55;
+  }
+
+  const progress = (resolution - 8) / 24;
+
+  return 1 - progress * 0.45;
+}
+
 export function buildEditorRouteDisplayCoordinates(
   points: EditorMapRoutePoint[],
   geometryMode: EditorMapRoute["geometry_mode"],
@@ -167,11 +192,13 @@ function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
   return feature;
 }
 
-function getCachedRouteStyles(route: EditorMapRoute): Style[] {
-  const normalizedWidth =
+function getCachedRouteStyles(route: EditorMapRoute, resolution?: number): Style[] {
+  const baseWidth =
     Number.isInteger(route.stroke_width) && route.stroke_width >= 1 && route.stroke_width <= 12
       ? route.stroke_width
       : 3;
+  const widthScale = getRouteWidthScale(resolution);
+  const normalizedWidth = Math.max(1, Math.round(baseWidth * widthScale * 10) / 10);
   const key = [
     route.status,
     route.stroke_style,
@@ -227,14 +254,14 @@ export function createEditorRoutesVectorLayer(
   return new VectorLayer({
     source,
     visible: options.visible ?? true,
-    style: (candidateFeature) => {
+    style: (candidateFeature, resolution) => {
       if (!(candidateFeature instanceof Feature)) {
         return undefined;
       }
 
       const route = getEditorRouteFromFeature(candidateFeature as Feature<Geometry>);
 
-      return route ? getCachedRouteStyles(route) : undefined;
+      return route ? getCachedRouteStyles(route, resolution) : undefined;
     },
   });
 }
@@ -246,7 +273,7 @@ export function createEditorRoutePreviewVectorLayer(
   return new VectorLayer({
     source,
     visible: options.visible ?? true,
-    style: (candidateFeature) => {
+    style: (candidateFeature, resolution) => {
       if (!(candidateFeature instanceof Feature)) {
         return undefined;
       }
@@ -267,12 +294,12 @@ export function createEditorRoutePreviewVectorLayer(
         id_route: "__preview__",
         faction: null,
         controleur: null,
-        status: "draft",
         description: null,
         created_at: "",
         updated_at: "",
         ...previewRoute,
-      });
+        status: previewRoute.status ?? "draft",
+      }, resolution);
     },
   });
 }

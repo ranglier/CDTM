@@ -109,9 +109,20 @@ Le lot routes 3 ajoute :
 - une mise a jour immediate du rendu de la route apres sauvegarde ;
 - aucun changement des points de controle dans ce lot.
 
+Le lot routes 4 ajoute :
+- un mode d'edition geometrique explicite pour une route selectionnee ;
+- l'affichage des sommets de la route selectionnee ;
+- la selection d'un sommet ;
+- le deplacement local d'un sommet par drag, sans sauvegarde automatique ;
+- l'ajout d'un sommet en fin de route ;
+- l'insertion d'un sommet apres un sommet selectionne ;
+- la suppression d'un sommet sans jamais descendre sous 2 points ;
+- une sauvegarde explicite de la geometrie via `PATCH /api/admin/editor/routes/[id]` avec `points` uniquement ;
+- une annulation locale des modifications geometriques.
+
 Le lot ne fait toujours pas :
 - de gestion des forces ;
-- d'edition de sommets de routes.
+- de snapping, d'undo/redo avance ni d'edition multi-routes.
 
 ## Ce qui reste en place
 
