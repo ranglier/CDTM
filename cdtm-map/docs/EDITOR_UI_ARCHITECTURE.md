@@ -78,11 +78,11 @@ Le lot courant ajoute :
 - le stockage des lieux uniques dans `map_landmarks` avec `type_key = 'lieu_unique'` ;
 - un champ `category` reserve a `reference_landmark_types` pour distinguer `landmark` et `unique` ;
 - l'utilisation de l'icone du type par defaut pour les localites et landmarks ;
-- un choix manuel d'icone pour les lieux uniques.
+- un choix manuel d'icone pour les lieux uniques ;
+- une couche OpenLayers unifiee pour `localites` et `landmarks` ;
+- la possibilite de surcharger l'icone d'une localite, tout en gardant par defaut l'icone de son type.
 
 Le lot ne fait toujours pas :
-- d'edition de landmarks ;
-- de drag de landmarks ;
 - de gestion des forces ;
 - de gestion des routes.
 
@@ -118,6 +118,7 @@ Principes gardes pour la suite :
 - repartir d'une UI minimale avant de remettre une carte OpenLayers
 - rebrancher les couches cartographiques seulement quand le cycle de vie OpenLayers
   est stable et verifie
+- garder des tables et APIs separees par famille, meme si l'affichage OpenLayers mutualise la couche des points
 
 ## Priorites de reprise
 

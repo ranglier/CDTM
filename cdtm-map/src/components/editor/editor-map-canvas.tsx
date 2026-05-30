@@ -20,6 +20,7 @@ import { loadJsonData } from "@/data/loaders";
 import type {
   EditorMapLandmark,
   EditorMapLandmarkInput,
+  EditorMapLandmarkPatch,
   EditorMapLocality,
   EditorMapLocalityInput,
   EditorMapLocalityPatch,
@@ -39,24 +40,18 @@ import {
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
-  createEditorLandmarksVectorLayer,
-  createEditorLandmarksVectorSource,
-  getEditorLandmarkFromFeature,
-  replaceEditorLandmarkFeatures,
-  syncEditorLandmarksLayerVisibility,
-  upsertEditorLandmarkFeature,
-} from "@/map/openlayers/editor-landmarks-layer";
-import {
-  createEditorLocalitiesVectorLayer,
-  createEditorLocalitiesVectorSource,
-  getEditorLocalityFeatureCoordinates,
-  getEditorLocalityFromFeature,
-  replaceEditorLocalityFeatures,
-  setEditorLocalityFeatureCoordinates,
-  syncEditorLocalitiesLayerVisibility,
-  updateEditorLocalityFeature,
-  upsertEditorLocalityFeature,
-} from "@/map/openlayers/editor-localities-layer";
+  createEditorPointsVectorLayer,
+  createEditorPointsVectorSource,
+  getEditorLandmarkFromPointFeature,
+  getEditorLocalityFromPointFeature,
+  getEditorPointFamilyFromFeature,
+  getEditorPointFeatureCoordinates,
+  replaceEditorPointFeatures,
+  setEditorPointFeatureCoordinates,
+  syncEditorPointsLayerVisibility,
+  updateEditorPointFeature,
+  upsertEditorPointFeature,
+} from "@/map/openlayers/editor-points-layer";
 import {
   cdtmProjection,
   createCdtmBackgroundLayer,
@@ -102,9 +97,33 @@ type LocalityEditDraft = {
   id_locality: string;
   name: string;
   type_key: string;
+  icon_key: string | null;
   status: "draft" | "published" | "archived";
   description: string;
 };
+
+type LandmarkEditDraft = {
+  id_landmark: string;
+  name: string;
+  type_key: string;
+  icon_key: string | null;
+  status: "draft" | "published" | "archived";
+  description: string;
+};
+
+type DragOrigin =
+  | {
+      family: "locality";
+      id: string;
+      coordinates: [number, number];
+      locality: EditorMapLocality;
+    }
+  | {
+      family: "landmark";
+      id: string;
+      coordinates: [number, number];
+      landmark: EditorMapLandmark;
+    };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -149,8 +168,20 @@ function createLocalityEditDraft(locality: EditorMapLocality): LocalityEditDraft
     id_locality: locality.id_locality,
     name: locality.name,
     type_key: locality.type_key,
+    icon_key: locality.icon_key,
     status: locality.status,
     description: locality.description ?? "",
+  };
+}
+
+function createLandmarkEditDraft(landmark: EditorMapLandmark): LandmarkEditDraft {
+  return {
+    id_landmark: landmark.id_landmark,
+    name: landmark.name,
+    type_key: landmark.type_key,
+    icon_key: landmark.icon_key,
+    status: landmark.status,
+    description: landmark.description ?? "",
   };
 }
 
@@ -239,6 +270,10 @@ function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
   return JSON.stringify(draft);
 }
 
+function getLandmarkEditSnapshot(draft: LandmarkEditDraft): string {
+  return JSON.stringify(draft);
+}
+
 function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
@@ -260,16 +295,10 @@ export function EditorMapCanvas() {
   const mapRef = useRef<Map | null>(null);
   const casesSourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
-  const localitiesSourceRef = useRef<ReturnType<typeof createEditorLocalitiesVectorSource> | null>(
+  const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
     null,
   );
-  const localitiesLayerRef = useRef<ReturnType<typeof createEditorLocalitiesVectorLayer> | null>(
-    null,
-  );
-  const landmarksSourceRef = useRef<ReturnType<typeof createEditorLandmarksVectorSource> | null>(
-    null,
-  );
-  const landmarksLayerRef = useRef<ReturnType<typeof createEditorLandmarksVectorLayer> | null>(
+  const pointsLayerRef = useRef<ReturnType<typeof createEditorPointsVectorLayer> | null>(
     null,
   );
   const casesVisibleRef = useRef(true);
@@ -278,16 +307,13 @@ export function EditorMapCanvas() {
   const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
   const selectedCaseIdRef = useRef<string | null>(null);
   const selectedLocalityIdRef = useRef<string | null>(null);
+  const selectedLandmarkIdRef = useRef<string | null>(null);
   const editorToolRef = useRef<EditorTool>("select");
   const localityDraftOpenRef = useRef(false);
   const localityDraggingRef = useRef(false);
   const localityMoveSavingRef = useRef(false);
   const localityTranslateInteractionRef = useRef<Translate | null>(null);
-  const localityDragOriginRef = useRef<{
-    id_locality: string;
-    coordinates: [number, number];
-    locality: EditorMapLocality;
-  } | null>(null);
+  const localityDragOriginRef = useRef<DragOrigin | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
   const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
@@ -315,12 +341,15 @@ export function EditorMapCanvas() {
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedLocality, setSelectedLocality] = useState<EditorMapLocality | null>(null);
+  const [selectedLandmark, setSelectedLandmark] = useState<EditorMapLandmark | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [pointDraft, setPointDraft] = useState<MapObjectCreateDraft | null>(null);
   const [localitySaving, setLocalitySaving] = useState(false);
   const [localitySaveError, setLocalitySaveError] = useState<string | null>(null);
   const [localityEditDraft, setLocalityEditDraft] = useState<LocalityEditDraft | null>(null);
   const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
+  const [landmarkEditDraft, setLandmarkEditDraft] = useState<LandmarkEditDraft | null>(null);
+  const [landmarkEditSnapshot, setLandmarkEditSnapshot] = useState<string | null>(null);
   const [localityEditSaving, setLocalityEditSaving] = useState(false);
   const [localityEditError, setLocalityEditError] = useState<string | null>(null);
   const [localityDragging, setLocalityDragging] = useState(false);
@@ -330,6 +359,10 @@ export function EditorMapCanvas() {
   const localityEditDirty =
     localityEditDraft && localityEditSnapshot
       ? getLocalityEditSnapshot(localityEditDraft) !== localityEditSnapshot
+      : false;
+  const landmarkEditDirty =
+    landmarkEditDraft && landmarkEditSnapshot
+      ? getLandmarkEditSnapshot(landmarkEditDraft) !== landmarkEditSnapshot
       : false;
 
   useEffect(() => {
@@ -343,25 +376,27 @@ export function EditorMapCanvas() {
 
   useEffect(() => {
     localitiesVisibleRef.current = localitiesVisible;
-    syncEditorLocalitiesLayerVisibility(localitiesLayerRef.current, localitiesVisible);
+    syncEditorPointsLayerVisibility(pointsLayerRef.current, localitiesVisible || landmarksVisible);
 
     if (!localitiesVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
     }
-  }, [localitiesVisible]);
+    pointsLayerRef.current?.changed();
+  }, [localitiesVisible, landmarksVisible]);
 
   useEffect(() => {
     landmarksVisibleRef.current = landmarksVisible;
-    syncEditorLandmarksLayerVisibility(landmarksLayerRef.current, landmarksVisible);
+    syncEditorPointsLayerVisibility(pointsLayerRef.current, localitiesVisible || landmarksVisible);
 
     if (!landmarksVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
     }
-  }, [landmarksVisible]);
+    pointsLayerRef.current?.changed();
+  }, [landmarksVisible, localitiesVisible]);
 
   useEffect(() => {
     localityDisplayModeRef.current = localityDisplayMode;
-    localitiesLayerRef.current?.changed();
+    pointsLayerRef.current?.changed();
   }, [localityDisplayMode]);
 
   useEffect(() => {
@@ -440,8 +475,7 @@ export function EditorMapCanvas() {
       mapIconSourceByKeyRef.current = Object.fromEntries(
         entries.filter((entry): entry is readonly [string, string] => entry !== null),
       );
-      localitiesLayerRef.current?.changed();
-      landmarksLayerRef.current?.changed();
+      pointsLayerRef.current?.changed();
     }
 
     void loadIconSources();
@@ -454,6 +488,10 @@ export function EditorMapCanvas() {
   useEffect(() => {
     selectedLocalityIdRef.current = selectedLocality?.id_locality ?? null;
   }, [selectedLocality]);
+
+  useEffect(() => {
+    selectedLandmarkIdRef.current = selectedLandmark?.id_landmark ?? null;
+  }, [selectedLandmark]);
 
   useEffect(() => {
     const previousCaseId = selectedCaseIdRef.current;
@@ -482,18 +520,30 @@ export function EditorMapCanvas() {
     }
 
     interaction.setActive(
-      localitiesVisible &&
+      (localitiesVisible || landmarksVisible) &&
         editorTool === "select" &&
         !pointDraft &&
         !localityMoveSaving &&
-        !localityEditDirty,
+        !localityEditDirty &&
+        !landmarkEditDirty,
     );
-  }, [editorTool, pointDraft, localityEditDirty, localityMoveSaving, localitiesVisible]);
+  }, [
+    editorTool,
+    pointDraft,
+    localityEditDirty,
+    landmarkEditDirty,
+    localityMoveSaving,
+    localitiesVisible,
+    landmarksVisible,
+  ]);
 
   function handleCloseLocalitySelection() {
     setSelectedLocality(null);
+    setSelectedLandmark(null);
     setLocalityEditDraft(null);
     setLocalityEditSnapshot(null);
+    setLandmarkEditDraft(null);
+    setLandmarkEditSnapshot(null);
     setLocalityEditError(null);
   }
 
@@ -513,10 +563,41 @@ export function EditorMapCanvas() {
     const draft = createLocalityEditDraft(locality);
 
     setSelectedLocality(locality);
+    setSelectedLandmark(null);
     setLocalityEditDraft(draft);
     setLocalityEditSnapshot(getLocalityEditSnapshot(draft));
+    setLandmarkEditDraft(null);
+    setLandmarkEditSnapshot(null);
     setLocalityEditError(null);
     setPointDraft(null);
+    setSelectedCaseId(null);
+    setEditorTool("select");
+  }
+
+  function handleCancelLandmarkEdit() {
+    if (!selectedLandmark) {
+      return;
+    }
+
+    const draft = createLandmarkEditDraft(selectedLandmark);
+
+    setLandmarkEditDraft(draft);
+    setLandmarkEditSnapshot(getLandmarkEditSnapshot(draft));
+    setLocalityEditError(null);
+  }
+
+  function selectLandmark(landmark: EditorMapLandmark) {
+    const draft = createLandmarkEditDraft(landmark);
+
+    setSelectedLandmark(landmark);
+    setSelectedLocality(null);
+    setLandmarkEditDraft(draft);
+    setLandmarkEditSnapshot(getLandmarkEditSnapshot(draft));
+    setLocalityEditDraft(null);
+    setLocalityEditSnapshot(null);
+    setLocalityEditError(null);
+    setPointDraft(null);
+    setSelectedCaseId(null);
     setEditorTool("select");
   }
 
@@ -562,12 +643,32 @@ export function EditorMapCanvas() {
       return;
     }
 
-    const locality = getEditorLocalityFromFeature(feature);
-    const coordinates = getEditorLocalityFeatureCoordinates(feature);
+    const locality =
+      origin.family === "locality" ? getEditorLocalityFromPointFeature(feature) : null;
+    const landmark =
+      origin.family === "landmark" ? getEditorLandmarkFromPointFeature(feature) : null;
+    const coordinates = getEditorPointFeatureCoordinates(feature);
 
-    if (!locality || !coordinates) {
-      setEditorLocalityFeatureCoordinates(feature, origin.coordinates);
-      updateEditorLocalityFeature(feature, origin.locality);
+    if (!coordinates) {
+      setEditorPointFeatureCoordinates(feature, origin.coordinates);
+      updateEditorPointFeature(
+        feature,
+        origin.family === "locality"
+          ? { family: "locality", locality: origin.locality }
+          : { family: "landmark", landmark: origin.landmark },
+      );
+      return;
+    }
+
+    if (origin.family === "locality" && !locality) {
+      setEditorPointFeatureCoordinates(feature, origin.coordinates);
+      updateEditorPointFeature(feature, { family: "locality", locality: origin.locality });
+      return;
+    }
+
+    if (origin.family === "landmark" && !landmark) {
+      setEditorPointFeatureCoordinates(feature, origin.coordinates);
+      updateEditorPointFeature(feature, { family: "landmark", landmark: origin.landmark });
       return;
     }
 
@@ -583,34 +684,71 @@ export function EditorMapCanvas() {
     setLocalityMoveError(null);
 
     try {
-      const updated = await fetchJson<EditorMapLocality>(
-        `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            x,
-            y,
-            id_case_detected: idCaseDetected,
-          } satisfies Pick<EditorMapLocalityPatch, "x" | "y" | "id_case_detected">),
-        },
-      );
+      if (origin.family === "locality" && locality) {
+        const updated = await fetchJson<EditorMapLocality>(
+          `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              x,
+              y,
+              id_case_detected: idCaseDetected,
+            } satisfies Pick<EditorMapLocalityPatch, "x" | "y" | "id_case_detected">),
+          },
+        );
 
-      if (localitiesSourceRef.current) {
-        upsertEditorLocalityFeature(localitiesSourceRef.current, updated);
-      }
+        if (pointsSourceRef.current) {
+          upsertEditorPointFeature(pointsSourceRef.current, {
+            family: "locality",
+            locality: updated,
+          });
+        }
 
-      if (selectedLocalityIdRef.current === updated.id_locality) {
-        const nextDraft = createLocalityEditDraft(updated);
+        if (selectedLocalityIdRef.current === updated.id_locality) {
+          const nextDraft = createLocalityEditDraft(updated);
 
-        setSelectedLocality(updated);
-        setLocalityEditDraft(nextDraft);
-        setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+          setSelectedLocality(updated);
+          setLocalityEditDraft(nextDraft);
+          setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+        }
+      } else if (origin.family === "landmark" && landmark) {
+        const updated = await fetchJson<EditorMapLandmark>(
+          `/api/admin/editor/landmarks/${encodeURIComponent(landmark.id_landmark)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              x,
+              y,
+              id_case_detected: idCaseDetected,
+            } satisfies Pick<EditorMapLandmarkPatch, "x" | "y" | "id_case_detected">),
+          },
+        );
+
+        if (pointsSourceRef.current) {
+          upsertEditorPointFeature(pointsSourceRef.current, {
+            family: "landmark",
+            landmark: updated,
+          });
+        }
+
+        if (selectedLandmarkIdRef.current === updated.id_landmark) {
+          const nextDraft = createLandmarkEditDraft(updated);
+
+          setSelectedLandmark(updated);
+          setLandmarkEditDraft(nextDraft);
+          setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
+        }
       }
     } catch (error) {
-      setEditorLocalityFeatureCoordinates(feature, origin.coordinates);
-      updateEditorLocalityFeature(feature, origin.locality);
+      if (origin.family === "locality") {
+        setEditorPointFeatureCoordinates(feature, origin.coordinates);
+        updateEditorPointFeature(feature, { family: "locality", locality: origin.locality });
+      } else {
+        setEditorPointFeatureCoordinates(feature, origin.coordinates);
+        updateEditorPointFeature(feature, { family: "landmark", landmark: origin.landmark });
+      }
       setLocalityMoveError(
-        error instanceof Error ? error.message : "Deplacement de localite impossible.",
+        error instanceof Error ? error.message : "Deplacement du point impossible.",
       );
     } finally {
       setLocalityMoveSaving(false);
@@ -624,8 +762,7 @@ export function EditorMapCanvas() {
 
     const backgroundLayer = createCdtmBackgroundLayer();
     const casesSource = createCasesVectorSource();
-    const localitiesSource = createEditorLocalitiesVectorSource();
-    const landmarksSource = createEditorLandmarksVectorSource();
+    const pointsSource = createEditorPointsVectorSource();
     const casesLayer = createCasesVectorLayer(
       casesSource,
       {
@@ -640,42 +777,34 @@ export function EditorMapCanvas() {
         fallbackWhenUnstyled: true,
       },
     );
-    const localitiesLayer = createEditorLocalitiesVectorLayer(localitiesSource, {
+    const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
       context: {
         getIconImagePath: (iconKey) =>
           iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
-        getDefaultIconKeyForType: (typeKey) =>
+        getLocalityDefaultIconKeyForType: (typeKey) =>
           localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getDisplayMode: () => localityDisplayModeRef.current,
-      },
-      visible: localitiesVisibleRef.current,
-    });
-    const landmarksLayer = createEditorLandmarksVectorLayer(landmarksSource, {
-      context: {
-        getIconImagePath: (iconKey) =>
-          iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
-        getDefaultIconKeyForType: (typeKey) =>
+        getLandmarkDefaultIconKeyForType: (typeKey) =>
           landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getTypeCategory: (typeKey) => landmarkCategoryByTypeRef.current[typeKey] ?? null,
+        getLandmarkTypeCategory: (typeKey) => landmarkCategoryByTypeRef.current[typeKey] ?? null,
+        getDisplayMode: () => localityDisplayModeRef.current,
+        isFamilyVisible: (family) =>
+          family === "locality" ? localitiesVisibleRef.current : landmarksVisibleRef.current,
       },
-      visible: landmarksVisibleRef.current,
+      visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
     });
     const map = createCdtmMap(mapElementRef.current, [
       backgroundLayer,
       casesLayer,
-      localitiesLayer,
-      landmarksLayer,
+      pointsLayer,
     ]);
     const translateInteraction = new Translate({
-      layers: [localitiesLayer],
+      layers: [pointsLayer],
     });
 
     casesSourceRef.current = casesSource;
     casesLayerRef.current = casesLayer;
-    localitiesSourceRef.current = localitiesSource;
-    localitiesLayerRef.current = localitiesLayer;
-    landmarksSourceRef.current = landmarksSource;
-    landmarksLayerRef.current = landmarksLayer;
+    pointsSourceRef.current = pointsSource;
+    pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
     mapRef.current = map;
     fitCdtmCasesExtent(map, 0);
@@ -695,23 +824,41 @@ export function EditorMapCanvas() {
         return;
       }
 
-      const locality = getEditorLocalityFromFeature(feature as Feature<Geometry>);
-      const coordinates = getEditorLocalityFeatureCoordinates(feature as Feature<Geometry>);
+      const locality = getEditorLocalityFromPointFeature(feature as Feature<Geometry>);
+      const localityCoordinates = getEditorPointFeatureCoordinates(feature as Feature<Geometry>);
 
-      if (!locality || !coordinates) {
-        localityDragOriginRef.current = null;
+      if (locality && localityCoordinates) {
+        localityDragOriginRef.current = {
+          family: "locality",
+          id: locality.id_locality,
+          coordinates: localityCoordinates,
+          locality,
+        };
+        setHoverInfo(null);
+        setLocalityDragging(true);
+        setLocalityMoveError(null);
+        selectLocality(locality);
         return;
       }
 
-      localityDragOriginRef.current = {
-        id_locality: locality.id_locality,
-        coordinates,
-        locality,
-      };
-      setHoverInfo(null);
-      setLocalityDragging(true);
-      setLocalityMoveError(null);
-      selectLocality(locality);
+      const landmark = getEditorLandmarkFromPointFeature(feature as Feature<Geometry>);
+      const landmarkCoordinates = getEditorPointFeatureCoordinates(feature as Feature<Geometry>);
+
+      if (landmark && landmarkCoordinates) {
+        localityDragOriginRef.current = {
+          family: "landmark",
+          id: landmark.id_landmark,
+          coordinates: landmarkCoordinates,
+          landmark,
+        };
+        setHoverInfo(null);
+        setLocalityDragging(true);
+        setLocalityMoveError(null);
+        selectLandmark(landmark);
+        return;
+      }
+
+      localityDragOriginRef.current = null;
     }) as EventsKey;
 
     const translateEndKey = translateInteraction.on("translateend", (event: unknown) => {
@@ -749,8 +896,8 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (landmarksVisibleRef.current) {
-        const landmarkFeature = map.forEachFeatureAtPixel(
+      if (landmarksVisibleRef.current || localitiesVisibleRef.current) {
+        const pointFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
             if (candidate instanceof Feature) {
@@ -760,41 +907,27 @@ export function EditorMapCanvas() {
             return null;
           },
           {
-            layerFilter: (candidateLayer) => candidateLayer === landmarksLayer,
+            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
             hitTolerance: 10,
           },
         );
 
-        if (landmarkFeature) {
-          handleCloseLocalitySelection();
-          setSelectedCaseId(null);
-          return;
-        }
-      }
-
-      if (localitiesVisibleRef.current) {
-        const localityFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
+        if (pointFeature) {
+          const family = getEditorPointFamilyFromFeature(pointFeature as Feature<Geometry>);
+          if (family === "landmark") {
+            const landmark = getEditorLandmarkFromPointFeature(pointFeature as Feature<Geometry>);
+            if (landmark) {
+              selectLandmark(landmark);
             }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
-            hitTolerance: 10,
-          },
-        );
-
-        if (localityFeature) {
-          const locality = getEditorLocalityFromFeature(localityFeature as Feature<Geometry>);
-
-          if (locality) {
-            selectLocality(locality);
             return;
           }
+          if (family === "locality") {
+            const locality = getEditorLocalityFromPointFeature(pointFeature as Feature<Geometry>);
+            if (locality) {
+              selectLocality(locality);
+            }
+          }
+          return;
         }
       }
 
@@ -860,8 +993,8 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (landmarksVisibleRef.current) {
-        const landmarkFeature = map.forEachFeatureAtPixel(
+      if (landmarksVisibleRef.current || localitiesVisibleRef.current) {
+        const pointFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
             if (candidate instanceof Feature) {
@@ -871,79 +1004,58 @@ export function EditorMapCanvas() {
             return null;
           },
           {
-            layerFilter: (candidateLayer) => candidateLayer === landmarksLayer,
+            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
             hitTolerance: 10,
           },
         );
 
-        if (landmarkFeature) {
-          const landmark = getEditorLandmarkFromFeature(landmarkFeature as Feature<Geometry>);
-
-          if (landmark) {
-            const typeOption = referenceDataRef.current?.landmark_types.find(
-              (option) => option.value === landmark.type_key,
-            );
-            const category = typeOption?.category ?? landmarkCategoryByTypeRef.current[landmark.type_key] ?? null;
-
-            target.style.cursor = "pointer";
-            const position = getTooltipPosition(event.originalEvent);
-
-            setHoverInfo({
-              x: position.x,
-              y: position.y,
-              title: landmark.name,
-              rows: [
-                { label: "Type", value: typeOption?.label ?? landmark.type_key },
-                { label: "Categorie", value: getLandmarkCategoryLabel(category) },
-                { label: "Statut", value: landmark.status },
-                landmark.id_case_detected
-                  ? { label: "Case", value: landmark.id_case_detected }
-                  : null,
-              ].filter((row): row is { label: string; value: string } => row !== null),
-            });
-
-            return;
+        if (pointFeature) {
+          const family = getEditorPointFamilyFromFeature(pointFeature as Feature<Geometry>);
+          if (family === "landmark") {
+            const landmark = getEditorLandmarkFromPointFeature(pointFeature as Feature<Geometry>);
+            if (landmark) {
+              const typeOption = referenceDataRef.current?.landmark_types.find(
+                (option) => option.value === landmark.type_key,
+              );
+              const category =
+                typeOption?.category ?? landmarkCategoryByTypeRef.current[landmark.type_key] ?? null;
+              target.style.cursor = "pointer";
+              const position = getTooltipPosition(event.originalEvent);
+              setHoverInfo({
+                x: position.x,
+                y: position.y,
+                title: landmark.name,
+                rows: [
+                  { label: "Type", value: typeOption?.label ?? landmark.type_key },
+                  { label: "Categorie", value: getLandmarkCategoryLabel(category) },
+                  { label: "Statut", value: landmark.status },
+                  landmark.id_case_detected
+                    ? { label: "Case", value: landmark.id_case_detected }
+                    : null,
+                ].filter((row): row is { label: string; value: string } => row !== null),
+              });
+              return;
+            }
           }
-        }
-      }
-
-      if (localitiesVisibleRef.current) {
-        const localityFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
+          if (family === "locality") {
+            const locality = getEditorLocalityFromPointFeature(pointFeature as Feature<Geometry>);
+            if (locality) {
+              target.style.cursor = "pointer";
+              const position = getTooltipPosition(event.originalEvent);
+              setHoverInfo({
+                x: position.x,
+                y: position.y,
+                title: locality.name,
+                rows: [
+                  { label: "Type", value: locality.type_key },
+                  { label: "Statut", value: locality.status },
+                  locality.id_case_detected
+                    ? { label: "Case", value: locality.id_case_detected }
+                    : null,
+                ].filter((row): row is { label: string; value: string } => row !== null),
+              });
+              return;
             }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
-            hitTolerance: 10,
-          },
-        );
-
-        if (localityFeature) {
-          const locality = getEditorLocalityFromFeature(localityFeature as Feature<Geometry>);
-
-          if (locality) {
-            target.style.cursor = "pointer";
-            const position = getTooltipPosition(event.originalEvent);
-
-            setHoverInfo({
-              x: position.x,
-              y: position.y,
-              title: locality.name,
-              rows: [
-                { label: "Type", value: locality.type_key },
-                { label: "Statut", value: locality.status },
-                locality.id_case_detected
-                  ? { label: "Case", value: locality.id_case_detected }
-                  : null,
-              ].filter((row): row is { label: string; value: string } => row !== null),
-            });
-
-            return;
           }
         }
       }
@@ -1059,11 +1171,18 @@ export function EditorMapCanvas() {
       try {
         const items = await fetchJson<EditorMapLocality[]>("/api/admin/editor/localities?limit=1000");
 
-        if (cancelled || !localitiesSourceRef.current) {
+        if (cancelled || !pointsSourceRef.current) {
           return;
         }
-
-        replaceEditorLocalityFeatures(localitiesSourceRef.current, items);
+        const landmarkFeatures: EditorMapLandmark[] =
+          pointsSourceRef.current
+            .getFeatures()
+            .map((feature) => getEditorLandmarkFromPointFeature(feature as Feature<Geometry>))
+            .filter((item): item is EditorMapLandmark => item !== null);
+        replaceEditorPointFeatures(pointsSourceRef.current, {
+          localities: items,
+          landmarks: landmarkFeatures,
+        });
         setLocalitiesCount(items.length);
       } catch (error) {
         if (cancelled) {
@@ -1089,11 +1208,18 @@ export function EditorMapCanvas() {
       try {
         const items = await fetchJson<EditorMapLandmark[]>("/api/admin/editor/landmarks?limit=1000");
 
-        if (cancelled || !landmarksSourceRef.current) {
+        if (cancelled || !pointsSourceRef.current) {
           return;
         }
-
-        replaceEditorLandmarkFeatures(landmarksSourceRef.current, items);
+        const localityFeatures: EditorMapLocality[] =
+          pointsSourceRef.current
+            .getFeatures()
+            .map((feature) => getEditorLocalityFromPointFeature(feature as Feature<Geometry>))
+            .filter((item): item is EditorMapLocality => item !== null);
+        replaceEditorPointFeatures(pointsSourceRef.current, {
+          localities: localityFeatures,
+          landmarks: items,
+        });
         setLandmarksCount(items.length);
       } catch (error) {
         if (cancelled) {
@@ -1146,10 +1272,8 @@ export function EditorMapCanvas() {
       map.setTarget(undefined);
       casesSourceRef.current = null;
       casesLayerRef.current = null;
-      localitiesSourceRef.current = null;
-      localitiesLayerRef.current = null;
-      landmarksSourceRef.current = null;
-      landmarksLayerRef.current = null;
+      pointsSourceRef.current = null;
+      pointsLayerRef.current = null;
       localityTranslateInteractionRef.current = null;
       mapRef.current = null;
     };
@@ -1189,7 +1313,7 @@ export function EditorMapCanvas() {
         const payload: EditorMapLocalityInput = {
           name: trimmedName,
           type_key: pointDraft.type_key,
-          icon_key: null,
+          icon_key: pointDraft.icon_key,
           x: pointDraft.x,
           y: pointDraft.y,
           id_case_detected: pointDraft.id_case_detected,
@@ -1205,8 +1329,11 @@ export function EditorMapCanvas() {
           body: JSON.stringify(payload),
         });
 
-        if (localitiesSourceRef.current) {
-          upsertEditorLocalityFeature(localitiesSourceRef.current, created);
+        if (pointsSourceRef.current) {
+          upsertEditorPointFeature(pointsSourceRef.current, {
+            family: "locality",
+            locality: created,
+          });
         }
 
         setLocalitiesCount((count) => (count === null ? 1 : count + 1));
@@ -1230,13 +1357,15 @@ export function EditorMapCanvas() {
           body: JSON.stringify(payload),
         });
 
-        if (landmarksSourceRef.current) {
-          upsertEditorLandmarkFeature(landmarksSourceRef.current, created);
+        if (pointsSourceRef.current) {
+          upsertEditorPointFeature(pointsSourceRef.current, {
+            family: "landmark",
+            landmark: created,
+          });
         }
 
         setLandmarksCount((count) => (count === null ? 1 : count + 1));
-        handleCloseLocalitySelection();
-        setSelectedCaseId(created.id_case_detected);
+        selectLandmark(created);
       }
 
       setPointDraft(null);
@@ -1270,6 +1399,7 @@ export function EditorMapCanvas() {
       const patch: EditorMapLocalityPatch = {
         name,
         type_key: typeKey,
+        icon_key: localityEditDraft.icon_key,
         status: localityEditDraft.status,
         description:
           localityEditDraft.description.trim().length > 0
@@ -1285,8 +1415,11 @@ export function EditorMapCanvas() {
         },
       );
 
-      if (localitiesSourceRef.current) {
-        upsertEditorLocalityFeature(localitiesSourceRef.current, updated);
+      if (pointsSourceRef.current) {
+        upsertEditorPointFeature(pointsSourceRef.current, {
+          family: "locality",
+          locality: updated,
+        });
       }
 
       const nextDraft = createLocalityEditDraft(updated);
@@ -1302,6 +1435,81 @@ export function EditorMapCanvas() {
       setLocalityEditSaving(false);
     }
   }
+
+  async function handleSaveLandmarkEdit() {
+    if (!selectedLandmark || !landmarkEditDraft) {
+      return;
+    }
+
+    const name = landmarkEditDraft.name.trim();
+    const typeKey = landmarkEditDraft.type_key.trim();
+    const typeCategory =
+      referenceData?.landmark_types.find((option) => option.value === typeKey)?.category ?? null;
+
+    if (!name || !typeKey) {
+      setLocalityEditError("Le nom et le type sont obligatoires.");
+      return;
+    }
+
+    if (
+      typeCategory === "unique" &&
+      (referenceData?.map_icons.length ?? 0) > 0 &&
+      !landmarkEditDraft.icon_key
+    ) {
+      setLocalityEditError("L'icone est obligatoire pour un lieu unique.");
+      return;
+    }
+
+    setLocalityEditSaving(true);
+    setLocalityEditError(null);
+
+    try {
+      const patch: EditorMapLandmarkPatch = {
+        name,
+        type_key: typeKey,
+        icon_key: typeCategory === "unique" ? landmarkEditDraft.icon_key : null,
+        status: landmarkEditDraft.status,
+        description:
+          landmarkEditDraft.description.trim().length > 0
+            ? landmarkEditDraft.description.trim()
+            : null,
+      };
+
+      const updated = await fetchJson<EditorMapLandmark>(
+        `/api/admin/editor/landmarks/${encodeURIComponent(selectedLandmark.id_landmark)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      );
+
+      if (pointsSourceRef.current) {
+        upsertEditorPointFeature(pointsSourceRef.current, {
+          family: "landmark",
+          landmark: updated,
+        });
+      }
+
+      const nextDraft = createLandmarkEditDraft(updated);
+
+      setSelectedLandmark(updated);
+      setLandmarkEditDraft(nextDraft);
+      setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
+    } catch (error) {
+      setLocalityEditError(
+        error instanceof Error ? error.message : "Mise a jour de landmark impossible.",
+      );
+    } finally {
+      setLocalityEditSaving(false);
+    }
+  }
+
+  const selectedLandmarkTypeOption =
+    selectedLandmark && landmarkEditDraft
+      ? referenceData?.landmark_types.find((option) => option.value === landmarkEditDraft.type_key) ??
+        null
+      : null;
+  const selectedLandmarkCategory = selectedLandmarkTypeOption?.category ?? null;
 
   return (
     <section className="relative min-h-[calc(100svh-5rem)] overflow-hidden rounded-[28px] bg-background/70">
@@ -1413,9 +1621,9 @@ export function EditorMapCanvas() {
               ? `Case selectionnee : ${selectedCaseId}`
               : "Aucune case selectionnee"}
           </p>
-          {localityEditDirty ? (
+          {localityEditDirty || landmarkEditDirty ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              Enregistrez ou annulez les modifications avant de deplacer la localite.
+              Enregistrez ou annulez les modifications avant de deplacer le point.
             </p>
           ) : null}
           {localityDragging ? (
@@ -1552,6 +1760,33 @@ export function EditorMapCanvas() {
                   </select>
                 </label>
               ) : null}
+              {pointDraft.family === "locality" ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Icone</span>
+                  <select
+                    value={pointDraft.icon_key ?? ""}
+                    onChange={(event) =>
+                      setPointDraft((draft) =>
+                        draft
+                          ? {
+                              ...draft,
+                              icon_key:
+                                event.target.value.trim().length > 0 ? event.target.value : null,
+                            }
+                          : draft,
+                      )
+                    }
+                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                  >
+                    <option value="">Icone du type</option>
+                    {(referenceData?.map_icons ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Description</span>
                 <textarea
@@ -1653,6 +1888,31 @@ export function EditorMapCanvas() {
                 </select>
               </label>
               <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Icone</span>
+                <select
+                  value={localityEditDraft.icon_key ?? ""}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            icon_key:
+                              event.target.value.trim().length > 0 ? event.target.value : null,
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="">Icone du type</option>
+                  {(referenceData?.map_icons ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Statut</span>
                 <select
                   value={localityEditDraft.status}
@@ -1708,6 +1968,171 @@ export function EditorMapCanvas() {
                     size="sm"
                     disabled={localityEditSaving || !localityEditDirty}
                     onClick={handleCancelLocalityEdit}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={localityEditSaving}
+                    onClick={handleCloseLocalitySelection}
+                  >
+                    Fermer
+                  </Button>
+                </div>
+              </div>
+            </form>
+          ) : null}
+          {selectedLandmark && landmarkEditDraft ? (
+            <form
+              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveLandmarkEdit();
+              }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Landmark selectionne
+              </p>
+              <p className="text-sm font-semibold text-foreground">{selectedLandmark.name}</p>
+              <p className="text-xs text-muted-foreground">
+                Position : {Math.round(selectedLandmark.x)}, {Math.round(selectedLandmark.y)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Case : {selectedLandmark.id_case_detected ?? "non detectee"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ID : {selectedLandmark.id_landmark}
+              </p>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Nom</span>
+                <input
+                  value={landmarkEditDraft.name}
+                  onChange={(event) =>
+                    setLandmarkEditDraft((draft) =>
+                      draft ? { ...draft, name: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Type</span>
+                <select
+                  value={landmarkEditDraft.type_key}
+                  onChange={(event) =>
+                    setLandmarkEditDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            type_key: event.target.value,
+                            icon_key:
+                              referenceData?.landmark_types.find(
+                                (option) => option.value === event.target.value,
+                              )?.category === "unique"
+                                ? draft.icon_key
+                                : null,
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  {referenceData?.landmark_types.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedLandmarkCategory === "unique" ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Icone</span>
+                  <select
+                    value={landmarkEditDraft.icon_key ?? ""}
+                    onChange={(event) =>
+                      setLandmarkEditDraft((draft) =>
+                        draft
+                          ? {
+                              ...draft,
+                              icon_key: event.target.value.trim().length > 0 ? event.target.value : null,
+                            }
+                          : draft,
+                      )
+                    }
+                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                  >
+                    <option value="">Aucune icone</option>
+                    {(referenceData?.map_icons ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Statut</span>
+                <select
+                  value={landmarkEditDraft.status}
+                  onChange={(event) =>
+                    setLandmarkEditDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            status: event.target.value as LandmarkEditDraft["status"],
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="draft">draft</option>
+                  <option value="published">published</option>
+                  <option value="archived">archived</option>
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Description</span>
+                <textarea
+                  value={landmarkEditDraft.description}
+                  onChange={(event) =>
+                    setLandmarkEditDraft((draft) =>
+                      draft ? { ...draft, description: event.target.value } : draft,
+                    )
+                  }
+                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                />
+              </label>
+              {selectedLandmarkCategory === "unique" && (referenceData?.map_icons.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Aucune icone active n&apos;est disponible. Le lieu unique gardera le fallback visuel.
+                </p>
+              ) : null}
+              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+                {localityEditError ? (
+                  <p className="text-xs text-destructive">{localityEditError}</p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={
+                      localityEditSaving ||
+                      landmarkEditDraft.name.trim().length === 0 ||
+                      landmarkEditDraft.type_key.trim().length === 0 ||
+                      !landmarkEditDirty
+                    }
+                  >
+                    {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={localityEditSaving || !landmarkEditDirty}
+                    onClick={handleCancelLandmarkEdit}
                   >
                     Annuler
                   </Button>

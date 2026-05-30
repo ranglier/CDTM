@@ -75,7 +75,8 @@ Dans l'editeur cartographique, la creation de point distingue :
 - `Landmark`, stocke dans `map_landmarks`
 - `Lieu unique`, egalement stocke dans `map_landmarks`
 
-Les localites et landmarks utilisent par defaut l'icone definie sur leur type.
+Les localites utilisent par defaut l'icone definie sur leur type, mais peuvent aussi definir une icone specifique via `icon_key`.
+Les landmarks utilisent par defaut l'icone definie sur leur type.
 Les lieux uniques peuvent choisir manuellement une icone de `reference_map_icons`.
 
 ## Supprime
