@@ -133,6 +133,54 @@ Les champs suivent le modele des localites sans `depends_on_locality_id`.
 
 `PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
 
+## Routes
+
+### `GET /api/admin/editor/routes`
+
+Filtres supportes :
+
+- `status`
+- `type_key` utilise comme alias de `route_type`
+- `faction`
+- `controleur`
+- `search`
+- `limit`
+
+### `POST /api/admin/editor/routes`
+
+Payload minimal :
+
+```json
+{
+  "name": "Route de la Foret Noire",
+  "route_type": "route_terrestre",
+  "points": [[1200, 800], [1400, 920]],
+  "geometry_mode": "curved",
+  "stroke_style": "solid",
+  "stroke_width": 3,
+  "stroke_color": "#d7b35f",
+  "faction": null,
+  "controleur": null,
+  "status": "draft",
+  "description": "Axe principal"
+}
+```
+
+### `GET /api/admin/editor/routes/[id]`
+### `PATCH /api/admin/editor/routes/[id]`
+### `DELETE /api/admin/editor/routes/[id]`
+
+`PATCH` accepte un objet partiel.
+
+Contraintes :
+- l'identifiant ne peut pas etre modifie ;
+- `PATCH {}` est invalide ;
+- `points`, s'ils sont fournis, doivent contenir au moins deux couples `[x, y]` finis ;
+- `geometry_mode` accepte `straight` ou `curved` ;
+- `stroke_style` accepte `solid`, `dashed` ou `dotted` ;
+- `stroke_width` doit rester entre `1` et `12` ;
+- `stroke_color` accepte `#rgb`, `#rrggbb` ou `""` pour revenir a `null`.
+
 ## Statuts
 
 Les objets cartographiques utilisent uniquement :

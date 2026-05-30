@@ -981,6 +981,47 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "007",
+    name: "route_style_fields",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE map_routes
+        ADD COLUMN IF NOT EXISTS geometry_mode TEXT DEFAULT 'curved'
+      `);
+      await client.query(`
+        ALTER TABLE map_routes
+        ADD COLUMN IF NOT EXISTS stroke_style TEXT DEFAULT 'solid'
+      `);
+      await client.query(`
+        ALTER TABLE map_routes
+        ADD COLUMN IF NOT EXISTS stroke_width INTEGER DEFAULT 3
+      `);
+      await client.query(`
+        ALTER TABLE map_routes
+        ADD COLUMN IF NOT EXISTS stroke_color TEXT
+      `);
+      await client.query(`
+        UPDATE map_routes
+        SET geometry_mode = 'curved'
+        WHERE geometry_mode IS NULL
+           OR geometry_mode NOT IN ('straight', 'curved')
+      `);
+      await client.query(`
+        UPDATE map_routes
+        SET stroke_style = 'solid'
+        WHERE stroke_style IS NULL
+           OR stroke_style NOT IN ('solid', 'dashed', 'dotted')
+      `);
+      await client.query(`
+        UPDATE map_routes
+        SET stroke_width = 3
+        WHERE stroke_width IS NULL
+           OR stroke_width < 1
+           OR stroke_width > 12
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

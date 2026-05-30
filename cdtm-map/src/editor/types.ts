@@ -1,5 +1,10 @@
 export const MAP_OBJECT_STATUSES = ["draft", "published", "archived"] as const;
 export type MapObjectStatus = (typeof MAP_OBJECT_STATUSES)[number];
+export const MAP_ROUTE_GEOMETRY_MODES = ["straight", "curved"] as const;
+export type MapRouteGeometryMode = (typeof MAP_ROUTE_GEOMETRY_MODES)[number];
+
+export const MAP_ROUTE_STROKE_STYLES = ["solid", "dashed", "dotted"] as const;
+export type MapRouteStrokeStyle = (typeof MAP_ROUTE_STROKE_STYLES)[number];
 
 export type EditorReferenceOption = {
   value: string;
@@ -59,6 +64,25 @@ export type EditorMapForce = {
   updated_at: string;
 };
 
+export type EditorMapRoutePoint = [number, number];
+
+export type EditorMapRoute = {
+  id_route: string;
+  name: string;
+  route_type: string;
+  points: EditorMapRoutePoint[];
+  geometry_mode: MapRouteGeometryMode;
+  stroke_style: MapRouteStrokeStyle;
+  stroke_width: number;
+  stroke_color: string | null;
+  faction: string | null;
+  controleur: string | null;
+  status: MapObjectStatus;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type EditorMapLocalityInput = {
   id_locality?: string;
   name: string;
@@ -102,6 +126,21 @@ export type EditorMapForceInput = {
   description?: string | null;
 };
 
+export type EditorMapRouteInput = {
+  id_route?: string;
+  name: string;
+  route_type: string;
+  points: EditorMapRoutePoint[];
+  geometry_mode?: MapRouteGeometryMode;
+  stroke_style?: MapRouteStrokeStyle;
+  stroke_width?: number;
+  stroke_color?: string | null;
+  faction?: string | null;
+  controleur?: string | null;
+  status?: MapObjectStatus;
+  description?: string | null;
+};
+
 export type EditorMapLocalityPatch = Partial<
   Omit<EditorMapLocalityInput, "id_locality">
 >;
@@ -112,6 +151,10 @@ export type EditorMapLandmarkPatch = Partial<
 
 export type EditorMapForcePatch = Partial<
   Omit<EditorMapForceInput, "id_force">
+>;
+
+export type EditorMapRoutePatch = Partial<
+  Omit<EditorMapRouteInput, "id_route">
 >;
 
 export type EditorListOptions = {

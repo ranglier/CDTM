@@ -1,0 +1,250 @@
+import Feature from "ol/Feature";
+import LineString from "ol/geom/LineString";
+import type Geometry from "ol/geom/Geometry";
+import VectorLayer from "ol/layer/Vector";
+import VectorSource from "ol/source/Vector";
+import Stroke from "ol/style/Stroke";
+import Style from "ol/style/Style";
+
+import type {
+  EditorMapRoute,
+  EditorMapRoutePoint,
+  MapObjectStatus,
+  MapRouteStrokeStyle,
+} from "@/editor/types";
+
+const DEFAULT_ROUTE_COLOR = "rgba(245, 221, 150, 0.95)";
+const routeStyleCache = new Map<string, Style[]>();
+
+function isEditorMapRoute(value: unknown): value is EditorMapRoute {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    typeof candidate.id_route === "string" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.route_type === "string" &&
+    Array.isArray(candidate.points)
+  );
+}
+
+function toRgba(color: string | null, alpha: number): string {
+  if (!color) {
+    return `rgba(245, 221, 150, ${alpha})`;
+  }
+
+  const trimmed = color.trim();
+
+  if (/^#([0-9a-fA-F]{3})$/.test(trimmed)) {
+    const [, hex] = /^#([0-9a-fA-F]{3})$/.exec(trimmed) ?? [];
+
+    if (hex) {
+      const [r, g, b] = hex.split("").map((channel) => Number.parseInt(channel + channel, 16));
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+
+  if (/^#([0-9a-fA-F]{6})$/.test(trimmed)) {
+    const [, hex] = /^#([0-9a-fA-F]{6})$/.exec(trimmed) ?? [];
+
+    if (hex) {
+      const r = Number.parseInt(hex.slice(0, 2), 16);
+      const g = Number.parseInt(hex.slice(2, 4), 16);
+      const b = Number.parseInt(hex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+
+  return DEFAULT_ROUTE_COLOR;
+}
+
+function getStatusOpacity(status: MapObjectStatus): number {
+  if (status === "draft") {
+    return 0.55;
+  }
+
+  if (status === "archived") {
+    return 0.4;
+  }
+
+  return 0.95;
+}
+
+function getStrokeSpec(
+  strokeStyle: MapRouteStrokeStyle,
+): { lineDash: number[] | undefined; lineCap: CanvasLineCap } {
+  if (strokeStyle === "dashed") {
+    return { lineDash: [12, 8], lineCap: "butt" };
+  }
+
+  if (strokeStyle === "dotted") {
+    return { lineDash: [2, 8], lineCap: "round" };
+  }
+
+  return { lineDash: undefined, lineCap: "round" };
+}
+
+function buildCurvedCoordinates(points: EditorMapRoutePoint[]): EditorMapRoutePoint[] {
+  if (points.length < 3) {
+    return points;
+  }
+
+  const coordinates: EditorMapRoutePoint[] = [];
+  const segmentsPerInterval = 12;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const p0 = points[Math.max(0, index - 1)];
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const p3 = points[Math.min(points.length - 1, index + 2)];
+
+    for (let step = 0; step < segmentsPerInterval; step += 1) {
+      const t = step / segmentsPerInterval;
+      const t2 = t * t;
+      const t3 = t2 * t;
+
+      const x =
+        0.5 *
+        ((2 * p1[0]) +
+          (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+      const y =
+        0.5 *
+        ((2 * p1[1]) +
+          (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+
+      coordinates.push([x, y]);
+    }
+  }
+
+  coordinates.push(points[points.length - 1]);
+  return coordinates;
+}
+
+function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
+  const displayPoints =
+    route.geometry_mode === "curved" ? buildCurvedCoordinates(route.points) : route.points;
+  const feature = new Feature<LineString>({
+    geometry: new LineString(displayPoints),
+    route,
+  });
+
+  feature.setId(`route:${route.id_route}`);
+  return feature;
+}
+
+function getCachedRouteStyles(route: EditorMapRoute): Style[] {
+  const normalizedWidth =
+    Number.isInteger(route.stroke_width) && route.stroke_width >= 1 && route.stroke_width <= 12
+      ? route.stroke_width
+      : 3;
+  const key = [
+    route.status,
+    route.stroke_style,
+    normalizedWidth,
+    route.stroke_color ?? "",
+  ].join(":");
+  const cached = routeStyleCache.get(key);
+
+  if (cached) {
+    return cached;
+  }
+
+  const opacity = getStatusOpacity(route.status);
+  const { lineDash, lineCap } = getStrokeSpec(route.stroke_style);
+  const haloColor = route.status === "archived" ? "rgba(18, 18, 18, 0.25)" : "rgba(18, 18, 18, 0.45)";
+  const styles = [
+    new Style({
+      stroke: new Stroke({
+        color: haloColor,
+        width: normalizedWidth + 2,
+        lineDash,
+        lineCap,
+        lineJoin: "round",
+      }),
+    }),
+    new Style({
+      stroke: new Stroke({
+        color: route.status === "archived" ? "rgba(155, 155, 155, 0.55)" : toRgba(route.stroke_color, opacity),
+        width: normalizedWidth,
+        lineDash,
+        lineCap,
+        lineJoin: "round",
+      }),
+    }),
+  ];
+
+  routeStyleCache.set(key, styles);
+  return styles;
+}
+
+export function createEditorRoutesVectorSource(): VectorSource {
+  return new VectorSource();
+}
+
+export function createEditorRoutesVectorLayer(
+  source: VectorSource,
+  options: { visible?: boolean } = {},
+): VectorLayer {
+  return new VectorLayer({
+    source,
+    visible: options.visible ?? true,
+    style: (candidateFeature) => {
+      if (!(candidateFeature instanceof Feature)) {
+        return undefined;
+      }
+
+      const route = getEditorRouteFromFeature(candidateFeature as Feature<Geometry>);
+
+      return route ? getCachedRouteStyles(route) : undefined;
+    },
+  });
+}
+
+export function replaceEditorRouteFeatures(
+  source: VectorSource,
+  routes: EditorMapRoute[],
+): void {
+  source.clear(true);
+  source.addFeatures(routes.map(createRouteFeature));
+}
+
+export function upsertEditorRouteFeature(
+  source: VectorSource,
+  route: EditorMapRoute,
+): void {
+  const featureId = `route:${route.id_route}`;
+  const existing = source.getFeatureById(featureId);
+  const nextFeature = createRouteFeature(route);
+
+  if (existing) {
+    source.removeFeature(existing);
+  }
+
+  source.addFeature(nextFeature);
+}
+
+export function syncEditorRoutesLayerVisibility(
+  layer: VectorLayer | null,
+  visible: boolean,
+): void {
+  if (!layer) {
+    return;
+  }
+
+  layer.setVisible(visible);
+  layer.changed();
+}
+
+export function getEditorRouteFromFeature(
+  feature: Feature<Geometry>,
+): EditorMapRoute | null {
+  const route = feature.get("route");
+  return isEditorMapRoute(route) ? route : null;
+}

@@ -63,6 +63,17 @@ Les types associes sont eux aussi separes :
 Les lieux uniques restent stockes dans `map_landmarks`.
 Ils utilisent le type technique `type_key = 'lieu_unique'`.
 
+`map_routes` stocke les routes comme des points de controle dans `points_json`.
+L'API d'edition expose ce champ sous la forme `points: Array<[number, number]>`.
+
+Les champs de rendu actifs pour les routes sont :
+- `geometry_mode`: `straight` | `curved`
+- `stroke_style`: `solid` | `dashed` | `dotted`
+- `stroke_width`
+- `stroke_color`
+
+La courbure n'est jamais stockee en base : elle est calculee cote client a l'affichage.
+
 Le statut des objets cartographiques est limite a :
 - `draft`
 - `published`

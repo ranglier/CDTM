@@ -24,6 +24,7 @@ import type {
   EditorMapLocality,
   EditorMapLocalityInput,
   EditorMapLocalityPatch,
+  EditorMapRoute,
   EditorReferenceData,
 } from "@/editor/types";
 import {
@@ -52,6 +53,13 @@ import {
   updateEditorPointFeature,
   upsertEditorPointFeature,
 } from "@/map/openlayers/editor-points-layer";
+import {
+  createEditorRoutesVectorLayer,
+  createEditorRoutesVectorSource,
+  getEditorRouteFromFeature,
+  replaceEditorRouteFeatures,
+  syncEditorRoutesLayerVisibility,
+} from "@/map/openlayers/editor-routes-layer";
 import {
   cdtmProjection,
   createCdtmBackgroundLayer,
@@ -189,6 +197,22 @@ function getLandmarkCategoryLabel(category: string | null | undefined): string {
   return category === "unique" ? "Lieu unique" : "Landmark";
 }
 
+function getRouteGeometryLabel(geometryMode: EditorMapRoute["geometry_mode"]): string {
+  return geometryMode === "straight" ? "Droite" : "Courbe";
+}
+
+function getRouteStrokeStyleLabel(strokeStyle: EditorMapRoute["stroke_style"]): string {
+  if (strokeStyle === "dashed") {
+    return "Tirets";
+  }
+
+  if (strokeStyle === "dotted") {
+    return "Points";
+  }
+
+  return "Plein";
+}
+
 function getDefaultPointFamily(referenceData: EditorReferenceData | null): EditorCreateObjectFamily {
   if ((referenceData?.locality_types.length ?? 0) > 0) {
     return "locality";
@@ -295,6 +319,8 @@ export function EditorMapCanvas() {
   const mapRef = useRef<Map | null>(null);
   const casesSourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
+  const routesSourceRef = useRef<ReturnType<typeof createEditorRoutesVectorSource> | null>(null);
+  const routesLayerRef = useRef<ReturnType<typeof createEditorRoutesVectorLayer> | null>(null);
   const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
     null,
   );
@@ -302,6 +328,7 @@ export function EditorMapCanvas() {
     null,
   );
   const casesVisibleRef = useRef(true);
+  const routesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
   const landmarksVisibleRef = useRef(true);
   const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
@@ -326,6 +353,10 @@ export function EditorMapCanvas() {
   const [casesCount, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [routesVisible, setRoutesVisible] = useState(true);
+  const [routesCount, setRoutesCount] = useState<number | null>(null);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [routesError, setRoutesError] = useState<string | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
   const [localitiesCount, setLocalitiesCount] = useState<number | null>(null);
   const [localitiesLoading, setLocalitiesLoading] = useState(false);
@@ -373,6 +404,15 @@ export function EditorMapCanvas() {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
     }
   }, [casesVisible]);
+
+  useEffect(() => {
+    routesVisibleRef.current = routesVisible;
+    syncEditorRoutesLayerVisibility(routesLayerRef.current, routesVisible);
+
+    if (!routesVisible) {
+      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+    }
+  }, [routesVisible]);
 
   useEffect(() => {
     localitiesVisibleRef.current = localitiesVisible;
@@ -762,6 +802,7 @@ export function EditorMapCanvas() {
 
     const backgroundLayer = createCdtmBackgroundLayer();
     const casesSource = createCasesVectorSource();
+    const routesSource = createEditorRoutesVectorSource();
     const pointsSource = createEditorPointsVectorSource();
     const casesLayer = createCasesVectorLayer(
       casesSource,
@@ -792,9 +833,13 @@ export function EditorMapCanvas() {
       },
       visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
     });
+    const routesLayer = createEditorRoutesVectorLayer(routesSource, {
+      visible: routesVisibleRef.current,
+    });
     const map = createCdtmMap(mapElementRef.current, [
       backgroundLayer,
       casesLayer,
+      routesLayer,
       pointsLayer,
     ]);
     const translateInteraction = new Translate({
@@ -803,6 +848,8 @@ export function EditorMapCanvas() {
 
     casesSourceRef.current = casesSource;
     casesLayerRef.current = casesLayer;
+    routesSourceRef.current = routesSource;
+    routesLayerRef.current = routesLayer;
     pointsSourceRef.current = pointsSource;
     pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
@@ -987,7 +1034,12 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (!casesVisibleRef.current && !localitiesVisibleRef.current && !landmarksVisibleRef.current) {
+      if (
+        !casesVisibleRef.current &&
+        !routesVisibleRef.current &&
+        !localitiesVisibleRef.current &&
+        !landmarksVisibleRef.current
+      ) {
         target.style.cursor = "";
         setHoverInfo(null);
         return;
@@ -1056,6 +1108,45 @@ export function EditorMapCanvas() {
               });
               return;
             }
+          }
+        }
+      }
+
+      if (routesVisibleRef.current) {
+        const routeFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === routesLayer,
+            hitTolerance: 6,
+          },
+        );
+
+        if (routeFeature) {
+          const route = getEditorRouteFromFeature(routeFeature as Feature<Geometry>);
+
+          if (route) {
+            target.style.cursor = "pointer";
+            const position = getTooltipPosition(event.originalEvent);
+            setHoverInfo({
+              x: position.x,
+              y: position.y,
+              title: route.name,
+              rows: [
+                { label: "Type", value: route.route_type },
+                { label: "Geometrie", value: getRouteGeometryLabel(route.geometry_mode) },
+                { label: "Style", value: getRouteStrokeStyleLabel(route.stroke_style) },
+                { label: "Statut", value: route.status },
+                { label: "Points", value: String(route.points.length) },
+              ],
+            });
+            return;
           }
         }
       }
@@ -1164,6 +1255,34 @@ export function EditorMapCanvas() {
       }
     }
 
+    async function loadRoutes() {
+      setRoutesLoading(true);
+      setRoutesError(null);
+
+      try {
+        const items = await fetchJson<EditorMapRoute[]>("/api/admin/editor/routes?limit=1000");
+
+        if (cancelled || !routesSourceRef.current) {
+          return;
+        }
+
+        replaceEditorRouteFeatures(routesSourceRef.current, items);
+        setRoutesCount(items.length);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Impossible de charger les routes dans l'editeur.", error);
+        setRoutesCount(0);
+        setRoutesError(error instanceof Error ? error.message : "Chargement des routes impossible.");
+      } finally {
+        if (!cancelled) {
+          setRoutesLoading(false);
+        }
+      }
+    }
+
     async function loadLocalities() {
       setLocalitiesLoading(true);
       setLocalitiesError(null);
@@ -1256,6 +1375,7 @@ export function EditorMapCanvas() {
     }
 
     void loadCases();
+    void loadRoutes();
     void loadLocalities();
     void loadLandmarks();
     void loadReferenceData();
@@ -1272,6 +1392,8 @@ export function EditorMapCanvas() {
       map.setTarget(undefined);
       casesSourceRef.current = null;
       casesLayerRef.current = null;
+      routesSourceRef.current = null;
+      routesLayerRef.current = null;
       pointsSourceRef.current = null;
       pointsLayerRef.current = null;
       localityTranslateInteractionRef.current = null;
@@ -1550,6 +1672,22 @@ export function EditorMapCanvas() {
           </Button>
           <Button
             type="button"
+            variant={routesVisible ? "secondary" : "outline"}
+            className="mt-2"
+            onClick={() =>
+              setRoutesVisible((visible) => {
+                if (visible) {
+                  setHoverInfo(null);
+                }
+
+                return !visible;
+              })
+            }
+          >
+            {routesVisible ? "Masquer les routes" : "Afficher les routes"}
+          </Button>
+          <Button
+            type="button"
             variant={localitiesVisible ? "secondary" : "outline"}
             className="mt-2"
             onClick={() =>
@@ -1596,6 +1734,13 @@ export function EditorMapCanvas() {
               : casesCount !== null
                 ? `${casesCount} cases chargees`
                 : "Cases non chargees"}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {routesLoading
+              ? "Chargement des routes..."
+              : routesCount !== null
+                ? `${routesCount} routes chargees`
+                : "Routes non chargees"}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {localitiesLoading
@@ -1649,6 +1794,7 @@ export function EditorMapCanvas() {
             </Button>
           ) : null}
           {casesError ? <p className="mt-2 text-xs text-destructive">{casesError}</p> : null}
+          {routesError ? <p className="mt-2 text-xs text-destructive">{routesError}</p> : null}
           {localitiesError ? (
             <p className="mt-2 text-xs text-destructive">{localitiesError}</p>
           ) : null}
@@ -2156,7 +2302,7 @@ export function EditorMapCanvas() {
         className="h-[calc(100svh-5rem)] w-full"
         aria-label="Carte editeur"
       />
-      {hoverInfo && (casesVisible || localitiesVisible || landmarksVisible) ? (
+      {hoverInfo && (casesVisible || routesVisible || localitiesVisible || landmarksVisible) ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{

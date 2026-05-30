@@ -82,9 +82,19 @@ Le lot courant ajoute :
 - une couche OpenLayers unifiee pour `localites` et `landmarks` ;
 - la possibilite de surcharger l'icone d'une localite, tout en gardant par defaut l'icone de son type.
 
+Le lot routes 1 ajoute :
+- le chargement de `/api/admin/editor/routes` dans l'editeur ;
+- une couche OpenLayers lecture seule dediee aux routes, placee sous les points ;
+- le rendu `straight` ou `curved` a partir des points de controle ;
+- les styles `solid`, `dashed`, `dotted` ;
+- un bouton pour afficher ou masquer les routes ;
+- un hover route prioritaire sur les cases mais sous les points ;
+- aucune creation ou edition interactive de route dans l'UI a ce stade.
+
 Le lot ne fait toujours pas :
 - de gestion des forces ;
-- de gestion des routes.
+- de creation interactive de routes ;
+- d'edition de sommets de routes.
 
 ## Ce qui reste en place
 
@@ -100,7 +110,7 @@ Le modele reste separe par famille d'objets :
 - `map_localities`
 - `map_landmarks`
 - `map_forces`
-- `map_routes` plus tard
+- `map_routes`
 
 Les statuts restent :
 - `draft`
@@ -126,4 +136,4 @@ Principes gardes pour la suite :
 2. retour d'un canevas cartographique minimal
 3. lecture seule des localites
 4. creation et edition progressive des objets
-5. landmarks, forces, puis routes
+5. landmarks, forces, puis creation/edition des routes
