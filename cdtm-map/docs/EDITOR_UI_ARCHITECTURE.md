@@ -63,6 +63,12 @@ Le lot 9 :
 - conserve hover, selection, edition et drag des localites ;
 - ne traite toujours pas landmarks, uniques ou forces.
 
+Le rendu actuel des localites ajoute aussi :
+- un mode `Icones` / `Points` dans l'editeur ;
+- des SVG qui remplacent les points en mode icones ;
+- une taille d'icone liee au zoom, plus grande de pres et reduite au dezoom ;
+- la suppression du diagnostic d'icone dans l'UI.
+
 Il n'ajoute toujours :
 - aucune localite ;
 - aucun landmark ;

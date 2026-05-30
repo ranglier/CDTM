@@ -38,9 +38,23 @@ const archivedStyle = new Style({
 type EditorLocalitiesLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
   getDefaultIconKeyForType: (typeKey: string) => string | null;
+  getDisplayMode?: () => "icons" | "points";
 };
 
 const iconStyleCache = new Map<string, Style[]>();
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getIconScaleForResolution(resolution: number): number {
+  const safeResolution = Number.isFinite(resolution) && resolution > 0 ? resolution : 1;
+  return clamp(1 / Math.sqrt(Math.max(safeResolution, 1)), 0.45, 1);
+}
+
+function getScaleBucket(scale: number): number {
+  return Math.round(scale * 100) / 100;
+}
 
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -89,13 +103,17 @@ function getFallbackLocalityStyle(locality: EditorMapLocality | null): Style {
 function createIconStyles(
   iconSource: string,
   locality: EditorMapLocality,
+  resolution: number,
 ): Style[] {
   const opacity =
     locality.status === "archived" ? 0.45 : locality.status === "draft" ? 0.75 : 1;
+  const scale = getIconScaleForResolution(resolution);
+  const scaleBucket = getScaleBucket(scale);
+  const hitRadius = Math.max(8, 16 * scaleBucket);
 
   const hitAreaStyle = new Style({
     image: new CircleStyle({
-      radius: 14,
+      radius: hitRadius,
       fill: new Fill({ color: "rgba(0, 0, 0, 0.01)" }),
     }),
   });
@@ -104,7 +122,7 @@ function createIconStyles(
     image: new Icon({
       src: iconSource,
       opacity,
-      scale: 1,
+      scale: scaleBucket,
       anchor: [0.5, 0.5],
       ...(iconSource.startsWith("data:")
         ? {}
@@ -117,15 +135,20 @@ function createIconStyles(
   return [hitAreaStyle, iconStyle];
 }
 
-function getIconStyles(iconSource: string, locality: EditorMapLocality): Style[] {
-  const key = `${iconSource}:${locality.status}`;
+function getIconStyles(
+  iconSource: string,
+  locality: EditorMapLocality,
+  resolution: number,
+): Style[] {
+  const scaleBucket = getScaleBucket(getIconScaleForResolution(resolution));
+  const key = `${iconSource}:${locality.status}:${scaleBucket}`;
   const cached = iconStyleCache.get(key);
 
   if (cached) {
     return cached;
   }
 
-  const styles = createIconStyles(iconSource, locality);
+  const styles = createIconStyles(iconSource, locality, resolution);
   iconStyleCache.set(key, styles);
   return styles;
 }
@@ -133,11 +156,16 @@ function getIconStyles(iconSource: string, locality: EditorMapLocality): Style[]
 function getLocalityStyleWithContext(
   feature: Feature<Geometry>,
   context?: EditorLocalitiesLayerContext,
+  resolution = 1,
 ): Style | Style[] {
   const locality = getEditorLocalityFromFeature(feature);
   const fallbackStyle = getFallbackLocalityStyle(locality);
 
   if (!locality) {
+    return fallbackStyle;
+  }
+
+  if (context?.getDisplayMode?.() === "points") {
     return fallbackStyle;
   }
 
@@ -149,7 +177,7 @@ function getLocalityStyleWithContext(
     return fallbackStyle;
   }
 
-  return getIconStyles(iconSource, locality);
+  return getIconStyles(iconSource, locality, resolution);
 }
 
 export function createEditorLocalitiesVectorSource(): VectorSource {
@@ -163,12 +191,16 @@ export function createEditorLocalitiesVectorLayer(
   return new VectorLayer({
     source,
     visible: options.visible ?? true,
-    style: (feature) => {
+    style: (feature, resolution) => {
       if (!(feature instanceof Feature)) {
         return undefined;
       }
 
-      return getLocalityStyleWithContext(feature as Feature<Geometry>, options.context);
+      return getLocalityStyleWithContext(
+        feature as Feature<Geometry>,
+        options.context,
+        resolution,
+      );
     },
   });
 }

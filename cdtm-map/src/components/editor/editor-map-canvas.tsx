@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Image from "next/image";
 import Collection from "ol/Collection";
 import Feature from "ol/Feature";
 import type Geometry from "ol/geom/Geometry";
@@ -75,6 +74,7 @@ type HoverInfo = {
 };
 
 type EditorTool = "select" | "create-locality";
+type LocalityDisplayMode = "icons" | "points";
 
 type LocalityCreateDraft = {
   x: number;
@@ -145,43 +145,6 @@ function getLocalityEditSnapshot(draft: LocalityEditDraft): string {
   return JSON.stringify(draft);
 }
 
-function resolveSelectedLocalityIconDiagnostics(
-  locality: EditorMapLocality | null,
-  referenceData: EditorReferenceData | null,
-  iconSourceByKey: Record<string, string>,
-): {
-  defaultIconKey: string | null;
-  effectiveIconKey: string | null;
-  imagePath: string | null;
-  iconSource: string | null;
-} {
-  if (!locality) {
-    return {
-      defaultIconKey: null,
-      effectiveIconKey: null,
-      imagePath: null,
-      iconSource: null,
-    };
-  }
-
-  const defaultIconKey =
-    referenceData?.locality_types.find((type) => type.value === locality.type_key)?.default_icon_key ??
-    null;
-  const effectiveIconKey = locality.icon_key ?? defaultIconKey ?? null;
-  const imagePath =
-    effectiveIconKey
-      ? referenceData?.map_icons.find((icon) => icon.value === effectiveIconKey)?.image_path ?? null
-      : null;
-  const iconSource = effectiveIconKey ? iconSourceByKey[effectiveIconKey] ?? null : null;
-
-  return {
-    defaultIconKey,
-    effectiveIconKey,
-    imagePath,
-    iconSource,
-  };
-}
-
 function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
@@ -211,6 +174,7 @@ export function EditorMapCanvas() {
   );
   const casesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
+  const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
   const selectedCaseIdRef = useRef<string | null>(null);
   const selectedLocalityIdRef = useRef<string | null>(null);
   const editorToolRef = useRef<EditorTool>("select");
@@ -239,7 +203,8 @@ export function EditorMapCanvas() {
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
   const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [mapIconSourceByKey, setMapIconSourceByKey] = useState<Record<string, string>>({});
+  const [localityDisplayMode, setLocalityDisplayMode] =
+    useState<LocalityDisplayMode>("icons");
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [selectedLocality, setSelectedLocality] = useState<EditorMapLocality | null>(null);
@@ -254,14 +219,6 @@ export function EditorMapCanvas() {
   const [localityDragging, setLocalityDragging] = useState(false);
   const [localityMoveSaving, setLocalityMoveSaving] = useState(false);
   const [localityMoveError, setLocalityMoveError] = useState<string | null>(null);
-
-  const [, setIconSourceDiagnosticsVersion] = useState(0);
-
-  const selectedLocalityIconDiagnostics = resolveSelectedLocalityIconDiagnostics(
-    selectedLocality,
-    referenceData,
-    mapIconSourceByKey,
-  );
 
   const localityEditDirty =
     localityEditDraft && localityEditSnapshot
@@ -285,6 +242,11 @@ export function EditorMapCanvas() {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
     }
   }, [localitiesVisible]);
+
+  useEffect(() => {
+    localityDisplayModeRef.current = localityDisplayMode;
+    localitiesLayerRef.current?.changed();
+  }, [localityDisplayMode]);
 
   useEffect(() => {
     editorToolRef.current = editorTool;
@@ -345,16 +307,6 @@ export function EditorMapCanvas() {
       mapIconSourceByKeyRef.current = Object.fromEntries(
         entries.filter((entry): entry is readonly [string, string] => entry !== null),
       );
-      setMapIconSourceByKey(mapIconSourceByKeyRef.current);
-
-      if (process.env.NODE_ENV !== "production") {
-        console.info("[editor-icons]", {
-          icons: Object.keys(mapIconImagePathByKeyRef.current).length,
-          localityTypeDefaults: Object.keys(localityDefaultIconKeyByTypeRef.current).length,
-        });
-      }
-
-      setIconSourceDiagnosticsVersion((value) => value + 1);
       localitiesLayerRef.current?.changed();
     }
 
@@ -559,6 +511,7 @@ export function EditorMapCanvas() {
           iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
         getDefaultIconKeyForType: (typeKey) =>
           localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
+        getDisplayMode: () => localityDisplayModeRef.current,
       },
       visible: localitiesVisibleRef.current,
     });
@@ -1111,6 +1064,16 @@ export function EditorMapCanvas() {
           >
             {localitiesVisible ? "Masquer les localites" : "Afficher les localites"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2"
+            onClick={() =>
+              setLocalityDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
+            }
+          >
+            {localityDisplayMode === "icons" ? "Mode points" : "Mode icones"}
+          </Button>
           <p className="mt-2 text-xs text-muted-foreground">
             {casesLoading
               ? "Chargement des cases..."
@@ -1272,53 +1235,6 @@ export function EditorMapCanvas() {
               <p className="text-xs text-muted-foreground">
                 ID : {selectedLocality.id_locality}
               </p>
-              <div className="space-y-1 rounded-xl border border-border/70 bg-background/50 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Diagnostic icone
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  icon_key : {selectedLocality.icon_key ?? "aucune"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  type_key : {selectedLocality.type_key}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  default_icon_key : {selectedLocalityIconDiagnostics.defaultIconKey ?? "aucune"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  effective_icon_key : {selectedLocalityIconDiagnostics.effectiveIconKey ?? "aucune"}
-                </p>
-                <p className="break-all text-xs text-muted-foreground">
-                  image_path : {selectedLocalityIconDiagnostics.imagePath ?? "aucun"}
-                </p>
-                <p className="break-all text-xs text-muted-foreground">
-                  icon_source : {selectedLocalityIconDiagnostics.iconSource ?? "aucune"}
-                </p>
-                {selectedLocalityIconDiagnostics.imagePath ? (
-                  <div className="rounded-lg border border-border/70 bg-background/70 p-2">
-                    <Image
-                      src={selectedLocalityIconDiagnostics.imagePath}
-                      alt={`${selectedLocality.name} brut`}
-                      width={32}
-                      height={32}
-                      unoptimized
-                      className="h-8 w-8 object-contain"
-                    />
-                  </div>
-                ) : null}
-                {selectedLocalityIconDiagnostics.iconSource ? (
-                  <div className="rounded-lg border border-border/70 bg-background/70 p-2">
-                    <Image
-                      src={selectedLocalityIconDiagnostics.iconSource}
-                      alt={`${selectedLocality.name} normalise`}
-                      width={32}
-                      height={32}
-                      unoptimized
-                      className="h-8 w-8 object-contain"
-                    />
-                  </div>
-                ) : null}
-              </div>
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Nom</span>
                 <input
