@@ -16,7 +16,7 @@ import type {
   MapRouteStrokeStyle,
 } from "@/editor/types";
 
-const DEFAULT_ROUTE_COLOR = "rgba(245, 221, 150, 0.95)";
+const DEFAULT_ROUTE_RGB = [255, 255, 255] as const;
 const routeStyleCache = new Map<string, Style[]>();
 const routePreviewPointStyle = new Style({
   image: new CircleStyle({
@@ -55,7 +55,7 @@ function isEditorMapRoute(value: unknown): value is EditorMapRoute {
 
 function toRgba(color: string | null, alpha: number): string {
   if (!color) {
-    return `rgba(245, 221, 150, ${alpha})`;
+    return `rgba(${DEFAULT_ROUTE_RGB[0]}, ${DEFAULT_ROUTE_RGB[1]}, ${DEFAULT_ROUTE_RGB[2]}, ${alpha})`;
   }
 
   const trimmed = color.trim();
@@ -80,7 +80,7 @@ function toRgba(color: string | null, alpha: number): string {
     }
   }
 
-  return DEFAULT_ROUTE_COLOR;
+  return `rgba(${DEFAULT_ROUTE_RGB[0]}, ${DEFAULT_ROUTE_RGB[1]}, ${DEFAULT_ROUTE_RGB[2]}, ${alpha})`;
 }
 
 function getStatusOpacity(status: MapObjectStatus): number {

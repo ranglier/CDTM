@@ -100,9 +100,17 @@ Le lot routes 2 ajoute :
 - une creation en statut `draft` ;
 - aucun deplacement ni aucune edition de sommet existant a ce stade.
 
+Le lot routes 3 ajoute :
+- la selection des routes existantes par clic ;
+- l'affichage d'un formulaire d'edition simple dans l'overlay ;
+- l'edition de `name`, `route_type`, `geometry_mode`, `stroke_style`, `stroke_width`, `stroke_color`, `status`, `description` ;
+- un editeur de couleur natif avec champ hex et retour a la couleur par defaut ;
+- une sauvegarde via `PATCH /api/admin/editor/routes/[id]` ;
+- une mise a jour immediate du rendu de la route apres sauvegarde ;
+- aucun changement des points de controle dans ce lot.
+
 Le lot ne fait toujours pas :
 - de gestion des forces ;
-- de creation interactive de routes ;
 - d'edition de sommets de routes.
 
 ## Ce qui reste en place
