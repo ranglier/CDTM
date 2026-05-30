@@ -91,6 +91,15 @@ Le lot routes 1 ajoute :
 - un hover route prioritaire sur les cases mais sous les points ;
 - aucune creation ou edition interactive de route dans l'UI a ce stade.
 
+Le lot routes 2 ajoute :
+- un mode `Creer une route` distinct du mode creation de point ;
+- une creation par clics successifs sur la carte ;
+- une previsualisation immediate de la route et de ses sommets ;
+- un formulaire minimal de nom, type, geometrie, style, largeur, couleur et description ;
+- un `POST /api/admin/editor/routes` uniquement au clic sur `Terminer` ;
+- une creation en statut `draft` ;
+- aucun deplacement ni aucune edition de sommet existant a ce stade.
+
 Le lot ne fait toujours pas :
 - de gestion des forces ;
 - de creation interactive de routes ;

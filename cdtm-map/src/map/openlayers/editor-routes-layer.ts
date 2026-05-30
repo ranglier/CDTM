@@ -1,8 +1,11 @@
 import Feature from "ol/Feature";
 import LineString from "ol/geom/LineString";
+import Point from "ol/geom/Point";
 import type Geometry from "ol/geom/Geometry";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
+import CircleStyle from "ol/style/Circle";
+import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
 import Style from "ol/style/Style";
 
@@ -15,6 +18,25 @@ import type {
 
 const DEFAULT_ROUTE_COLOR = "rgba(245, 221, 150, 0.95)";
 const routeStyleCache = new Map<string, Style[]>();
+const routePreviewPointStyle = new Style({
+  image: new CircleStyle({
+    radius: 4,
+    fill: new Fill({ color: "rgba(245, 221, 150, 0.95)" }),
+    stroke: new Stroke({ color: "rgba(18, 18, 18, 0.9)", width: 1.5 }),
+  }),
+});
+const routePreviewLastPointStyle = new Style({
+  image: new CircleStyle({
+    radius: 5,
+    fill: new Fill({ color: "rgba(255, 244, 194, 1)" }),
+    stroke: new Stroke({ color: "rgba(18, 18, 18, 0.95)", width: 2 }),
+  }),
+});
+
+type EditorRoutePreview = Pick<
+  EditorMapRoute,
+  "name" | "route_type" | "points" | "geometry_mode" | "stroke_style" | "stroke_width" | "stroke_color"
+>;
 
 function isEditorMapRoute(value: unknown): value is EditorMapRoute {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -87,7 +109,14 @@ function getStrokeSpec(
   return { lineDash: undefined, lineCap: "round" };
 }
 
-function buildCurvedCoordinates(points: EditorMapRoutePoint[]): EditorMapRoutePoint[] {
+export function buildEditorRouteDisplayCoordinates(
+  points: EditorMapRoutePoint[],
+  geometryMode: EditorMapRoute["geometry_mode"],
+): EditorMapRoutePoint[] {
+  if (geometryMode !== "curved") {
+    return points;
+  }
+
   if (points.length < 3) {
     return points;
   }
@@ -128,8 +157,7 @@ function buildCurvedCoordinates(points: EditorMapRoutePoint[]): EditorMapRoutePo
 }
 
 function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
-  const displayPoints =
-    route.geometry_mode === "curved" ? buildCurvedCoordinates(route.points) : route.points;
+  const displayPoints = buildEditorRouteDisplayCoordinates(route.points, route.geometry_mode);
   const feature = new Feature<LineString>({
     geometry: new LineString(displayPoints),
     route,
@@ -188,6 +216,10 @@ export function createEditorRoutesVectorSource(): VectorSource {
   return new VectorSource();
 }
 
+export function createEditorRoutePreviewVectorSource(): VectorSource {
+  return new VectorSource();
+}
+
 export function createEditorRoutesVectorLayer(
   source: VectorSource,
   options: { visible?: boolean } = {},
@@ -203,6 +235,44 @@ export function createEditorRoutesVectorLayer(
       const route = getEditorRouteFromFeature(candidateFeature as Feature<Geometry>);
 
       return route ? getCachedRouteStyles(route) : undefined;
+    },
+  });
+}
+
+export function createEditorRoutePreviewVectorLayer(
+  source: VectorSource,
+  options: { visible?: boolean } = {},
+): VectorLayer {
+  return new VectorLayer({
+    source,
+    visible: options.visible ?? true,
+    style: (candidateFeature) => {
+      if (!(candidateFeature instanceof Feature)) {
+        return undefined;
+      }
+
+      const previewKind = candidateFeature.get("preview_kind");
+
+      if (previewKind === "route-point") {
+        return candidateFeature.get("preview_last_point") ? routePreviewLastPointStyle : routePreviewPointStyle;
+      }
+
+      const previewRoute = candidateFeature.get("route_preview") as EditorRoutePreview | undefined;
+
+      if (!previewRoute) {
+        return undefined;
+      }
+
+      return getCachedRouteStyles({
+        id_route: "__preview__",
+        faction: null,
+        controleur: null,
+        status: "draft",
+        description: null,
+        created_at: "",
+        updated_at: "",
+        ...previewRoute,
+      });
     },
   });
 }
@@ -228,6 +298,43 @@ export function upsertEditorRouteFeature(
   }
 
   source.addFeature(nextFeature);
+}
+
+export function replaceEditorRoutePreviewFeatures(
+  source: VectorSource,
+  route: EditorRoutePreview,
+): void {
+  source.clear(true);
+
+  if (route.points.length === 0) {
+    return;
+  }
+
+  if (route.points.length >= 2) {
+    const lineFeature = new Feature<LineString>({
+      geometry: new LineString(
+        buildEditorRouteDisplayCoordinates(route.points, route.geometry_mode),
+      ),
+      route_preview: route,
+      preview_kind: "route-line",
+    });
+    lineFeature.setId("route-preview:line");
+    source.addFeature(lineFeature);
+  }
+
+  route.points.forEach((point, index) => {
+    const pointFeature = new Feature({
+      geometry: new Point(point),
+      preview_kind: "route-point",
+      preview_last_point: index === route.points.length - 1,
+    });
+    pointFeature.setId(`route-preview:point:${index}`);
+    source.addFeature(pointFeature);
+  });
+}
+
+export function clearEditorRoutePreview(source: VectorSource): void {
+  source.clear(true);
 }
 
 export function syncEditorRoutesLayerVisibility(

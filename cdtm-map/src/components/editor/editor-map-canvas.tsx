@@ -25,6 +25,7 @@ import type {
   EditorMapLocalityInput,
   EditorMapLocalityPatch,
   EditorMapRoute,
+  EditorMapRouteInput,
   EditorReferenceData,
 } from "@/editor/types";
 import {
@@ -54,11 +55,16 @@ import {
   upsertEditorPointFeature,
 } from "@/map/openlayers/editor-points-layer";
 import {
+  clearEditorRoutePreview,
+  createEditorRoutePreviewVectorLayer,
+  createEditorRoutePreviewVectorSource,
   createEditorRoutesVectorLayer,
   createEditorRoutesVectorSource,
   getEditorRouteFromFeature,
+  replaceEditorRoutePreviewFeatures,
   replaceEditorRouteFeatures,
   syncEditorRoutesLayerVisibility,
+  upsertEditorRouteFeature,
 } from "@/map/openlayers/editor-routes-layer";
 import {
   cdtmProjection,
@@ -86,7 +92,7 @@ type HoverInfo = {
   }>;
 };
 
-type EditorTool = "select" | "create-point";
+type EditorTool = "select" | "create-point" | "create-route";
 type LocalityDisplayMode = "icons" | "points";
 type EditorCreateObjectFamily = "locality" | "landmark" | "unique";
 
@@ -117,6 +123,17 @@ type LandmarkEditDraft = {
   icon_key: string | null;
   status: "draft" | "published" | "archived";
   description: string;
+};
+
+type RouteCreateDraft = {
+  name: string;
+  route_type: string;
+  geometry_mode: "straight" | "curved";
+  stroke_style: "solid" | "dashed" | "dotted";
+  stroke_width: number;
+  stroke_color: string;
+  description: string;
+  points: Array<[number, number]>;
 };
 
 type DragOrigin =
@@ -298,6 +315,29 @@ function getLandmarkEditSnapshot(draft: LandmarkEditDraft): string {
   return JSON.stringify(draft);
 }
 
+function createEmptyRouteDraft(): RouteCreateDraft {
+  return {
+    name: "",
+    route_type: "route",
+    geometry_mode: "curved",
+    stroke_style: "solid",
+    stroke_width: 3,
+    stroke_color: "",
+    description: "",
+    points: [],
+  };
+}
+
+function isValidRouteColor(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return true;
+  }
+
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed);
+}
+
 function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
@@ -321,6 +361,8 @@ export function EditorMapCanvas() {
   const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
   const routesSourceRef = useRef<ReturnType<typeof createEditorRoutesVectorSource> | null>(null);
   const routesLayerRef = useRef<ReturnType<typeof createEditorRoutesVectorLayer> | null>(null);
+  const routePreviewSourceRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorSource> | null>(null);
+  const routePreviewLayerRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorLayer> | null>(null);
   const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
     null,
   );
@@ -375,8 +417,11 @@ export function EditorMapCanvas() {
   const [selectedLandmark, setSelectedLandmark] = useState<EditorMapLandmark | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [pointDraft, setPointDraft] = useState<MapObjectCreateDraft | null>(null);
+  const [routeDraft, setRouteDraft] = useState<RouteCreateDraft | null>(null);
   const [localitySaving, setLocalitySaving] = useState(false);
   const [localitySaveError, setLocalitySaveError] = useState<string | null>(null);
+  const [routeSaving, setRouteSaving] = useState(false);
+  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
   const [localityEditDraft, setLocalityEditDraft] = useState<LocalityEditDraft | null>(null);
   const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
   const [landmarkEditDraft, setLandmarkEditDraft] = useState<LandmarkEditDraft | null>(null);
@@ -395,6 +440,7 @@ export function EditorMapCanvas() {
     landmarkEditDraft && landmarkEditSnapshot
       ? getLandmarkEditSnapshot(landmarkEditDraft) !== landmarkEditSnapshot
       : false;
+  const routeColorValid = routeDraft ? isValidRouteColor(routeDraft.stroke_color) : true;
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -442,6 +488,19 @@ export function EditorMapCanvas() {
   useEffect(() => {
     editorToolRef.current = editorTool;
   }, [editorTool]);
+
+  useEffect(() => {
+    if (!routePreviewSourceRef.current) {
+      return;
+    }
+
+    if (!routeDraft || routeDraft.points.length === 0) {
+      clearEditorRoutePreview(routePreviewSourceRef.current);
+      return;
+    }
+
+    replaceEditorRoutePreviewFeatures(routePreviewSourceRef.current, routeDraft);
+  }, [routeDraft]);
 
   useEffect(() => {
     localityDraftOpenRef.current = pointDraft !== null;
@@ -587,6 +646,15 @@ export function EditorMapCanvas() {
     setLocalityEditError(null);
   }
 
+  function handleCancelRouteCreate() {
+    setRouteDraft(null);
+    setRouteSaveError(null);
+    setEditorTool("select");
+    if (routePreviewSourceRef.current) {
+      clearEditorRoutePreview(routePreviewSourceRef.current);
+    }
+  }
+
   function handleCancelLocalityEdit() {
     if (!selectedLocality) {
       return;
@@ -610,6 +678,8 @@ export function EditorMapCanvas() {
     setLandmarkEditSnapshot(null);
     setLocalityEditError(null);
     setPointDraft(null);
+    setRouteDraft(null);
+    setRouteSaveError(null);
     setSelectedCaseId(null);
     setEditorTool("select");
   }
@@ -637,6 +707,8 @@ export function EditorMapCanvas() {
     setLocalityEditSnapshot(null);
     setLocalityEditError(null);
     setPointDraft(null);
+    setRouteDraft(null);
+    setRouteSaveError(null);
     setSelectedCaseId(null);
     setEditorTool("select");
   }
@@ -803,6 +875,7 @@ export function EditorMapCanvas() {
     const backgroundLayer = createCdtmBackgroundLayer();
     const casesSource = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
+    const routePreviewSource = createEditorRoutePreviewVectorSource();
     const pointsSource = createEditorPointsVectorSource();
     const casesLayer = createCasesVectorLayer(
       casesSource,
@@ -836,10 +909,14 @@ export function EditorMapCanvas() {
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
     });
+    const routePreviewLayer = createEditorRoutePreviewVectorLayer(routePreviewSource, {
+      visible: true,
+    });
     const map = createCdtmMap(mapElementRef.current, [
       backgroundLayer,
       casesLayer,
       routesLayer,
+      routePreviewLayer,
       pointsLayer,
     ]);
     const translateInteraction = new Translate({
@@ -850,6 +927,8 @@ export function EditorMapCanvas() {
     casesLayerRef.current = casesLayer;
     routesSourceRef.current = routesSource;
     routesLayerRef.current = routesLayer;
+    routePreviewSourceRef.current = routePreviewSource;
+    routePreviewLayerRef.current = routePreviewLayer;
     pointsSourceRef.current = pointsSource;
     pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
@@ -914,6 +993,21 @@ export function EditorMapCanvas() {
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
+
+      if (editorToolRef.current === "create-route") {
+        const [x, y] = event.coordinate;
+        setRouteDraft((draft) => {
+          const nextDraft = draft ?? createEmptyRouteDraft();
+
+          return {
+            ...nextDraft,
+            points: [...nextDraft.points, [x, y]],
+          };
+        });
+        setHoverInfo(null);
+        setRouteSaveError(null);
+        return;
+      }
 
       if (editorToolRef.current === "create-point") {
         const [x, y] = event.coordinate;
@@ -1030,6 +1124,12 @@ export function EditorMapCanvas() {
 
       if (localityDraggingRef.current) {
         target.style.cursor = "";
+        setHoverInfo(null);
+        return;
+      }
+
+      if (editorToolRef.current === "create-route") {
+        target.style.cursor = "crosshair";
         setHoverInfo(null);
         return;
       }
@@ -1394,6 +1494,8 @@ export function EditorMapCanvas() {
       casesLayerRef.current = null;
       routesSourceRef.current = null;
       routesLayerRef.current = null;
+      routePreviewSourceRef.current = null;
+      routePreviewLayerRef.current = null;
       pointsSourceRef.current = null;
       pointsLayerRef.current = null;
       localityTranslateInteractionRef.current = null;
@@ -1626,6 +1728,81 @@ export function EditorMapCanvas() {
     }
   }
 
+  function handlePopLastRoutePoint() {
+    setRouteDraft((draft) =>
+      draft ? { ...draft, points: draft.points.slice(0, -1) } : draft,
+    );
+    setRouteSaveError(null);
+  }
+
+  function handleClearRouteTrace() {
+    setRouteDraft((draft) => (draft ? { ...draft, points: [] } : draft));
+    setRouteSaveError(null);
+  }
+
+  async function handleSaveRouteCreate() {
+    if (!routeDraft) {
+      return;
+    }
+
+    const name = routeDraft.name.trim();
+    const routeType = routeDraft.route_type.trim();
+
+    if (!name || !routeType) {
+      setRouteSaveError("Le nom et le type technique sont obligatoires.");
+      return;
+    }
+
+    if (routeDraft.points.length < 2) {
+      setRouteSaveError("Deux points minimum sont requis.");
+      return;
+    }
+
+    if (!routeColorValid) {
+      setRouteSaveError("La couleur de trait est invalide.");
+      return;
+    }
+
+    setRouteSaving(true);
+    setRouteSaveError(null);
+
+    try {
+      const payload: EditorMapRouteInput = {
+        name,
+        route_type: routeType,
+        points: routeDraft.points,
+        geometry_mode: routeDraft.geometry_mode,
+        stroke_style: routeDraft.stroke_style,
+        stroke_width: routeDraft.stroke_width,
+        stroke_color: routeDraft.stroke_color.trim() || null,
+        faction: null,
+        controleur: null,
+        status: "draft",
+        description: routeDraft.description.trim() || null,
+      };
+
+      const created = await fetchJson<EditorMapRoute>("/api/admin/editor/routes", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (routesSourceRef.current) {
+        upsertEditorRouteFeature(routesSourceRef.current, created);
+      }
+
+      setRoutesCount((count) => (count === null ? 1 : count + 1));
+      setRouteDraft(null);
+      setEditorTool("select");
+      if (routePreviewSourceRef.current) {
+        clearEditorRoutePreview(routePreviewSourceRef.current);
+      }
+    } catch (error) {
+      setRouteSaveError(error instanceof Error ? error.message : "Creation de route impossible.");
+    } finally {
+      setRouteSaving(false);
+    }
+  }
+
   const selectedLandmarkTypeOption =
     selectedLandmark && landmarkEditDraft
       ? referenceData?.landmark_types.find((option) => option.value === landmarkEditDraft.type_key) ??
@@ -1663,12 +1840,43 @@ export function EditorMapCanvas() {
             }
             onClick={() => {
               handleCloseLocalitySelection();
+              setRouteDraft(null);
+              setRouteSaveError(null);
+              if (routePreviewSourceRef.current) {
+                clearEditorRoutePreview(routePreviewSourceRef.current);
+              }
               setEditorTool((tool) => (tool === "create-point" ? "select" : "create-point"));
               setPointDraft(null);
               setLocalitySaveError(null);
             }}
           >
             {editorTool === "create-point" ? "Annuler la creation" : "Creer un point"}
+          </Button>
+          <Button
+            type="button"
+            variant={editorTool === "create-route" ? "secondary" : "outline"}
+            className="mt-2"
+            onClick={() => {
+              handleCloseLocalitySelection();
+              setPointDraft(null);
+              setLocalitySaveError(null);
+              setEditorTool((tool) => {
+                if (tool === "create-route") {
+                  setRouteDraft(null);
+                  setRouteSaveError(null);
+                  if (routePreviewSourceRef.current) {
+                    clearEditorRoutePreview(routePreviewSourceRef.current);
+                  }
+                  return "select";
+                }
+
+                setRouteDraft(createEmptyRouteDraft());
+                setRouteSaveError(null);
+                return "create-route";
+              });
+            }}
+          >
+            {editorTool === "create-route" ? "Annuler la route" : "Creer une route"}
           </Button>
           <Button
             type="button"
@@ -1761,6 +1969,11 @@ export function EditorMapCanvas() {
               Cliquez sur la carte pour placer le point.
             </p>
           ) : null}
+          {editorTool === "create-route" ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cliquez sur la carte pour ajouter des points. Deux points minimum.
+            </p>
+          ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
             {selectedCaseId
               ? `Case selectionnee : ${selectedCaseId}`
@@ -1803,6 +2016,176 @@ export function EditorMapCanvas() {
           ) : null}
           {referenceError ? (
             <p className="mt-2 text-xs text-destructive">{referenceError}</p>
+          ) : null}
+          {routeDraft ? (
+            <form
+              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveRouteCreate();
+              }}
+            >
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Nom</span>
+                <input
+                  value={routeDraft.name}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft ? { ...draft, name: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Type technique</span>
+                <input
+                  value={routeDraft.route_type}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft ? { ...draft, route_type: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Geometrie</span>
+                <select
+                  value={routeDraft.geometry_mode}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            geometry_mode: event.target.value as RouteCreateDraft["geometry_mode"],
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="curved">Courbe</option>
+                  <option value="straight">Droite</option>
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Style</span>
+                <select
+                  value={routeDraft.stroke_style}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            stroke_style: event.target.value as RouteCreateDraft["stroke_style"],
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="solid">Plein</option>
+                  <option value="dashed">Tirets</option>
+                  <option value="dotted">Points</option>
+                </select>
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Epaisseur</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={routeDraft.stroke_width}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            stroke_width: Number.parseInt(event.target.value || "3", 10),
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Couleur optionnelle</span>
+                <input
+                  placeholder="#d6b35a"
+                  value={routeDraft.stroke_color}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft ? { ...draft, stroke_color: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+              </label>
+              {!routeColorValid ? (
+                <p className="text-xs text-destructive">
+                  La couleur doit etre vide, `#rgb` ou `#rrggbb`.
+                </p>
+              ) : null}
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Description</span>
+                <textarea
+                  value={routeDraft.description}
+                  onChange={(event) =>
+                    setRouteDraft((draft) =>
+                      draft ? { ...draft, description: event.target.value } : draft,
+                    )
+                  }
+                  rows={3}
+                  className="w-full rounded-2xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {routeDraft.points.length} point{routeDraft.points.length > 1 ? "s" : ""}
+              </p>
+              {routeSaveError ? (
+                <p className="text-xs text-destructive">{routeSaveError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  disabled={
+                    routeSaving ||
+                    routeDraft.name.trim().length === 0 ||
+                    routeDraft.route_type.trim().length === 0 ||
+                    routeDraft.points.length < 2 ||
+                    !routeColorValid
+                  }
+                >
+                  {routeSaving ? "Sauvegarde..." : "Terminer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePopLastRoutePoint}
+                  disabled={routeSaving || routeDraft.points.length === 0}
+                >
+                  Retirer le dernier point
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClearRouteTrace}
+                  disabled={routeSaving || routeDraft.points.length === 0}
+                >
+                  Vider le trace
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleCancelRouteCreate}
+                  disabled={routeSaving}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </form>
           ) : null}
           {pointDraft ? (
             <form
