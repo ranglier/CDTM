@@ -333,7 +333,7 @@ export function EditorMapCanvas() {
             return [iconKey, source] as const;
           } catch (error) {
             console.error("Icone SVG impossible a normaliser.", { icon: iconKey, imagePath, error });
-            return null;
+            return [iconKey, imagePath] as const;
           }
         }),
       );
@@ -663,6 +663,7 @@ export function EditorMapCanvas() {
           },
           {
             layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
+            hitTolerance: 10,
           },
         );
 
@@ -750,6 +751,7 @@ export function EditorMapCanvas() {
           },
           {
             layerFilter: (candidateLayer) => candidateLayer === localitiesLayer,
+            hitTolerance: 10,
           },
         );
 
