@@ -2535,28 +2535,6 @@ export function EditorMapCanvas() {
         null
       : null;
   const selectedLandmarkCategory = selectedLandmarkTypeOption?.category ?? null;
-  const activeModeLabel = routeGeometryDraft
-    ? "Edition geometrique route"
-    : editorTool === "create-point"
-      ? "Creation point"
-      : editorTool === "create-route"
-        ? "Creation route"
-        : "Selection";
-  const activeModeHint = routeGeometryDraft
-    ? routeGeometryTool === "prepend-vertex"
-      ? "Cliquez sur la carte pour ajouter un sommet au debut."
-      : routeGeometryTool === "append-vertex"
-        ? "Cliquez sur la carte pour ajouter un sommet a la fin."
-        : routeGeometryTool === "insert-before-vertex"
-          ? "Cliquez sur la carte pour inserer un sommet avant celui selectionne."
-          : routeGeometryTool === "insert-after-vertex"
-            ? "Cliquez sur la carte pour inserer un sommet apres celui selectionne."
-            : "Selectionnez ou deplacez les sommets de la route."
-    : editorTool === "create-point"
-      ? "Cliquez sur la carte pour placer le point."
-      : editorTool === "create-route"
-        ? "Cliquez sur la carte pour ajouter des points de controle."
-        : "Selectionnez un objet ou activez un mode de creation.";
   const panelTitle = routeDraft
     ? "Nouvelle route"
     : pointDraft
@@ -2586,79 +2564,85 @@ export function EditorMapCanvas() {
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
         <div className="pointer-events-none absolute inset-x-4 top-4 z-20">
-          <div className="pointer-events-auto flex flex-wrap items-start gap-3 rounded-[20px] border border-border/80 bg-background/92 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-            <div className="min-w-32">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Mode actif
-              </p>
-              <p className="mt-1 text-sm font-semibold text-foreground">{activeModeLabel}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{activeModeHint}</p>
-            </div>
-            <div className="flex min-w-48 flex-1 flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={casesVisible ? "secondary" : "outline"}
-                onClick={() =>
-                  setCasesVisible((visible) => {
-                    if (visible) {
-                      setHoverInfo(null);
-                    }
+          <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <details className="group relative">
+                <summary className="flex h-9 cursor-pointer list-none items-center rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+                  Filtres
+                </summary>
+                <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={casesVisible ? "secondary" : "outline"}
+                      className="justify-start"
+                      onClick={() =>
+                        setCasesVisible((visible) => {
+                          if (visible) {
+                            setHoverInfo(null);
+                          }
 
-                    return !visible;
-                  })
-                }
-              >
-                {casesVisible ? "Cases visibles" : "Cases masquees"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={localitiesVisible ? "secondary" : "outline"}
-                onClick={() =>
-                  setLocalitiesVisible((visible) => {
-                    if (visible) {
-                      setHoverInfo(null);
-                    }
+                          return !visible;
+                        })
+                      }
+                    >
+                      {casesVisible ? "Cases visibles" : "Cases masquees"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={localitiesVisible ? "secondary" : "outline"}
+                      className="justify-start"
+                      onClick={() =>
+                        setLocalitiesVisible((visible) => {
+                          if (visible) {
+                            setHoverInfo(null);
+                          }
 
-                    return !visible;
-                  })
-                }
-              >
-                {localitiesVisible ? "Localites visibles" : "Localites masquees"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={landmarksVisible ? "secondary" : "outline"}
-                onClick={() =>
-                  setLandmarksVisible((visible) => {
-                    if (visible) {
-                      setHoverInfo(null);
-                    }
+                          return !visible;
+                        })
+                      }
+                    >
+                      {localitiesVisible ? "Localites visibles" : "Localites masquees"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={landmarksVisible ? "secondary" : "outline"}
+                      className="justify-start"
+                      onClick={() =>
+                        setLandmarksVisible((visible) => {
+                          if (visible) {
+                            setHoverInfo(null);
+                          }
 
-                    return !visible;
-                  })
-                }
-              >
-                {landmarksVisible ? "Landmarks visibles" : "Landmarks masques"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={routesVisible ? "secondary" : "outline"}
-                onClick={() =>
-                  setRoutesVisible((visible) => {
-                    if (visible) {
-                      setHoverInfo(null);
-                    }
+                          return !visible;
+                        })
+                      }
+                    >
+                      {landmarksVisible ? "Landmarks visibles" : "Landmarks masques"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={routesVisible ? "secondary" : "outline"}
+                      className="justify-start"
+                      onClick={() =>
+                        setRoutesVisible((visible) => {
+                          if (visible) {
+                            setHoverInfo(null);
+                          }
 
-                    return !visible;
-                  })
-                }
-              >
-                {routesVisible ? "Routes visibles" : "Routes masquees"}
-              </Button>
+                          return !visible;
+                        })
+                      }
+                    >
+                      {routesVisible ? "Routes visibles" : "Routes masquees"}
+                    </Button>
+                  </div>
+                </div>
+              </details>
               <Button
                 type="button"
                 size="sm"
@@ -2667,10 +2651,10 @@ export function EditorMapCanvas() {
                   setLocalityDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
                 }
               >
-                {localityDisplayMode === "icons" ? "Localites : icones" : "Localites : points"}
+                {localityDisplayMode === "icons" ? "Icones" : "Points"}
               </Button>
             </div>
-            <div className="flex min-w-48 flex-wrap gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 type="button"
                 size="sm"
