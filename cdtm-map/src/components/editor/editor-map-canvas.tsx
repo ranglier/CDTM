@@ -480,20 +480,20 @@ export function EditorMapCanvas() {
   const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
   const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
   const [casesVisible, setCasesVisible] = useState(true);
-  const [casesCount, setCasesCount] = useState<number | null>(null);
+  const [, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
-  const [casesLoading, setCasesLoading] = useState(false);
+  const [, setCasesLoading] = useState(false);
   const [routesVisible, setRoutesVisible] = useState(true);
-  const [routesCount, setRoutesCount] = useState<number | null>(null);
-  const [routesLoading, setRoutesLoading] = useState(false);
+  const [, setRoutesCount] = useState<number | null>(null);
+  const [, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState<string | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
-  const [localitiesCount, setLocalitiesCount] = useState<number | null>(null);
-  const [localitiesLoading, setLocalitiesLoading] = useState(false);
+  const [, setLocalitiesCount] = useState<number | null>(null);
+  const [, setLocalitiesLoading] = useState(false);
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
-  const [landmarksCount, setLandmarksCount] = useState<number | null>(null);
-  const [landmarksLoading, setLandmarksLoading] = useState(false);
+  const [, setLandmarksCount] = useState<number | null>(null);
+  const [, setLandmarksLoading] = useState(false);
   const [landmarksError, setLandmarksError] = useState<string | null>(null);
   const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
@@ -2568,17 +2568,6 @@ export function EditorMapCanvas() {
           : selectedLandmark
             ? "Landmark selectionne"
             : "Editeur";
-  const panelIntro = routeDraft
-    ? "Definissez les proprietes de la route puis terminez sa creation."
-    : pointDraft
-      ? "Choisissez la famille du point puis renseignez ses informations."
-      : selectedRoute
-        ? "Modifiez les proprietes de la route ou sa geometrie."
-        : selectedLocality
-          ? "Mettez a jour la localite selectionnee."
-          : selectedLandmark
-            ? "Mettez a jour le landmark selectionne."
-            : "Selectionnez une case, un point ou une route, ou lancez une creation depuis la toolbar.";
   const mapStatusMessages = [
     localityDragging ? "Deplacement de point en cours..." : null,
     localityMoveSaving ? "Sauvegarde du deplacement..." : null,
@@ -2763,94 +2752,32 @@ export function EditorMapCanvas() {
         />
       </div>
       <aside className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]">
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Panneau lateral
+        <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>
+        {localityEditDirty || landmarkEditDirty ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Enregistrez ou annulez les modifications avant de deplacer le point.
           </p>
-          <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>
-          <p className="text-sm text-muted-foreground">{panelIntro}</p>
-        </div>
-        <div className="mt-4 rounded-[22px] border border-border/70 bg-background/50 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Etat
-          </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Couches</p>
-              <div className="mt-2 space-y-1.5 text-sm text-foreground">
-                <p>
-                  {casesLoading
-                    ? "Chargement des cases..."
-                    : casesCount !== null
-                      ? `${casesCount} cases chargees`
-                      : "Cases non chargees"}
-                </p>
-                <p>
-                  {routesLoading
-                    ? "Chargement des routes..."
-                    : routesCount !== null
-                      ? `${routesCount} routes chargees`
-                      : "Routes non chargees"}
-                </p>
-                <p>
-                  {localitiesLoading
-                    ? "Chargement des localites..."
-                    : localitiesCount !== null
-                      ? `${localitiesCount} localites chargees`
-                      : "Localites non chargees"}
-                </p>
-                <p>
-                  {landmarksLoading
-                    ? "Chargement des landmarks..."
-                    : landmarksCount !== null
-                      ? `${landmarksCount} landmarks charges`
-                      : "Landmarks non charges"}
-                </p>
-              </div>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Selection
+        ) : null}
+        {selectedCaseId && !routeDraft && !pointDraft && !selectedRoute && !selectedLocality && !selectedLandmark ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-3"
+            onClick={() => setSelectedCaseId(null)}
+          >
+            Deselectionner la case
+          </Button>
+        ) : null}
+        {panelErrors.length > 0 ? (
+          <div className="mt-3 space-y-1.5">
+            {panelErrors.map((message) => (
+              <p key={message} className="text-xs text-destructive">
+                {message}
               </p>
-              <div className="mt-2 space-y-1.5 text-sm text-foreground">
-                <p>{selectedCaseId ? `Case : ${selectedCaseId}` : "Aucune case selectionnee"}</p>
-                <p>{selectedRoute ? `Route : ${selectedRoute.name}` : "Aucune route selectionnee"}</p>
-                <p>
-                  {selectedLocality
-                    ? `Localite : ${selectedLocality.name}`
-                    : selectedLandmark
-                      ? `Landmark : ${selectedLandmark.name}`
-                      : "Aucun point selectionne"}
-                </p>
-              </div>
-              {selectedCaseId ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => setSelectedCaseId(null)}
-                >
-                  Deselectionner la case
-                </Button>
-              ) : null}
-            </div>
+            ))}
           </div>
-          {localityEditDirty || landmarkEditDirty ? (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Enregistrez ou annulez les modifications avant de deplacer le point.
-            </p>
-          ) : null}
-          {panelErrors.length > 0 ? (
-            <div className="mt-3 space-y-1.5">
-              {panelErrors.map((message) => (
-                <p key={message} className="text-xs text-destructive">
-                  {message}
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        ) : null}
         {!routeDraft &&
         !pointDraft &&
         !selectedRoute &&
@@ -3041,15 +2968,11 @@ export function EditorMapCanvas() {
                 void handleSaveRouteEdit();
               }}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Route selectionnee
-              </p>
               <p className="text-sm font-semibold text-foreground">{selectedRoute.name}</p>
               <p className="text-xs text-muted-foreground">
                 {(routeGeometryDraft?.points.length ?? selectedRoute.points.length)} point
                 {(routeGeometryDraft?.points.length ?? selectedRoute.points.length) > 1 ? "s" : ""} de controle
               </p>
-              <p className="text-xs text-muted-foreground">ID : {selectedRoute.id_route}</p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -3569,19 +3492,7 @@ export function EditorMapCanvas() {
                 void handleSaveLocalityEdit();
               }}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Localite selectionnee
-              </p>
               <p className="text-sm font-semibold text-foreground">{selectedLocality.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Position : {Math.round(selectedLocality.x)}, {Math.round(selectedLocality.y)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Case : {selectedLocality.id_case_detected ?? "non detectee"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                ID : {selectedLocality.id_locality}
-              </p>
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Nom</span>
                 <input
@@ -3717,19 +3628,7 @@ export function EditorMapCanvas() {
                 void handleSaveLandmarkEdit();
               }}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Landmark selectionne
-              </p>
               <p className="text-sm font-semibold text-foreground">{selectedLandmark.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Position : {Math.round(selectedLandmark.x)}, {Math.round(selectedLandmark.y)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Case : {selectedLandmark.id_case_detected ?? "non detectee"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                ID : {selectedLandmark.id_landmark}
-              </p>
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Nom</span>
                 <input
