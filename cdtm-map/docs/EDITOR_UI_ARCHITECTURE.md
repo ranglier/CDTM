@@ -140,6 +140,12 @@ Dans cette organisation :
 - les actions importantes d'enregistrement et d'annulation restent collees en bas du panneau ;
 - les formulaires longs ne vivent plus dans les overlays sur la carte.
 
+En parallele, la carte publique reutilise maintenant les memes briques de rendu OpenLayers
+pour les objets publies, mais sans aucune logique d'edition :
+- elle charge `/api/map/objects` ;
+- elle n'utilise pas `/api/admin/editor/*` ;
+- elle ne rend que des objets en statut `published`.
+
 Le lot ne fait toujours pas :
 - de gestion des forces ;
 - de snapping, d'undo/redo avance ni d'edition multi-routes.

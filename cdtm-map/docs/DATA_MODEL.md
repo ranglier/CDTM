@@ -81,6 +81,15 @@ Le statut des objets cartographiques est limite a :
 
 L'API d'edition cible ces tables separees directement. `map_points` et `reference_map_point_types` ne font plus partie du modele actif et ne subsistent que comme heritage de migration.
 
+La carte publique ne lit jamais ces tables via les routes admin. Elle consomme :
+- `/api/cases/public-index` pour les cases et leurs styles publics ;
+- `/api/map/objects` pour les objets cartographiques publies uniquement.
+
+Les objets visibles sur la carte publique sont limites aux statuts `published` :
+- localites publiees ;
+- landmarks et lieux uniques publies ;
+- routes publiees.
+
 Dans l'editeur cartographique, la creation de point distingue :
 - `Localite`, stockee dans `map_localities`
 - `Landmark`, stocke dans `map_landmarks`

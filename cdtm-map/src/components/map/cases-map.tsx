@@ -13,12 +13,18 @@ import { loadJsonData } from "@/data/loaders";
 import { buildCaseHoverRows } from "@/map/case-hover";
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
-  cdtmProjection,
-  createCdtmBackgroundLayer,
-  createCdtmMap,
-  createCdtmView,
-  fitCdtmCasesExtent,
-} from "@/map/openlayers/map-core";
+  buildPublicLandmarkHoverRows,
+  buildPublicLocalityHoverRows,
+  buildPublicRouteHoverRows,
+  createEmptyPublicMapObjectsResponse,
+  type PublicMapLandmark,
+  type PublicMapLocality,
+  type PublicMapObjectsResponse,
+  type PublicMapRoute,
+  toRenderablePublicLandmarks,
+  toRenderablePublicLocalities,
+  toRenderablePublicRoutes,
+} from "@/map/public-objects";
 import {
   createCasesVectorLayer,
   createCasesVectorSource,
@@ -26,6 +32,30 @@ import {
   resolveCaseFeatureProperties,
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
+import {
+  createEditorPointsVectorLayer,
+  createEditorPointsVectorSource,
+  getEditorLandmarkFromPointFeature,
+  getEditorLocalityFromPointFeature,
+  getEditorPointFamilyFromFeature,
+  replaceEditorPointFeatures,
+  syncEditorPointsLayerVisibility,
+} from "@/map/openlayers/editor-points-layer";
+import {
+  createEditorRoutesVectorLayer,
+  createEditorRoutesVectorSource,
+  getEditorRouteFromFeature,
+  replaceEditorRouteFeatures,
+  syncEditorRoutesLayerVisibility,
+} from "@/map/openlayers/editor-routes-layer";
+import {
+  cdtmProjection,
+  createCdtmBackgroundLayer,
+  createCdtmMap,
+  createCdtmView,
+  fitCdtmCasesExtent,
+} from "@/map/openlayers/map-core";
+import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
   type CaseSelectionIntent,
   type MapDisplayMode,
@@ -67,6 +97,16 @@ type HoverInfo = {
   }>;
 };
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`Erreur HTTP ${response.status} pour ${url}`);
+  }
+
+  return (await response.json()) as T;
+}
+
 export function CasesMap({
   dataUrl,
   activeCaseId,
@@ -88,13 +128,40 @@ export function CasesMap({
   const mapRef = useRef<Map | null>(null);
   const sourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
   const layerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
+  const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
+    null,
+  );
+  const pointsLayerRef = useRef<ReturnType<typeof createEditorPointsVectorLayer> | null>(
+    null,
+  );
+  const routesSourceRef = useRef<ReturnType<typeof createEditorRoutesVectorSource> | null>(
+    null,
+  );
+  const routesLayerRef = useRef<ReturnType<typeof createEditorRoutesVectorLayer> | null>(
+    null,
+  );
   const casesVisibleRef = useRef(casesVisible);
+  const localitiesVisibleRef = useRef(true);
+  const landmarksVisibleRef = useRef(true);
+  const routesVisibleRef = useRef(true);
   const activeCaseIdRef = useRef<string | null>(activeCaseId);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
   const casePropertiesByIdRef = useRef(casePropertiesById);
   const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
   const displayModeRef = useRef<MapDisplayMode>(normalizeMapDisplayMode(displayMode));
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
+  const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
+  const localityDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>({});
+  const landmarkDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>({});
+  const landmarkCategoryByTypeRef = useRef<
+    Record<string, "landmark" | "unique" | null>
+  >({});
+  const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
+  const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
+  const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
+  const [localitiesVisible, setLocalitiesVisible] = useState(true);
+  const [landmarksVisible, setLandmarksVisible] = useState(true);
+  const [routesVisible, setRoutesVisible] = useState(true);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(() => createCdtmView(), []);
@@ -107,35 +174,32 @@ export function CasesMap({
     fitCdtmCasesExtent(mapRef.current, duration);
   }
 
-  const focusCaseById = useCallback(
-    (idCase: string, duration = 250) => {
-      const source = sourceRef.current;
-      const map = mapRef.current;
+  const focusCaseById = useCallback((idCase: string, duration = 250) => {
+    const source = sourceRef.current;
+    const map = mapRef.current;
 
-      if (!source || !map) {
-        return;
-      }
+    if (!source || !map) {
+      return;
+    }
 
-      const feature = source.getFeatureById(idCase);
+    const feature = source.getFeatureById(idCase);
 
-      if (!feature) {
-        return;
-      }
+    if (!feature) {
+      return;
+    }
 
-      const geometry = feature.getGeometry();
+    const geometry = feature.getGeometry();
 
-      if (!geometry) {
-        return;
-      }
+    if (!geometry) {
+      return;
+    }
 
-      map.getView().fit(geometry.getExtent(), {
-        duration,
-        padding: [60, 60, 60, 60],
-        maxZoom: MAP_MAX_ZOOM,
-      });
-    },
-    [],
-  );
+    map.getView().fit(geometry.getExtent(), {
+      duration,
+      padding: [60, 60, 60, 60],
+      maxZoom: MAP_MAX_ZOOM,
+    });
+  }, []);
 
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
@@ -215,8 +279,37 @@ export function CasesMap({
     if (!casesVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
       onCaseSelectionChangeRef.current(null, "replace");
+      const frame = requestAnimationFrame(() => {
+        setHoverInfo(null);
+      });
+
+      return () => {
+        cancelAnimationFrame(frame);
+      };
     }
   }, [casesVisible]);
+
+  useEffect(() => {
+    localitiesVisibleRef.current = localitiesVisible;
+    landmarksVisibleRef.current = landmarksVisible;
+    routesVisibleRef.current = routesVisible;
+
+    syncEditorPointsLayerVisibility(
+      pointsLayerRef.current,
+      localitiesVisible || landmarksVisible,
+    );
+    syncEditorRoutesLayerVisibility(routesLayerRef.current, routesVisible);
+    pointsLayerRef.current?.changed();
+    routesLayerRef.current?.changed();
+    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+    const frame = requestAnimationFrame(() => {
+      setHoverInfo(null);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [landmarksVisible, localitiesVisible, routesVisible]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -241,21 +334,52 @@ export function CasesMap({
 
     const backgroundLayer = createCdtmBackgroundLayer();
     const source = createCasesVectorSource();
-    const layer = createCasesVectorLayer(source, {
-      getDisplayMode: () => displayModeRef.current,
-      getCasePropertiesById: () => casePropertiesByIdRef.current,
-      getPublicMapStyles: () => publicMapStylesRef.current,
-      getSelectionState: (idCase) =>
-        idCase === activeCaseIdRef.current
-          ? "active"
-          : idCase !== null && selectedCaseIdsRef.current.has(idCase)
-            ? "selected"
-            : "default",
-    }, {
-      visible: casesVisibleRef.current,
+    const routesSource = createEditorRoutesVectorSource();
+    const pointsSource = createEditorPointsVectorSource();
+    const layer = createCasesVectorLayer(
+      source,
+      {
+        getDisplayMode: () => displayModeRef.current,
+        getCasePropertiesById: () => casePropertiesByIdRef.current,
+        getPublicMapStyles: () => publicMapStylesRef.current,
+        getSelectionState: (idCase) =>
+          idCase === activeCaseIdRef.current
+            ? "active"
+            : idCase !== null && selectedCaseIdsRef.current.has(idCase)
+              ? "selected"
+              : "default",
+      },
+      {
+        visible: casesVisibleRef.current,
+      },
+    );
+    const routesLayer = createEditorRoutesVectorLayer(routesSource, {
+      visible: routesVisibleRef.current,
+    });
+    const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
+      visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
+      context: {
+        getIconImagePath: (iconKey) =>
+          iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
+        getLocalityDefaultIconKeyForType: (typeKey) =>
+          localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
+        getLandmarkDefaultIconKeyForType: (typeKey) =>
+          landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
+        getLandmarkTypeCategory: (typeKey) =>
+          landmarkCategoryByTypeRef.current[typeKey] ?? null,
+        isFamilyVisible: (family) =>
+          family === "locality"
+            ? localitiesVisibleRef.current
+            : landmarksVisibleRef.current,
+      },
     });
 
-    const map = createCdtmMap(mapElementRef.current, [backgroundLayer, layer]);
+    const map = createCdtmMap(mapElementRef.current, [
+      backgroundLayer,
+      layer,
+      routesLayer,
+      pointsLayer,
+    ]);
     map.setView(view);
 
     const singleClickHandler = (rawEvent: unknown) => {
@@ -302,6 +426,109 @@ export function CasesMap({
     const pointerMoveHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+      const originalEvent = event.originalEvent;
+      const preferredX = originalEvent.clientX + 18;
+      const preferredY = originalEvent.clientY + 18;
+
+      const setTooltip = (
+        title: string,
+        rows: Array<{ label: string; value: string }>,
+      ) => {
+        target.style.cursor = "pointer";
+        const tooltipWidth = 260;
+        const tooltipHeight = rows.length > 2 ? 180 : 140;
+
+        setHoverInfo({
+          x:
+            viewportWidth > 0
+              ? Math.min(preferredX, viewportWidth - tooltipWidth)
+              : preferredX,
+          y:
+            viewportHeight > 0
+              ? Math.min(preferredY, viewportHeight - tooltipHeight)
+              : preferredY,
+          title,
+          rows,
+        });
+      };
+
+      if (localitiesVisibleRef.current || landmarksVisibleRef.current) {
+        const pointFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
+            hitTolerance: 10,
+          },
+        );
+
+        if (pointFeature instanceof Feature) {
+          const family = getEditorPointFamilyFromFeature(pointFeature);
+
+          if (family === "locality" && localitiesVisibleRef.current) {
+            const locality = getEditorLocalityFromPointFeature(pointFeature);
+            const publicLocality =
+              locality && publicLocalitiesByIdRef.current[locality.id_locality];
+
+            if (publicLocality) {
+              setTooltip(
+                publicLocality.name,
+                buildPublicLocalityHoverRows(publicLocality),
+              );
+              return;
+            }
+          }
+
+          if (family === "landmark" && landmarksVisibleRef.current) {
+            const landmark = getEditorLandmarkFromPointFeature(pointFeature);
+            const publicLandmark =
+              landmark && publicLandmarksByIdRef.current[landmark.id_landmark];
+
+            if (publicLandmark) {
+              setTooltip(
+                publicLandmark.name,
+                buildPublicLandmarkHoverRows(publicLandmark),
+              );
+              return;
+            }
+          }
+        }
+      }
+
+      if (routesVisibleRef.current) {
+        const routeFeature = map.forEachFeatureAtPixel(
+          event.pixel,
+          (candidate) => {
+            if (candidate instanceof Feature) {
+              return candidate as Feature<Geometry>;
+            }
+
+            return null;
+          },
+          {
+            layerFilter: (candidateLayer) => candidateLayer === routesLayer,
+            hitTolerance: 8,
+          },
+        );
+
+        if (routeFeature instanceof Feature) {
+          const route = getEditorRouteFromFeature(routeFeature);
+          const publicRoute = route && publicRoutesByIdRef.current[route.id_route];
+
+          if (publicRoute) {
+            setTooltip(publicRoute.name, buildPublicRouteHoverRows(publicRoute));
+            return;
+          }
+        }
+      }
 
       if (!casesVisibleRef.current) {
         target.style.cursor = "";
@@ -309,7 +536,7 @@ export function CasesMap({
         return;
       }
 
-      const feature = map.forEachFeatureAtPixel(
+      const caseFeature = map.forEachFeatureAtPixel(
         event.pixel,
         (candidate) => {
           if (candidate instanceof Feature) {
@@ -323,14 +550,14 @@ export function CasesMap({
         },
       );
 
-      if (!feature) {
+      if (!(caseFeature instanceof Feature)) {
         target.style.cursor = "";
         setHoverInfo(null);
         return;
       }
 
       const resolvedCase = resolveCaseFeatureProperties(
-        feature as Feature<Geometry>,
+        caseFeature,
         casePropertiesByIdRef.current,
       );
       const rows = buildCaseHoverRows(displayModeRef.current, resolvedCase);
@@ -341,21 +568,7 @@ export function CasesMap({
         return;
       }
 
-      target.style.cursor = "pointer";
-      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
-      const originalEvent = event.originalEvent;
-      const preferredX = originalEvent.clientX + 18;
-      const preferredY = originalEvent.clientY + 18;
-      const tooltipWidth = 240;
-      const tooltipHeight = 120;
-
-      setHoverInfo({
-        x: viewportWidth > 0 ? Math.min(preferredX, viewportWidth - tooltipWidth) : preferredX,
-        y: viewportHeight > 0 ? Math.min(preferredY, viewportHeight - tooltipHeight) : preferredY,
-        title: resolvedCase?.id_case ?? "Case",
-        rows,
-      });
+      setTooltip(resolvedCase?.id_case ?? "Case", rows);
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
@@ -363,6 +576,10 @@ export function CasesMap({
 
     sourceRef.current = source;
     layerRef.current = layer;
+    pointsSourceRef.current = pointsSource;
+    pointsLayerRef.current = pointsLayer;
+    routesSourceRef.current = routesSource;
+    routesLayerRef.current = routesLayer;
     mapRef.current = map;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -378,6 +595,10 @@ export function CasesMap({
       map.setTarget(undefined);
       sourceRef.current = null;
       layerRef.current = null;
+      pointsSourceRef.current = null;
+      pointsLayerRef.current = null;
+      routesSourceRef.current = null;
+      routesLayerRef.current = null;
       mapRef.current = null;
     };
   }, [view]);
@@ -415,6 +636,7 @@ export function CasesMap({
         if (cancelled) {
           return;
         }
+
         onFeaturesLoad?.(0);
         onCaseSelectionChangeRef.current(null, "replace");
         console.error("Impossible de charger la couche publique.", error);
@@ -428,18 +650,134 @@ export function CasesMap({
     };
   }, [dataUrl, focusCaseById, focusCaseId, onFeaturesLoad]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublishedObjects() {
+      if (!pointsSourceRef.current || !routesSourceRef.current) {
+        return;
+      }
+
+      try {
+        const response = await fetchJson<PublicMapObjectsResponse>("/api/map/objects");
+        const payload = response ?? createEmptyPublicMapObjectsResponse();
+
+        if (cancelled || !pointsSourceRef.current || !routesSourceRef.current) {
+          return;
+        }
+
+        publicLocalitiesByIdRef.current = Object.fromEntries(
+          payload.localities.map((locality) => [locality.id, locality]),
+        );
+        publicLandmarksByIdRef.current = Object.fromEntries(
+          payload.landmarks.map((landmark) => [landmark.id, landmark]),
+        );
+        publicRoutesByIdRef.current = Object.fromEntries(
+          payload.routes.map((route) => [route.id, route]),
+        );
+        localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
+          payload.reference.locality_types.map((typeRef) => [
+            typeRef.value,
+            typeRef.default_icon_key,
+          ]),
+        );
+        landmarkDefaultIconKeyByTypeRef.current = Object.fromEntries(
+          payload.reference.landmark_types.map((typeRef) => [
+            typeRef.value,
+            typeRef.default_icon_key,
+          ]),
+        );
+        landmarkCategoryByTypeRef.current = Object.fromEntries(
+          payload.reference.landmark_types.map((typeRef) => [
+            typeRef.value,
+            typeRef.category,
+          ]),
+        );
+
+        const iconEntries = await Promise.all(
+          payload.reference.map_icons.map(async (iconRef) => {
+            if (!iconRef.image_path) {
+              return [iconRef.value, null] as const;
+            }
+
+            try {
+              const normalizedSource = iconRef.image_path.toLowerCase().endsWith(".svg")
+                ? await getNormalizedSvgIconSource(iconRef.image_path)
+                : iconRef.image_path;
+              return [iconRef.value, normalizedSource] as const;
+            } catch {
+              return [iconRef.value, iconRef.image_path] as const;
+            }
+          }),
+        );
+
+        if (cancelled || !pointsSourceRef.current || !routesSourceRef.current) {
+          return;
+        }
+
+        mapIconSourceByKeyRef.current = Object.fromEntries(
+          iconEntries.filter((entry): entry is [string, string] => entry[1] !== null),
+        );
+
+        replaceEditorPointFeatures(pointsSourceRef.current, {
+          localities: toRenderablePublicLocalities(payload.localities),
+          landmarks: toRenderablePublicLandmarks(payload.landmarks),
+        });
+        replaceEditorRouteFeatures(
+          routesSourceRef.current,
+          toRenderablePublicRoutes(payload.routes),
+        );
+        pointsLayerRef.current?.changed();
+        routesLayerRef.current?.changed();
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Impossible de charger les objets publics.", error);
+        publicLocalitiesByIdRef.current = {};
+        publicLandmarksByIdRef.current = {};
+        publicRoutesByIdRef.current = {};
+        mapIconSourceByKeyRef.current = {};
+        localityDefaultIconKeyByTypeRef.current = {};
+        landmarkDefaultIconKeyByTypeRef.current = {};
+        landmarkCategoryByTypeRef.current = {};
+        pointsSourceRef.current?.clear(true);
+        routesSourceRef.current?.clear(true);
+      }
+    }
+
+    void loadPublishedObjects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
         <div className="pointer-events-auto">
-      <MapToolbar
-        casesVisible={casesVisible}
-        panelVisible={panelVisible}
-        displayMode={displayMode}
-        onDisplayModeChange={onDisplayModeChange}
-        onToggleCases={() => onCasesVisibilityChange(!casesVisible)}
-        onTogglePanel={() => onPanelVisibilityChange(!panelVisible)}
-      />
+          <MapToolbar
+            casesVisible={casesVisible}
+            localitiesVisible={localitiesVisible}
+            landmarksVisible={landmarksVisible}
+            routesVisible={routesVisible}
+            panelVisible={panelVisible}
+            displayMode={displayMode}
+            onDisplayModeChange={onDisplayModeChange}
+            onToggleCases={() => onCasesVisibilityChange(!casesVisible)}
+            onToggleLocalities={() => setLocalitiesVisible((visible) => !visible)}
+            onToggleLandmarks={() => setLandmarksVisible((visible) => !visible)}
+            onToggleRoutes={() => setRoutesVisible((visible) => !visible)}
+            onToggleAllObjects={() => {
+              const nextVisible = !(localitiesVisible || landmarksVisible || routesVisible);
+              setLocalitiesVisible(nextVisible);
+              setLandmarksVisible(nextVisible);
+              setRoutesVisible(nextVisible);
+            }}
+            onTogglePanel={() => onPanelVisibilityChange(!panelVisible)}
+          />
         </div>
       </div>
       <div
@@ -447,7 +785,8 @@ export function CasesMap({
         className="h-[calc(100svh-2rem)] w-full xl:h-full"
         aria-label="Carte des cases publiques"
       />
-      {hoverInfo && casesVisible ? (
+      {hoverInfo &&
+      (casesVisible || localitiesVisible || landmarksVisible || routesVisible) ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{

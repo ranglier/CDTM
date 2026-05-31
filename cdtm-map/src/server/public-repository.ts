@@ -1,4 +1,13 @@
 import type { PublicCaseIndexResponse, PublicCaseProperties } from "@/admin/types";
+import type {
+  PublicMapLandmark,
+  PublicMapLocality,
+  PublicMapObjectsResponse,
+  PublicMapReferenceIcon,
+  PublicMapReferenceLandmarkType,
+  PublicMapReferenceLocalityType,
+  PublicMapRoute,
+} from "@/map/public-objects";
 import { listPublicMapStyles } from "@/server/admin-tech-repository";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import { loadStableCaseIndex } from "@/server/stable-case-source";
@@ -17,6 +26,43 @@ type PublicCaseRow = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+};
+
+type PublicMapLocalityRow = {
+  id: string;
+  name: string;
+  type_key: string;
+  type_label: string | null;
+  icon_key: string | null;
+  x: number;
+  y: number;
+  id_case_detected: string | null;
+  description: string | null;
+};
+
+type PublicMapLandmarkRow = {
+  id: string;
+  name: string;
+  type_key: string;
+  type_label: string | null;
+  category: "landmark" | "unique" | null;
+  icon_key: string | null;
+  x: number;
+  y: number;
+  id_case_detected: string | null;
+  description: string | null;
+};
+
+type PublicMapRouteRow = {
+  id: string;
+  name: string;
+  route_type: string;
+  points_json: unknown;
+  geometry_mode: "straight" | "curved" | null;
+  stroke_style: "solid" | "dashed" | "dotted" | null;
+  stroke_width: number | null;
+  stroke_color: string | null;
+  description: string | null;
 };
 
 function createEmptyPublicCase(idCase: string): PublicCaseProperties {
@@ -53,6 +99,27 @@ function mergePublicCase(row: PublicCaseRow, fallback: PublicCaseProperties): Pu
     controleur: row.controleur,
     controle_type: row.controle_type,
   };
+}
+
+function isPublicRoutePoint(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === "number" &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[1])
+  );
+}
+
+function normalizePublicRoutePoints(value: unknown): Array<[number, number]> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const points = value.filter(isPublicRoutePoint).map((point) => [point[0], point[1]] as [number, number]);
+
+  return points.length >= 2 ? points : null;
 }
 
 export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
@@ -133,5 +200,207 @@ export async function getPublicCaseIndexResponse(): Promise<PublicCaseIndexRespo
   return {
     cases,
     styles,
+  };
+}
+
+async function listPublicLocalities(): Promise<PublicMapLocality[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapLocalityRow>(
+    `
+      SELECT
+        locality.id_locality AS id,
+        locality.name,
+        locality.type_key,
+        COALESCE(type_ref.label, type_ref.type_key) AS type_label,
+        locality.icon_key,
+        locality.x,
+        locality.y,
+        locality.id_case_detected,
+        locality.description
+      FROM map_localities AS locality
+      LEFT JOIN reference_locality_types AS type_ref ON type_ref.type_key = locality.type_key
+      WHERE locality.status = 'published'
+      ORDER BY LOWER(locality.name) ASC, locality.id_locality ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+async function listPublicLandmarks(): Promise<PublicMapLandmark[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapLandmarkRow>(
+    `
+      SELECT
+        landmark.id_landmark AS id,
+        landmark.name,
+        landmark.type_key,
+        COALESCE(type_ref.label, type_ref.type_key) AS type_label,
+        type_ref.category,
+        landmark.icon_key,
+        landmark.x,
+        landmark.y,
+        landmark.id_case_detected,
+        landmark.description
+      FROM map_landmarks AS landmark
+      LEFT JOIN reference_landmark_types AS type_ref ON type_ref.type_key = landmark.type_key
+      WHERE landmark.status = 'published'
+      ORDER BY LOWER(landmark.name) ASC, landmark.id_landmark ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+async function listPublicRoutes(): Promise<PublicMapRoute[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapRouteRow>(
+    `
+      SELECT
+        id_route AS id,
+        name,
+        route_type,
+        points AS points_json,
+        geometry_mode,
+        stroke_style,
+        stroke_width,
+        stroke_color,
+        description
+      FROM map_routes
+      WHERE status = 'published'
+      ORDER BY LOWER(name) ASC, id_route ASC
+    `,
+  );
+
+  return result.rows.flatMap((row) => {
+    const points = normalizePublicRoutePoints(row.points_json);
+
+    if (!points) {
+      return [];
+    }
+
+    return [
+      {
+        id: row.id,
+        name: row.name,
+        route_type: row.route_type,
+        points,
+        geometry_mode: row.geometry_mode === "straight" ? "straight" : "curved",
+        stroke_style:
+          row.stroke_style === "dashed" || row.stroke_style === "dotted" ? row.stroke_style : "solid",
+        stroke_width:
+          Number.isFinite(row.stroke_width) && typeof row.stroke_width === "number" ? row.stroke_width : 3,
+        stroke_color: row.stroke_color ?? null,
+        description: row.description ?? null,
+      } satisfies PublicMapRoute,
+    ];
+  });
+}
+
+async function listPublicMapIconReferences(): Promise<PublicMapReferenceIcon[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapReferenceIcon>(
+    `
+      SELECT
+        icon_key AS value,
+        COALESCE(label, icon_key) AS label,
+        image_path,
+        image_alt
+      FROM reference_map_icons
+      WHERE is_active = TRUE
+      ORDER BY LOWER(COALESCE(label, icon_key)) ASC, icon_key ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+async function listPublicLocalityTypeReferences(): Promise<PublicMapReferenceLocalityType[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapReferenceLocalityType>(
+    `
+      SELECT
+        type_key AS value,
+        COALESCE(label, type_key) AS label,
+        default_icon_key
+      FROM reference_locality_types
+      WHERE is_active = TRUE
+      ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+async function listPublicLandmarkTypeReferences(): Promise<PublicMapReferenceLandmarkType[]> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    return [];
+  }
+
+  const result = await getPool().query<PublicMapReferenceLandmarkType>(
+    `
+      SELECT
+        type_key AS value,
+        COALESCE(label, type_key) AS label,
+        category,
+        default_icon_key
+      FROM reference_landmark_types
+      WHERE is_active = TRUE
+      ORDER BY
+        LOWER(COALESCE(category, 'landmark')) ASC,
+        LOWER(COALESCE(label, type_key)) ASC,
+        type_key ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+export async function getPublicMapObjectsResponse(): Promise<PublicMapObjectsResponse> {
+  const [localities, landmarks, routes, mapIcons, localityTypes, landmarkTypes] = await Promise.all([
+    listPublicLocalities(),
+    listPublicLandmarks(),
+    listPublicRoutes(),
+    listPublicMapIconReferences(),
+    listPublicLocalityTypeReferences(),
+    listPublicLandmarkTypeReferences(),
+  ]);
+
+  return {
+    localities,
+    landmarks,
+    routes,
+    reference: {
+      map_icons: mapIcons,
+      locality_types: localityTypes,
+      landmark_types: landmarkTypes,
+    },
   };
 }
