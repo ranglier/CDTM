@@ -26,8 +26,8 @@ informations stables de la couche `cases` :
 2. `region`
 3. `sous_region`
 4. `cote`
-5. `lac_majeur`
-6. `cours_eau_majeur`
+5. `lac`
+6. `fluvial`
 
 Si `region` ou `sous_region` valent `null`, l'interface affiche `Non renseigne`.
 Les booleens d'eau sont rendus en `Oui` ou `Non`.

@@ -139,6 +139,10 @@ type SlotOverrideInput = {
   slot_override_reason?: string | null;
 };
 
+type ReferenceSlotConsumer = SlotConsumer & {
+  upgrades_from_type_id?: string | null;
+};
+
 type NormalizedEditorRouteInput = {
   id_route: string;
   name: string;
@@ -521,13 +525,19 @@ async function getReferenceSlotConsumer(
   client: PoolClient,
   tableName: "reference_locality_types" | "reference_landmark_types",
   typeKey: string,
-): Promise<SlotConsumer> {
-  const result = await client.query<SlotConsumer>(
-    `
-      SELECT consumes_slot, emp_requis
-      FROM ${tableName}
-      WHERE type_key = $1
-    `,
+): Promise<ReferenceSlotConsumer> {
+  const result = await client.query<ReferenceSlotConsumer>(
+    tableName === "reference_locality_types"
+      ? `
+        SELECT consumes_slot, emp_requis, upgrades_from_type_id
+        FROM reference_locality_types
+        WHERE type_key = $1
+      `
+      : `
+        SELECT consumes_slot, emp_requis, NULL::text AS upgrades_from_type_id
+        FROM reference_landmark_types
+        WHERE type_key = $1
+      `,
     [typeKey],
   );
 
@@ -538,6 +548,7 @@ async function listExistingCaseSlotConsumers(
   client: PoolClient,
   idCase: string,
   exclude?: { tableName: "map_localities" | "map_landmarks"; idColumn: "id_locality" | "id_landmark"; id: string },
+  replacedLocality?: { id: string; typeKey: string },
 ): Promise<SlotConsumer[]> {
   const result = await client.query<SlotConsumer>(
     `
@@ -547,6 +558,21 @@ async function listExistingCaseSlotConsumers(
       WHERE locality.id_case_detected = $1
         AND locality.status <> 'archived'
         AND ($2::text IS NULL OR locality.id_locality <> $2)
+        AND (
+          $4::text IS NULL
+          OR locality.id_locality <> $4
+          OR locality.type_key <> $5
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM map_localities AS upgraded_by
+          INNER JOIN reference_locality_types AS upgraded_type ON upgraded_type.type_key = upgraded_by.type_key
+          WHERE upgraded_by.depends_on_locality_id = locality.id_locality
+            AND upgraded_by.id_case_detected = locality.id_case_detected
+            AND upgraded_by.status <> 'archived'
+            AND ($2::text IS NULL OR upgraded_by.id_locality <> $2)
+            AND upgraded_type.upgrades_from_type_id = locality.type_key
+        )
 
       UNION ALL
 
@@ -561,6 +587,8 @@ async function listExistingCaseSlotConsumers(
       idCase,
       exclude?.tableName === "map_localities" ? exclude.id : null,
       exclude?.tableName === "map_landmarks" ? exclude.id : null,
+      replacedLocality?.id ?? null,
+      replacedLocality?.typeKey ?? null,
     ],
   );
 
@@ -587,11 +615,11 @@ async function calculateCaseSlotCapacity(
         public_current.lac,
         public_current.fluvial,
         terrain.colline,
-        emplacements.peuple
+        control_current.peuple
       FROM case_registry AS registry
       LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
       LEFT JOIN case_terrain_current AS terrain ON terrain.id_case = registry.id_case
-      LEFT JOIN case_emplacements_current AS emplacements ON emplacements.id_case = registry.id_case
+      LEFT JOIN case_control_current AS control_current ON control_current.id_case = registry.id_case
       WHERE registry.id_case = $1
     `,
     [idCase],
@@ -759,6 +787,13 @@ async function assertSlotCapacityForEditorObject(
     return;
   }
 
+  const replacedLocality =
+    config.tableName === "map_localities" &&
+    input.depends_on_locality_id &&
+    candidate.upgrades_from_type_id
+      ? { id: input.depends_on_locality_id, typeKey: candidate.upgrades_from_type_id }
+      : undefined;
+
   const [calculation, existingConsumers] = await Promise.all([
     calculateCaseSlotCapacity(client, input.id_case_detected),
     listExistingCaseSlotConsumers(
@@ -771,6 +806,7 @@ async function assertSlotCapacityForEditorObject(
             id: existingId,
           }
         : undefined,
+      replacedLocality,
     ),
   ]);
   const nextConsumers = [...existingConsumers, candidate];

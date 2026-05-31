@@ -1314,6 +1314,67 @@ const databaseMigrations: DatabaseMigration[] = [
       }
     },
   },
+  {
+    version: "009",
+    name: "map_rules_v1_alignment",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE case_control_current
+        ADD COLUMN IF NOT EXISTS peuple TEXT
+      `);
+
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_emplacements_current'
+              AND column_name = 'peuple'
+          ) THEN
+            UPDATE case_control_current AS control_current
+            SET
+              peuple = COALESCE(control_current.peuple, emplacements.peuple),
+              updated_at = CASE
+                WHEN control_current.peuple IS NULL AND emplacements.peuple IS NOT NULL THEN NOW()
+                ELSE control_current.updated_at
+              END
+            FROM case_emplacements_current AS emplacements
+            WHERE control_current.id_case = emplacements.id_case
+              AND control_current.peuple IS NULL
+              AND emplacements.peuple IS NOT NULL;
+          END IF;
+        END
+        $$;
+      `);
+
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_emplacements_current'
+              AND column_name = 'peuple'
+          ) THEN
+            INSERT INTO case_control_current (id_case, peuple)
+            SELECT emplacements.id_case, emplacements.peuple
+            FROM case_emplacements_current AS emplacements
+            LEFT JOIN case_control_current AS control_current ON control_current.id_case = emplacements.id_case
+            WHERE control_current.id_case IS NULL
+              AND emplacements.peuple IS NOT NULL
+            ON CONFLICT (id_case) DO NOTHING;
+          END IF;
+        END
+        $$;
+      `);
+
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        DROP COLUMN IF EXISTS peuple
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

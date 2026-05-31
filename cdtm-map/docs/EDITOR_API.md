@@ -54,9 +54,17 @@ Payload :
   "controleur": null,
   "status": "draft",
   "depends_on_locality_id": null,
+  "force_slot_override": false,
   "description": "Port fluvial"
 }
 ```
+
+`depends_on_locality_id` est un lien optionnel entre instances de localites dans l'editeur.
+Il ne definit pas les chaines d'amelioration V1. Les chaines d'amelioration sont portees par `upgrades_from_type_id` dans `reference_locality_types`.
+Lorsqu'une localite active reference explicitement une localite qu'elle ameliore, l'ancienne localite n'est plus comptee dans les emplacements consommes.
+
+Si le type consomme des emplacements, l'API refuse par defaut une creation qui depasse la capacite calculee de la case.
+Le champ optionnel `force_slot_override: true` autorise le forçage admin.
 
 ### `GET /api/admin/editor/localities/[id]`
 ### `PATCH /api/admin/editor/localities/[id]`
@@ -72,6 +80,7 @@ Contraintes :
 - `x` et `y`, s'ils sont fournis, doivent etre des nombres finis ;
 - `null`, `""` et les chaines blanches sont refuses pour `x` / `y` ;
 - `status`, s'il est fourni, doit etre strictement `draft`, `published` ou `archived`.
+- `force_slot_override`, s'il vaut `true`, autorise un depassement d'emplacements.
 
 Exemples :
 
@@ -118,6 +127,7 @@ Retrait d'icone :
 ### `DELETE /api/admin/editor/landmarks/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
+Les landmarks dont le type consomme des emplacements suivent la meme validation et le meme forçage admin.
 
 `PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
 
@@ -130,6 +140,7 @@ Les champs suivent le modele des localites sans `depends_on_locality_id`.
 ### `DELETE /api/admin/editor/forces/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
+Les forces ne consomment pas d'emplacements en V1.
 
 `PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
 

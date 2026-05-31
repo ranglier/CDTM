@@ -60,22 +60,6 @@ function getStyleForTarget(
   };
 }
 
-function mergeTopographicStyles(
-  terrainStyle: ResolvedStyle | null,
-  reliefStyle: ResolvedStyle | null,
-): ResolvedStyle | null {
-  if (!terrainStyle && !reliefStyle) {
-    return null;
-  }
-
-  return {
-    fill: terrainStyle?.fill ?? reliefStyle?.fill ?? null,
-    stroke: terrainStyle?.stroke ?? reliefStyle?.stroke ?? null,
-    pattern_type: reliefStyle?.pattern_type ?? terrainStyle?.pattern_type ?? null,
-    pattern_color: reliefStyle?.pattern_color ?? terrainStyle?.pattern_color ?? null,
-  };
-}
-
 function resolveBaseStyle(
   displayMode: MapDisplayMode,
   properties: StableCaseProperties | null,
@@ -94,10 +78,7 @@ function resolveBaseStyle(
         getStyleForTarget(styles, "faction", properties.faction)
       );
     case "topographic":
-      return mergeTopographicStyles(
-        getStyleForTarget(styles, "terrain_type", properties.terrain_type),
-        getStyleForTarget(styles, "relief", properties.relief),
-      );
+      return getStyleForTarget(styles, "terrain_type", properties.terrain_type);
     default:
       return null;
   }

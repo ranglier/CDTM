@@ -27,6 +27,7 @@ import {
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
   normalizeMapDisplayMode,
+  toStableCaseProperties,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
@@ -136,9 +137,9 @@ function mergeStableCases(
       fluvial: publicCase.fluvial,
       terrain_cat: publicCase.terrain_cat,
       terrain_type: publicCase.terrain_type,
-      terrain_secondaire: publicCase.terrain_secondaire,
       colline: publicCase.colline,
       relief: publicCase.relief,
+      peuple: publicCase.peuple,
       faction: publicCase.faction,
       controleur: publicCase.controleur,
       controle_type: publicCase.controle_type,
@@ -160,9 +161,9 @@ function applyPersistedRecordToStableCase(
     fluvial: record.public.fluvial,
     terrain_cat: record.public.terrain_cat,
     terrain_type: record.public.terrain_type,
-    terrain_secondaire: record.public.terrain_secondaire,
     colline: record.public.colline,
     relief: record.public.relief,
+    peuple: record.public.peuple,
     faction: record.public.faction,
     controleur: record.public.controleur,
     controle_type: record.public.controle_type,
@@ -193,10 +194,11 @@ function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
     draft.terrain.terrain_secondaire,
     draft.terrain.colline,
     draft.terrain.relief,
+    draft.control.peuple,
     draft.control.faction,
     draft.control.controleur,
     draft.control.controle_type,
-  ].some((fieldState) => fieldState.touched);
+  ].some((fieldState) => fieldState.touched) || draft.bonus_contextuels.touched;
 }
 
 function buildBulkFieldState(values: Array<string | null | undefined>) {
@@ -207,6 +209,27 @@ function buildBulkFieldState(values: Array<string | null | undefined>) {
     value: uniqueValues.length === 1 ? uniqueValues[0] : "",
     touched: false,
     mixed: uniqueValues.length > 1,
+  };
+}
+
+function normalizeSlugList(values: string[]): string[] {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
+  ).sort();
+}
+
+function getSlugListKey(values: string[]): string {
+  return normalizeSlugList(values).join("\u0000");
+}
+
+function buildBulkListState(values: string[][]) {
+  const normalizedValues = values.map(normalizeSlugList);
+  const uniqueKeys = Array.from(new Set(normalizedValues.map(getSlugListKey)));
+
+  return {
+    value: uniqueKeys.length === 1 ? normalizedValues[0] : [],
+    touched: false,
+    mixed: uniqueKeys.length > 1,
   };
 }
 
@@ -235,10 +258,14 @@ function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
       relief: buildBulkFieldState(records.map((record) => record.terrain.relief)),
     },
     control: {
+      peuple: buildBulkFieldState(records.map((record) => record.control.peuple)),
       faction: buildBulkFieldState(records.map((record) => record.control.faction)),
       controleur: buildBulkFieldState(records.map((record) => record.control.controleur)),
       controle_type: buildBulkFieldState(records.map((record) => record.control.controle_type)),
     },
+    bonus_contextuels: buildBulkListState(
+      records.map((record) => record.bonus_contextuels.map((bonus) => bonus.slug)),
+    ),
   };
 }
 
@@ -322,11 +349,17 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
   }
 
   if (
+    draft.control.peuple.touched ||
     draft.control.faction.touched ||
     draft.control.controleur.touched ||
     draft.control.controle_type.touched
   ) {
     patch.control = {};
+
+    if (draft.control.peuple.touched) {
+      patch.control.peuple =
+        draft.control.peuple.value.trim().length > 0 ? draft.control.peuple.value.trim() : null;
+    }
 
     if (draft.control.faction.touched) {
       patch.control.faction =
@@ -346,6 +379,10 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
           ? draft.control.controle_type.value.trim()
           : null;
     }
+  }
+
+  if (draft.bonus_contextuels.touched) {
+    patch.bonus_contextuels = normalizeSlugList(draft.bonus_contextuels.value);
   }
 
   return patch;
@@ -750,6 +787,13 @@ export default function HomePage() {
     [],
   );
 
+  const handleSingleBonusContextuelsChange = useCallback((bonusSlugs: string[]) => {
+    setSingleDraft((current) => ({
+      ...current,
+      bonus_contextuels: normalizeSlugList(bonusSlugs),
+    }));
+  }, []);
+
   const handleBulkAdminFieldChange = useCallback(
     (
       section: keyof AdminBulkEditDraft,
@@ -792,6 +836,17 @@ export default function HomePage() {
     },
     [],
   );
+
+  const handleBulkBonusContextuelsChange = useCallback((bonusSlugs: string[]) => {
+    setBulkDraft((current) => ({
+      ...current,
+      bonus_contextuels: {
+        value: normalizeSlugList(bonusSlugs),
+        touched: true,
+        mixed: false,
+      },
+    }));
+  }, []);
 
   const handleEnterEditMode = useCallback(() => {
     if (!adminModeEnabled || !adminSession.authenticated) {
@@ -931,10 +986,14 @@ export default function HomePage() {
         }
 
         if (!cancelled) {
-          const baseCases = collection.features.map((feature) => ({
-            ...feature.properties,
-            registry_id_case: feature.properties.id_case,
-          }));
+          const baseCases = collection.features
+            .map((feature) =>
+              toStableCaseProperties({
+                ...feature.properties,
+                registry_id_case: feature.properties.id_case,
+              }),
+            )
+            .filter((stableCase): stableCase is StableCaseProperties => stableCase !== null);
 
           setStableCases(mergeStableCases(baseCases, publicCases.cases));
           setPublicMapStyles(publicCases.styles);
@@ -1119,8 +1178,10 @@ export default function HomePage() {
             }}
             onSearchSubmit={handleSearchSubmit}
             onSingleFieldChange={handleSingleAdminFieldChange}
+            onSingleBonusContextuelsChange={handleSingleBonusContextuelsChange}
             onDynamicFieldChange={handleDynamicAdminFieldChange}
             onBulkFieldChange={handleBulkAdminFieldChange}
+            onBulkBonusContextuelsChange={handleBulkBonusContextuelsChange}
             onEnterEditMode={handleEnterEditMode}
             onCancelEdit={handleCancelEdit}
             onSave={handleAdminSave}

@@ -919,6 +919,8 @@ export async function getStaticAdminReferenceData(
       terrainCategories,
       terrainTypeRows,
       reliefOptions,
+      bonusContextuelRows,
+      peupleOptions,
       factionOptions,
       controllerOptions,
       controlTypeOptions,
@@ -938,6 +940,20 @@ export async function getStaticAdminReferenceData(
           `,
         ),
         listReferenceOptionsInternal(client, "nomenclatures", "relief"),
+        client.query<{
+          slug: string;
+          label: string | null;
+          valeur: number;
+          description: string | null;
+        }>(
+          `
+            SELECT slug, label, valeur, description
+            FROM bonus_contextuel
+            WHERE active = TRUE
+            ORDER BY LOWER(COALESCE(label, slug)) ASC, slug ASC
+          `,
+        ),
+        listReferenceOptionsInternal(client, "peuples"),
         listReferenceOptionsInternal(client, "factions"),
         listReferenceOptionsInternal(client, "controleurs"),
         listReferenceOptionsInternal(client, "nomenclatures", "controle_type"),
@@ -962,6 +978,13 @@ export async function getStaticAdminReferenceData(
       terrain_categories: terrainCategories,
       terrain_types_by_category: terrainTypesByCategory,
       relief_options: reliefOptions,
+      bonus_contextuel_options: bonusContextuelRows.rows.map((row) => ({
+        slug: row.slug,
+        label: row.label?.trim().length ? row.label : row.slug,
+        valeur: row.valeur,
+        description: row.description,
+      })),
+      peuple_options: peupleOptions,
       faction_options: factionOptions,
       controller_options: controllerOptions,
       control_type_options: controlTypeOptions,
@@ -1806,6 +1829,7 @@ export async function validateStaticAdminDraftSelections(
   const terrainType = normalizeNullableText(draft.terrain.terrain_type);
   const terrainSecondaire = normalizeNullableText(draft.terrain.terrain_secondaire);
   const relief = normalizeNullableText(draft.terrain.relief);
+  const peuple = normalizeNullableText(draft.control.peuple);
   const faction = normalizeNullableText(draft.control.faction);
   const controleur = normalizeNullableText(draft.control.controleur);
   const controlType = normalizeNullableText(draft.control.controle_type);
@@ -1836,6 +1860,10 @@ export async function validateStaticAdminDraftSelections(
     throw new Error("La valeur du champ relief est invalide.");
   }
 
+  if (!isAllowedOption(referenceData.peuple_options, peuple)) {
+    throw new Error("La valeur du champ peuple est invalide.");
+  }
+
   if (!isAllowedOption(referenceData.faction_options, faction)) {
     throw new Error("La valeur du champ faction est invalide.");
   }
@@ -1859,7 +1887,12 @@ export async function validateStaticBulkPatchSelections(
       colline?: boolean | null;
       relief?: string | null;
     };
-    control?: { faction?: string | null; controleur?: string | null; controle_type?: string | null };
+    control?: {
+      peuple?: string | null;
+      faction?: string | null;
+      controleur?: string | null;
+      controle_type?: string | null;
+    };
   },
 ): Promise<void> {
   const referenceData = await getStaticAdminReferenceData(client);
@@ -1899,6 +1932,12 @@ export async function validateStaticBulkPatchSelections(
   if (patch.terrain?.relief !== undefined) {
     if (!isAllowedOption(referenceData.relief_options, patch.terrain.relief ?? null)) {
       throw new Error("La valeur du champ relief est invalide.");
+    }
+  }
+
+  if (patch.control?.peuple !== undefined) {
+    if (!isAllowedOption(referenceData.peuple_options, patch.control.peuple ?? null)) {
+      throw new Error("La valeur du champ peuple est invalide.");
     }
   }
 

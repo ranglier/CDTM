@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type {
   AdminBlockMeta,
+  AdminBonusContextuel,
   AdminBulkEditDraft,
   AdminCaseDraft,
   AdminCaseRecord,
@@ -37,8 +38,10 @@ type CaseInfoPanelProps = {
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
   onSingleFieldChange: (section: StaticAdminDraftSection, field: string, value: string) => void;
+  onSingleBonusContextuelsChange: (bonusSlugs: string[]) => void;
   onDynamicFieldChange: (tableKey: string, field: string, value: string) => void;
   onBulkFieldChange: (section: keyof AdminBulkEditDraft, field: string, value: string) => void;
+  onBulkBonusContextuelsChange: (bonusSlugs: string[]) => void;
   onEnterEditMode: () => void;
   onCancelEdit: () => void;
   onSave: () => void;
@@ -75,6 +78,19 @@ function summarizeBooleans(values: Array<boolean | null | undefined>): string {
     value === true ? "Oui" : value === false ? "Non" : "Non renseigne",
   );
   const uniqueValues = Array.from(new Set(normalizedValues));
+
+  return uniqueValues.length === 1 ? uniqueValues[0] : "Etat mixte";
+}
+
+function summarizeStringLists(values: string[][]): string {
+  const normalizedValues = values.map((list) =>
+    Array.from(new Set(list.map((value) => value.trim()).filter(Boolean))).sort(),
+  );
+  const uniqueValues = Array.from(new Set(normalizedValues.map((list) => list.join(", "))));
+
+  if (uniqueValues.length === 0 || (uniqueValues.length === 1 && uniqueValues[0] === "")) {
+    return "Non renseigne";
+  }
 
   return uniqueValues.length === 1 ? uniqueValues[0] : "Etat mixte";
 }
@@ -122,6 +138,23 @@ function renderBulkHelper(field: BulkFieldState): string | undefined {
   }
 
   return undefined;
+}
+
+function renderBulkListHelper(field: { touched: boolean; mixed: boolean }): string | undefined {
+  if (field.touched) {
+    return "Cette liste remplacera les bonus de toute la selection.";
+  }
+
+  if (field.mixed) {
+    return "Bonus differents selon la selection.";
+  }
+
+  return undefined;
+}
+
+function formatBonusOption(option: AdminBonusContextuel): string {
+  const signedValue = option.valeur > 0 ? `+${option.valeur}` : String(option.valeur);
+  return `${option.label} (${signedValue})`;
 }
 
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
@@ -212,6 +245,56 @@ function BooleanField({ value, onChange, disabled = false }: { value: string; on
   );
 }
 
+function CheckboxListField({
+  options,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  options: readonly AdminBonusContextuel[];
+  value: readonly string[];
+  onChange: (value: string[]) => void;
+  disabled?: boolean;
+}) {
+  const selected = new Set(value);
+
+  if (options.length === 0) {
+    return <p className="text-sm leading-6 text-muted-foreground">Aucun bonus contextuel disponible.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {options.map((option) => {
+        const checked = selected.has(option.slug);
+
+        return (
+          <label key={option.slug} className="flex items-start gap-3 rounded-[12px] border border-border/60 bg-background/35 px-3 py-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-primary"
+              checked={checked}
+              disabled={disabled}
+              onChange={(event) => {
+                if (event.target.checked) {
+                  onChange([...value, option.slug]);
+                } else {
+                  onChange(value.filter((slug) => slug !== option.slug));
+                }
+              }}
+            />
+            <span>
+              <span className="font-medium">{formatBonusOption(option)}</span>
+              {option.description ? (
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
+              ) : null}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function DynamicFieldInput({ section, fieldKey, disabled, draft, onDynamicFieldChange }: { section: AdminDynamicSectionRecord; fieldKey: string; disabled: boolean; draft: AdminCaseDraft; onDynamicFieldChange: (tableKey: string, field: string, value: string) => void; }) {
   const field = section.fields.find((item) => item.field_key === fieldKey);
 
@@ -282,8 +365,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     onSearchValueChange,
     onSearchSubmit,
     onSingleFieldChange,
+    onSingleBonusContextuelsChange,
     onDynamicFieldChange,
     onBulkFieldChange,
+    onBulkBonusContextuelsChange,
     onEnterEditMode,
     onCancelEdit,
     onSave,
@@ -295,6 +380,11 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const bulkTerrainCategory = bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched ? "" : bulkDraft.terrain.terrain_cat.value;
   const singleTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, singleDraft.terrain.terrain_cat);
   const bulkTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, bulkTerrainCategory);
+  const bonusContextuelOptions = activeAdminRecord?.reference_data.bonus_contextuel_options ?? [];
+  const selectedBonusContextuels = isMultiSelection
+    ? bulkDraft.bonus_contextuels.value
+    : singleDraft.bonus_contextuels ?? [];
+  const peupleOptions = activeAdminRecord?.reference_data.peuple_options.map((option) => option.value) ?? [];
   const factionOptions = activeAdminRecord?.reference_data.faction_options.map((option) => option.value) ?? [];
   const controllerOptions = activeAdminRecord?.reference_data.controller_options.map((option) => option.value) ?? [];
   const controlTypeOptions = activeAdminRecord?.reference_data.control_type_options.map((option) => option.value) ?? [];
@@ -336,9 +426,18 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     { label: "Emplacements", value: slotSummary },
   ];
   const controlRows = [
+    { label: "Peuple", value: summarizeStrings(selectedCases.map((item) => item.peuple)) },
     { label: "Faction", value: summarizeStrings(selectedCases.map((item) => item.faction)) },
     { label: "Controleur", value: summarizeStrings(selectedCases.map((item) => item.controleur)) },
     { label: "Type de controle", value: summarizeStrings(selectedCases.map((item) => item.controle_type)) },
+  ];
+  const bonusRows = [
+    {
+      label: "Bonus contextuels",
+      value: summarizeStringLists(
+        selectedAdminRecords.map((record) => record.bonus_contextuels.map((bonus) => bonus.label)),
+      ),
+    },
   ];
   const visibleDynamicSections = dynamicSections
     .map((section) => ({
@@ -459,6 +558,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Controle" meta={controlMeta} />
                 <div className="mt-4">
+                  <FormRow label="Peuple" mixed={isMultiSelection ? bulkDraft.control.peuple.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.peuple) : undefined}>
+                    <SelectField value={isMultiSelection ? bulkDraft.control.peuple.value : singleDraft.control.peuple} options={peupleOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "peuple", value) : onSingleFieldChange("control", "peuple", value)} disabled={adminLoading || adminSaving} />
+                  </FormRow>
                   <FormRow label="Faction" mixed={isMultiSelection ? bulkDraft.control.faction.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.faction) : undefined}>
                     <SelectField value={isMultiSelection ? bulkDraft.control.faction.value : singleDraft.control.faction} options={factionOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "faction", value) : onSingleFieldChange("control", "faction", value)} disabled={adminLoading || adminSaving} />
                   </FormRow>
@@ -467,6 +569,32 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   </FormRow>
                   <FormRow label="Type de controle" mixed={isMultiSelection ? bulkDraft.control.controle_type.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.controle_type) : undefined}>
                     <SelectField value={isMultiSelection ? bulkDraft.control.controle_type.value : singleDraft.control.controle_type} options={controlTypeOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "controle_type", value) : onSingleFieldChange("control", "controle_type", value)} disabled={adminLoading || adminSaving} />
+                  </FormRow>
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <SectionTitle title="Bonus contextuels" />
+                <div className="mt-4">
+                  <FormRow
+                    label="Bonus"
+                    mixed={isMultiSelection ? bulkDraft.bonus_contextuels.mixed : false}
+                    helper={
+                      isMultiSelection
+                        ? renderBulkListHelper(bulkDraft.bonus_contextuels)
+                        : undefined
+                    }
+                  >
+                    <CheckboxListField
+                      value={selectedBonusContextuels}
+                      options={bonusContextuelOptions}
+                      onChange={(value) =>
+                        isMultiSelection
+                          ? onBulkBonusContextuelsChange(value)
+                          : onSingleBonusContextuelsChange(value)
+                      }
+                      disabled={adminLoading || adminSaving}
+                    />
                   </FormRow>
                 </div>
               </section>
@@ -520,6 +648,15 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   <CompactInfoList rows={controlRows} emptyMessage="Aucune donnee de controle renseignee." />
                 </div>
               </section>
+
+              {adminModeEnabled ? (
+                <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                  <SectionTitle title="Bonus contextuels" />
+                  <div className="mt-4">
+                    <CompactInfoList rows={bonusRows} emptyMessage="Aucun bonus contextuel applique." />
+                  </div>
+                </section>
+              ) : null}
 
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Donnees personnalisees" />

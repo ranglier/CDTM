@@ -9,8 +9,8 @@ Les champs publics de base sont :
 - `region`
 - `sous_region`
 - `cote`
-- `lac_majeur`
-- `cours_eau_majeur`
+- `lac`
+- `fluvial`
 
 Les champs metier persistés par case sont separes en tables dediees :
 - `case_public_current`
@@ -19,9 +19,19 @@ Les champs metier persistés par case sont separes en tables dediees :
 - `case_emplacements_current`
 
 `case_emplacements_current` reste une table metier de case. Elle ne sert pas a modeliser les objets cartographiques libres de l'editeur.
+Elle porte uniquement le resultat courant du calcul V1 des emplacements.
 
-Le champ fonctionnel attendu pour cette table est `peuple`.
+Le champ fonctionnel attendu pour le peuple de la case est `case_control_current.peuple`.
 `peuple_majoritaire` est un heritage migre puis supprime.
+
+Les attributs geographiques V1 stockes sur les cases sont `cote`, `lac`, `fluvial` et `colline`.
+`colline` est un booleen de `case_terrain_current`; le champ `relief` ne porte plus la logique de colline.
+
+Les emplacements V1 sont recalcules depuis :
+- le terrain principal et son `emplacements_base` dans `reference_nomenclature_values`;
+- le peuple de la case et `reference_peuple_modificateurs`;
+- les bonus appliques dans `case_bonus_contextuels`;
+- les localites et landmarks qui consomment des emplacements.
 
 ## Referentiels
 
@@ -36,6 +46,8 @@ Les referentiels actifs sont :
 - `reference_force_types`
 - `reference_races`
 - `reference_peuples`
+- `reference_peuple_modificateurs`
+- `bonus_contextuel`
 
 Le tri manuel `sort_order` n'est plus utilise. Le tri attendu est alphabetique stable.
 
@@ -55,10 +67,20 @@ Les types associes sont eux aussi separes :
 - `reference_force_types`
 
 `reference_locality_types` ne porte pas de categorie fonctionnelle.
+Il porte les champs V1 de consommation d'emplacements :
+- `consumes_slot`
+- `emp_requis`
+- `upgrades_from_type_id`
+
+`upgrades_from_type_id` decrit la chaine metier entre types de localites, par exemple `village` ameliore `hameau`.
+Il remplace `depends_on_locality_id` pour definir les chaines d'amelioration.
+`depends_on_locality_id`, lorsqu'il existe encore sur une instance `map_localities`, reste un lien entre instances.
+Le calcul V1 ne l'utilise que comme indice de remplacement actif lorsqu'une localite publiee reference explicitement la localite qu'elle ameliore.
 
 `reference_landmark_types` porte un champ `category` reserve aux landmarks :
 - `landmark` pour les points remarquables generiques
 - `unique` pour les lieux nommes ou exceptionnels
+Les landmarks peuvent aussi porter `consumes_slot` et `emp_requis` au cas par cas.
 
 Les lieux uniques restent stockes dans `map_landmarks`.
 Ils utilisent le type technique `type_key = 'lieu_unique'`.

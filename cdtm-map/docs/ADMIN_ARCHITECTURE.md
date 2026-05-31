@@ -54,4 +54,7 @@ Elle ne fait pas partie du modele des objets cartographiques libres :
 - ce n'est pas `map_forces`
 - ce n'est pas `map_routes`
 
-Son role actuel est de porter des attributs metier de case. Les futurs besoins d'edition cartographique ne doivent pas la reutiliser comme substitut aux objets de carte.
+Son role actuel est de porter le resultat du calcul V1.
+Le peuple de rattachement est une donnee de controle de case stockee dans `case_control_current.peuple`.
+Les bonus appliques sont stockes dans `case_bonus_contextuels`, en liaison avec le referentiel `bonus_contextuel`.
+Les futurs besoins d'edition cartographique ne doivent pas la reutiliser comme substitut aux objets de carte.

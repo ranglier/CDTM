@@ -16,9 +16,9 @@ export type PublicCaseProperties = {
   fluvial: boolean | null;
   terrain_cat: string | null;
   terrain_type: string | null;
-  terrain_secondaire: string | null;
   colline: boolean | null;
   relief: string | null;
+  peuple: string | null;
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
@@ -38,9 +38,18 @@ export type AdminReferenceData = {
   terrain_categories: ReferenceOption[];
   terrain_types_by_category: Record<string, ReferenceOption[]>;
   relief_options: ReferenceOption[];
+  bonus_contextuel_options: AdminBonusContextuel[];
+  peuple_options: ReferenceOption[];
   faction_options: ReferenceOption[];
   controller_options: ReferenceOption[];
   control_type_options: ReferenceOption[];
+};
+
+export type AdminBonusContextuel = {
+  slug: string;
+  label: string;
+  valeur: number;
+  description: string | null;
 };
 
 type AdminPublicCaseRecord = PublicCaseProperties & {
@@ -57,6 +66,7 @@ type AdminTerrainRecord = {
 };
 
 type AdminControlRecord = {
+  peuple: string | null;
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
@@ -84,6 +94,7 @@ export type AdminCaseRecord = {
   terrain: AdminTerrainRecord;
   control: AdminControlRecord;
   emplacements: SlotCalculationResult;
+  bonus_contextuels: AdminBonusContextuel[];
   dynamic_sections: AdminDynamicSectionRecord[];
   reference_data: AdminReferenceData;
 };
@@ -105,15 +116,23 @@ export type AdminCaseDraft = {
     relief: string;
   };
   control: {
+    peuple: string;
     faction: string;
     controleur: string;
     controle_type: string;
   };
+  bonus_contextuels?: string[];
   dynamic: Record<string, Record<string, string>>;
 };
 
-type AdminBulkEditFieldState = {
+export type AdminBulkEditFieldState = {
   value: string;
+  touched: boolean;
+  mixed: boolean;
+};
+
+export type AdminBulkEditListState = {
+  value: string[];
   touched: boolean;
   mixed: boolean;
 };
@@ -134,10 +153,12 @@ export type AdminBulkEditDraft = {
     relief: AdminBulkEditFieldState;
   };
   control: {
+    peuple: AdminBulkEditFieldState;
     faction: AdminBulkEditFieldState;
     controleur: AdminBulkEditFieldState;
     controle_type: AdminBulkEditFieldState;
   };
+  bonus_contextuels: AdminBulkEditListState;
 };
 
 export type AdminBulkPatch = {
@@ -156,10 +177,12 @@ export type AdminBulkPatch = {
     relief?: string | null;
   };
   control?: {
+    peuple?: string | null;
     faction?: string | null;
     controleur?: string | null;
     controle_type?: string | null;
   };
+  bonus_contextuels?: string[];
 };
 
 export type AdminBulkUpdateResult = {
@@ -177,6 +200,14 @@ export type AdminSession = {
 function createEmptyBulkFieldState(): AdminBulkEditFieldState {
   return {
     value: "",
+    touched: false,
+    mixed: false,
+  };
+}
+
+function createEmptyBulkListState(): AdminBulkEditListState {
+  return {
+    value: [],
     touched: false,
     mixed: false,
   };
@@ -224,10 +255,12 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
       relief: "",
     },
     control: {
+      peuple: "",
       faction: "",
       controleur: "",
       controle_type: "",
     },
+    bonus_contextuels: [],
     dynamic: {},
   };
 }
@@ -249,10 +282,12 @@ export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
       relief: createEmptyBulkFieldState(),
     },
     control: {
+      peuple: createEmptyBulkFieldState(),
       faction: createEmptyBulkFieldState(),
       controleur: createEmptyBulkFieldState(),
       controle_type: createEmptyBulkFieldState(),
     },
+    bonus_contextuels: createEmptyBulkListState(),
   };
 }
 
@@ -278,10 +313,12 @@ export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft
       relief: record.terrain.relief ?? "",
     },
     control: {
+      peuple: record.control.peuple ?? "",
       faction: record.control.faction ?? "",
       controleur: record.control.controleur ?? "",
       controle_type: record.control.controle_type ?? "",
     },
+    bonus_contextuels: record.bonus_contextuels.map((bonus) => bonus.slug),
     dynamic: Object.fromEntries(
       record.dynamic_sections.map((section) => [
         section.table_key,

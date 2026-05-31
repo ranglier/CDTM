@@ -29,6 +29,8 @@ L'architecture interne de cette page est detaillee dans `docs/ADMIN_ARCHITECTURE
 - Controleurs
 - Races
 - Peuples
+- Modificateurs de peuples
+- Bonus contextuels
 - Icones de carte
 - Types de localites
 - Types de landmarks
@@ -37,6 +39,15 @@ L'architecture interne de cette page est detaillee dans `docs/ADMIN_ARCHITECTURE
 Certaines vues partagent une meme table technique :
 - les nomenclatures utilisent `reference_nomenclature_values`
 - l'interface les separe en vues metier comme `Terrains` et `Controle`
+
+## Bonus contextuels de case
+
+Les bonus disponibles sont definis dans le referentiel `bonus_contextuel`.
+L'API admin de case expose les bonus appliques dans `bonus_contextuels` et les options disponibles dans `reference_data.bonus_contextuel_options`.
+
+Pour remplacer les bonus d'une case, envoyer `bonus_contextuels` comme tableau de slugs dans `PUT /api/admin/cases/[id_case]`.
+Pour une edition de masse, envoyer le meme tableau dans `PATCH /api/admin/cases/bulk` sous `patch.bonus_contextuels`.
+Un tableau vide supprime tous les bonus contextuels de la case ou de la selection.
 
 ## Champs retires
 

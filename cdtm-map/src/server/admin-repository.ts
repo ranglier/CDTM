@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 
 import {
+  type AdminBonusContextuel,
   type AdminBulkPatch,
   type AdminBulkUpdateResult,
   createEmptyAdminCaseDraft,
@@ -11,7 +12,6 @@ import type { StableCaseProperties } from "@/map/types";
 import {
   calculateCaseSlots,
   countConsumedSlots,
-  type ContextualBonus,
   type PeupleModifier,
   type SlotCalculationResult,
   type SlotConsumer,
@@ -44,6 +44,7 @@ type CaseLookupRow = {
   terrain_secondaire: string | null;
   colline: boolean | null;
   relief: string | null;
+  peuple: string | null;
   terrain_updated_at: string | null;
   terrain_updated_by: string | null;
   faction: string | null;
@@ -119,10 +120,14 @@ function getPresentEntries<T extends EditableSectionPatch>(
 async function listCaseContextualBonuses(
   client: PoolClient,
   idCase: string,
-): Promise<ContextualBonus[]> {
-  const result = await client.query<ContextualBonus>(
+): Promise<AdminBonusContextuel[]> {
+  const result = await client.query<AdminBonusContextuel>(
     `
-      SELECT bonus.slug, bonus.label, bonus.valeur, bonus.description
+      SELECT
+        bonus.slug,
+        COALESCE(bonus.label, bonus.slug) AS label,
+        bonus.valeur,
+        bonus.description
       FROM case_bonus_contextuels AS case_bonus
       INNER JOIN bonus_contextuel AS bonus ON bonus.slug = case_bonus.bonus_slug
       WHERE case_bonus.id_case = $1
@@ -135,11 +140,59 @@ async function listCaseContextualBonuses(
   return result.rows;
 }
 
+async function assertBonusContextuelsExist(client: PoolClient, bonusSlugs: string[]): Promise<void> {
+  if (bonusSlugs.length === 0) {
+    return;
+  }
+
+  const result = await client.query<{ slug: string }>(
+    `
+      SELECT slug
+      FROM bonus_contextuel
+      WHERE active = TRUE
+        AND slug = ANY($1::text[])
+    `,
+    [bonusSlugs],
+  );
+  const existingSlugs = new Set(result.rows.map((row) => row.slug));
+  const missingSlug = bonusSlugs.find((slug) => !existingSlugs.has(slug));
+
+  if (missingSlug) {
+    throw new Error(`Le bonus contextuel ${missingSlug} est invalide.`);
+  }
+}
+
+async function replaceCaseContextualBonuses(
+  client: PoolClient,
+  idCase: string,
+  bonusSlugs: string[],
+): Promise<void> {
+  await assertBonusContextuelsExist(client, bonusSlugs);
+  await client.query(
+    `
+      DELETE FROM case_bonus_contextuels
+      WHERE id_case = $1
+    `,
+    [idCase],
+  );
+
+  for (const bonusSlug of bonusSlugs) {
+    await client.query(
+      `
+        INSERT INTO case_bonus_contextuels (id_case, bonus_slug)
+        VALUES ($1, $2)
+        ON CONFLICT (id_case, bonus_slug) DO NOTHING
+      `,
+      [idCase, bonusSlug],
+    );
+  }
+}
+
 async function getCasePeupleSlug(client: PoolClient, idCase: string): Promise<string | null> {
   const result = await client.query<{ peuple: string | null }>(
     `
       SELECT peuple
-      FROM case_emplacements_current
+      FROM case_control_current
       WHERE id_case = $1
     `,
     [idCase],
@@ -177,6 +230,15 @@ async function listCaseSlotConsumers(client: PoolClient, idCase: string): Promis
       INNER JOIN reference_locality_types AS type_ref ON type_ref.type_key = locality.type_key
       WHERE locality.id_case_detected = $1
         AND locality.status <> 'archived'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM map_localities AS upgraded_by
+          INNER JOIN reference_locality_types AS upgraded_type ON upgraded_type.type_key = upgraded_by.type_key
+          WHERE upgraded_by.depends_on_locality_id = locality.id_locality
+            AND upgraded_by.id_case_detected = locality.id_case_detected
+            AND upgraded_by.status <> 'archived'
+            AND upgraded_type.upgrades_from_type_id = locality.type_key
+        )
 
       UNION ALL
 
@@ -340,9 +402,9 @@ async function createEmptyAdminRecord(
       fluvial: sourceCase.fluvial ?? null,
       terrain_cat: null,
       terrain_type: null,
-      terrain_secondaire: null,
       colline: null,
       relief: null,
+      peuple: null,
       faction: null,
       controleur: null,
       controle_type: null,
@@ -357,6 +419,7 @@ async function createEmptyAdminRecord(
       meta: createEmptyPublicMeta(),
     },
     control: {
+      peuple: draft.control.peuple || null,
       faction: draft.control.faction || null,
       controleur: draft.control.controleur || null,
       controle_type: draft.control.controle_type || null,
@@ -367,6 +430,7 @@ async function createEmptyAdminRecord(
       reason: "calcul indisponible : terrain principal non renseigné",
       modifiers: [],
     },
+    bonus_contextuels: [],
     dynamic_sections: dynamicSections,
     reference_data: referenceData,
   };
@@ -377,9 +441,10 @@ async function mapCaseLookupRow(
   row: CaseLookupRow,
   sourceCase: StableCaseProperties,
 ): Promise<AdminCaseRecord> {
-  const [dynamicSections, referenceData] = await Promise.all([
+  const [dynamicSections, referenceData, bonusContextuels] = await Promise.all([
     getDynamicCaseSectionsForCase(client, row.id_case),
     getStaticAdminReferenceData(client),
+    listCaseContextualBonuses(client, row.id_case),
   ]);
   const emplacements = await calculateSlotsForCase(client, row.id_case, {
     terrain_type: row.terrain_type,
@@ -401,9 +466,9 @@ async function mapCaseLookupRow(
       fluvial: row.fluvial ?? sourceCase.fluvial ?? null,
       terrain_cat: row.terrain_cat,
       terrain_type: row.terrain_type,
-      terrain_secondaire: row.terrain_secondaire,
       colline: row.colline,
       relief: row.relief,
+      peuple: row.peuple,
       faction: row.faction,
       controleur: row.controleur,
       controle_type: row.controle_type,
@@ -424,6 +489,7 @@ async function mapCaseLookupRow(
       },
     },
     control: {
+      peuple: row.peuple,
       faction: row.faction,
       controleur: row.controleur,
       controle_type: row.controle_type,
@@ -433,6 +499,7 @@ async function mapCaseLookupRow(
       },
     },
     emplacements,
+    bonus_contextuels: bonusContextuels,
     dynamic_sections: dynamicSections,
     reference_data: referenceData,
   };
@@ -534,6 +601,7 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
         terrain.relief,
         terrain.updated_at AS terrain_updated_at,
         terrain_user.username AS terrain_updated_by,
+        control_current.peuple,
         control_current.faction,
         control_current.controleur,
         control_current.controle_type,
@@ -631,11 +699,15 @@ export async function saveAdminCaseRecord(
         faction: normalizeNullableField(draft.control.faction),
         controleur: normalizeNullableField(draft.control.controleur),
         controle_type: normalizeNullableField(draft.control.controle_type),
+        peuple: normalizeNullableField(draft.control.peuple),
       },
       userId,
     );
 
     await saveDynamicSectionsForCase(client, idCase, draft.dynamic, userId);
+    if (draft.bonus_contextuels !== undefined) {
+      await replaceCaseContextualBonuses(client, idCase, draft.bonus_contextuels);
+    }
 
     const record = await selectAdminCaseRecord(client, idCase);
     await persistSlotCalculation(client, idCase, record.emplacements, userId);
@@ -707,6 +779,10 @@ export async function saveAdminCaseBulkPatch(
           patch.control,
           userId,
         );
+      }
+
+      if (patch.bonus_contextuels) {
+        await replaceCaseContextualBonuses(client, idCase, patch.bonus_contextuels);
       }
 
       const record = await selectAdminCaseRecord(client, idCase);

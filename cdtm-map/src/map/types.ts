@@ -8,9 +8,9 @@ export type StableCaseProperties = {
   fluvial?: boolean | null;
   terrain_cat?: string | null;
   terrain_type?: string | null;
-  terrain_secondaire?: string | null;
   colline?: boolean | null;
   relief?: string | null;
+  peuple?: string | null;
   faction?: string | null;
   controleur?: string | null;
   controle_type?: string | null;
@@ -169,9 +169,9 @@ function isStableCaseProperties(value: unknown): value is StableCaseProperties {
     isNullableBoolean(value.fluvial) &&
     isNullableString(value.terrain_cat) &&
     isNullableString(value.terrain_type) &&
-    isNullableString(value.terrain_secondaire) &&
     isNullableBoolean(value.colline) &&
     isNullableString(value.relief) &&
+    isNullableString(value.peuple) &&
     isNullableString(value.faction) &&
     isNullableString(value.controleur) &&
     isNullableString(value.controle_type)
@@ -225,9 +225,9 @@ export function toStableCaseProperties(
     fluvial: readNullableBooleanAlias(value, "fluvial", "cours_eau_majeur"),
     terrain_cat: value.terrain_cat ?? null,
     terrain_type: value.terrain_type ?? null,
-    terrain_secondaire: value.terrain_secondaire ?? null,
     colline: value.colline ?? null,
     relief: value.relief ?? null,
+    peuple: value.peuple ?? null,
     faction: value.faction ?? null,
     controleur: value.controleur ?? null,
     controle_type: value.controle_type ?? null,

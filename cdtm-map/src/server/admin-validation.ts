@@ -57,6 +57,25 @@ function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error("La liste des bonus contextuels est invalide.");
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  );
+}
+
 export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const payload = ensurePlainObject(value);
   const emptyDraft = createEmptyAdminCaseDraft();
@@ -82,10 +101,14 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
       relief: normalizeText(terrain.relief),
     },
     control: {
+      peuple: normalizeText(control.peuple),
       faction: normalizeText(control.faction),
       controleur: normalizeText(control.controleur),
       controle_type: normalizeText(control.controle_type),
     },
+    bonus_contextuels: hasOwnProperty(payload, "bonus_contextuels")
+      ? normalizeStringArray(payload.bonus_contextuels)
+      : undefined,
     dynamic: Object.fromEntries(
       Object.entries(dynamicSections)
         .filter((entry): entry is [string, Record<string, unknown>] => {
@@ -178,6 +201,10 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
   if (control) {
     const controlPatch: NonNullable<AdminBulkPatch["control"]> = {};
 
+    if (hasOwnProperty(control, "peuple")) {
+      controlPatch.peuple = normalizeNullableText(control.peuple);
+    }
+
     if (hasOwnProperty(control, "faction")) {
       controlPatch.faction = normalizeNullableText(control.faction);
     }
@@ -193,6 +220,10 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     if (Object.keys(controlPatch).length > 0) {
       result.control = controlPatch;
     }
+  }
+
+  if (hasOwnProperty(patch, "bonus_contextuels")) {
+    result.bonus_contextuels = normalizeStringArray(patch.bonus_contextuels);
   }
 
   if (Object.keys(result).length === 0) {

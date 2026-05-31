@@ -22,9 +22,9 @@ type PublicCaseRow = {
   fluvial: boolean | null;
   terrain_cat: string | null;
   terrain_type: string | null;
-  terrain_secondaire: string | null;
   colline: boolean | null;
   relief: string | null;
+  peuple: string | null;
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
@@ -78,9 +78,9 @@ function createEmptyPublicCase(idCase: string): PublicCaseProperties {
     fluvial: null,
     terrain_cat: null,
     terrain_type: null,
-    terrain_secondaire: null,
     colline: null,
     relief: null,
+    peuple: null,
     faction: null,
     controleur: null,
     controle_type: null,
@@ -98,9 +98,9 @@ function mergePublicCase(row: PublicCaseRow, fallback: PublicCaseProperties): Pu
     fluvial: row.fluvial ?? fallback.fluvial,
     terrain_cat: row.terrain_cat,
     terrain_type: row.terrain_type,
-    terrain_secondaire: row.terrain_secondaire,
     colline: row.colline,
     relief: row.relief,
+    peuple: row.peuple,
     faction: row.faction,
     controleur: row.controleur,
     controle_type: row.controle_type,
@@ -140,9 +140,9 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
     fluvial: stableCase.fluvial ?? null,
     terrain_cat: null,
     terrain_type: null,
-    terrain_secondaire: null,
     colline: null,
     relief: null,
+    peuple: null,
     faction: null,
     controleur: null,
     controle_type: null,
@@ -166,9 +166,9 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
         public_current.fluvial,
         terrain.terrain_cat,
         terrain.terrain_type,
-        terrain.terrain_secondaire,
         terrain.colline,
         terrain.relief,
+        control_current.peuple,
         control_current.faction,
         control_current.controleur,
         control_current.controle_type
@@ -193,9 +193,9 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
           fluvial: stableCase.fluvial ?? null,
           terrain_cat: null,
           terrain_type: null,
-          terrain_secondaire: null,
           colline: null,
           relief: null,
+          peuple: null,
           faction: null,
           controleur: null,
           controle_type: null,

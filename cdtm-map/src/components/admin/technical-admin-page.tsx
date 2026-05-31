@@ -244,10 +244,9 @@ export function TechnicalAdminPage() {
         {
           id: "nomenclatures:relief",
           tableKey: "nomenclatures",
-          title: "Reliefs",
+          title: "Reliefs legacy",
           groupKey: "relief",
           rowCount: nomenclatureGroupCounts.relief ?? 0,
-          styleTargetType: "relief",
         },
       ],
     });
@@ -303,6 +302,31 @@ export function TechnicalAdminPage() {
           groupKey: null,
           rowCount:
             referenceStatuses.find((table) => table.definition.key === "peuples")?.row_count ?? 0,
+        },
+        {
+          id: "peuple_modificateurs",
+          tableKey: "peuple_modificateurs",
+          title: "Modificateurs",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "peuple_modificateurs")
+              ?.row_count ?? 0,
+        },
+      ],
+    });
+
+    addSection({
+      id: "emplacements",
+      title: "Emplacements",
+      views: [
+        {
+          id: "bonus_contextuel",
+          tableKey: "bonus_contextuel",
+          title: "Bonus contextuels",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find((table) => table.definition.key === "bonus_contextuel")
+              ?.row_count ?? 0,
         },
       ],
     });
@@ -416,6 +440,19 @@ export function TechnicalAdminPage() {
         items:
           referenceViewSections
             .find((section) => section.id === "objets-cartographiques")
+            ?.views.map((view) => ({
+              kind: "reference" as const,
+              id: view.id,
+              label: view.title,
+              count: view.rowCount,
+            })) ?? [],
+      },
+      {
+        id: "emplacements",
+        title: "Emplacements",
+        items:
+          referenceViewSections
+            .find((section) => section.id === "emplacements")
             ?.views.map((view) => ({
               kind: "reference" as const,
               id: view.id,

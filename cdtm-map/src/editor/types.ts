@@ -15,6 +15,10 @@ export type EditorReferenceOption = {
   category?: string | null;
   consumes_slot?: boolean | null;
   emp_requis?: number | null;
+  /**
+   * Chaine metier de type: Hameau ameliore Avant-poste, Village ameliore Hameau, etc.
+   * Ce champ est porte par reference_locality_types, pas par les instances map_localities.
+   */
   upgrades_from_type_id?: string | null;
 };
 
@@ -29,6 +33,10 @@ export type EditorMapLocality = {
   faction: string | null;
   controleur: string | null;
   status: MapObjectStatus;
+  /**
+   * Lien historique/technique entre instances de localites.
+   * Les chaines d'amelioration V1 utilisent upgrades_from_type_id sur les types.
+   */
   depends_on_locality_id: string | null;
   description: string | null;
   created_at: string;
@@ -97,6 +105,9 @@ export type EditorMapLocalityInput = {
   faction?: string | null;
   controleur?: string | null;
   status?: MapObjectStatus;
+  /**
+   * Lien optionnel entre instances. Ne sert pas au calcul V1 des emplacements.
+   */
   depends_on_locality_id?: string | null;
   force_slot_override?: boolean | null;
   slot_override_reason?: string | null;
