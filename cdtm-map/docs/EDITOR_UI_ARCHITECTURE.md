@@ -114,11 +114,31 @@ Le lot routes 4 ajoute :
 - l'affichage des sommets de la route selectionnee ;
 - la selection d'un sommet ;
 - le deplacement local d'un sommet par drag, sans sauvegarde automatique ;
-- l'ajout d'un sommet en fin de route ;
-- l'insertion d'un sommet apres un sommet selectionne ;
+- l'ajout d'un sommet au debut ou a la fin de la route ;
+- l'insertion d'un sommet avant ou apres un sommet selectionne ;
 - la suppression d'un sommet sans jamais descendre sous 2 points ;
 - une sauvegarde explicite de la geometrie via `PATCH /api/admin/editor/routes/[id]` avec `points` uniquement ;
 - une annulation locale des modifications geometriques.
+
+Le lot UI/UX courant reorganise l'editeur autour de trois zones stables :
+- une carte centrale qui garde seulement :
+  - la toolbar compacte des controles globaux ;
+  - les tooltips de survol ;
+  - un overlay de statut minimal pour les etats temporaires ;
+- un panneau lateral droit contextuel pour :
+  - la creation de points ;
+  - la creation de routes ;
+  - l'edition des localites ;
+  - l'edition des landmarks ;
+  - l'edition simple des routes ;
+  - l'edition geometrique des routes ;
+- une separation nette entre controles globaux de carte et formulaires d'edition.
+
+Dans cette organisation :
+- les toggles `Cases`, `Localites`, `Landmarks`, `Routes` restent dans la toolbar ;
+- le mode `Localites : icones / points` reste global a la carte ;
+- les actions importantes d'enregistrement et d'annulation restent collees en bas du panneau ;
+- les formulaires longs ne vivent plus dans les overlays sur la carte.
 
 Le lot ne fait toujours pas :
 - de gestion des forces ;
@@ -153,7 +173,7 @@ en conditions reelles.
 Principes gardes pour la suite :
 - ne pas reintroduire un modele generique `map_points`
 - ne pas coupler fortement l'editeur a `TechnicalAdminPage`
-- repartir d'une UI minimale avant de remettre une carte OpenLayers
+- garder une toolbar carte compacte et un panneau lateral contextuel plutot qu'un overlay de formulaire
 - rebrancher les couches cartographiques seulement quand le cycle de vie OpenLayers
   est stable et verifie
 - garder des tables et APIs separees par famille, meme si l'affichage OpenLayers mutualise la couche des points

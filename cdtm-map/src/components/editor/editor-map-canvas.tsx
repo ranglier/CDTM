@@ -2535,247 +2535,337 @@ export function EditorMapCanvas() {
         null
       : null;
   const selectedLandmarkCategory = selectedLandmarkTypeOption?.category ?? null;
+  const activeModeLabel = routeGeometryDraft
+    ? "Edition geometrique route"
+    : editorTool === "create-point"
+      ? "Creation point"
+      : editorTool === "create-route"
+        ? "Creation route"
+        : "Selection";
+  const activeModeHint = routeGeometryDraft
+    ? routeGeometryTool === "prepend-vertex"
+      ? "Cliquez sur la carte pour ajouter un sommet au debut."
+      : routeGeometryTool === "append-vertex"
+        ? "Cliquez sur la carte pour ajouter un sommet a la fin."
+        : routeGeometryTool === "insert-before-vertex"
+          ? "Cliquez sur la carte pour inserer un sommet avant celui selectionne."
+          : routeGeometryTool === "insert-after-vertex"
+            ? "Cliquez sur la carte pour inserer un sommet apres celui selectionne."
+            : "Selectionnez ou deplacez les sommets de la route."
+    : editorTool === "create-point"
+      ? "Cliquez sur la carte pour placer le point."
+      : editorTool === "create-route"
+        ? "Cliquez sur la carte pour ajouter des points de controle."
+        : "Selectionnez un objet ou activez un mode de creation.";
+  const panelTitle = routeDraft
+    ? "Nouvelle route"
+    : pointDraft
+      ? "Nouveau point"
+      : selectedRoute
+        ? "Route selectionnee"
+        : selectedLocality
+          ? "Localite selectionnee"
+          : selectedLandmark
+            ? "Landmark selectionne"
+            : "Editeur";
+  const panelIntro = routeDraft
+    ? "Definissez les proprietes de la route puis terminez sa creation."
+    : pointDraft
+      ? "Choisissez la famille du point puis renseignez ses informations."
+      : selectedRoute
+        ? "Modifiez les proprietes de la route ou sa geometrie."
+        : selectedLocality
+          ? "Mettez a jour la localite selectionnee."
+          : selectedLandmark
+            ? "Mettez a jour le landmark selectionne."
+            : "Selectionnez une case, un point ou une route, ou lancez une creation depuis la toolbar.";
+  const mapStatusMessages = [
+    localityDragging ? "Deplacement de point en cours..." : null,
+    localityMoveSaving ? "Sauvegarde du deplacement..." : null,
+    routeGeometryDragging ? "Deplacement de sommet en cours..." : null,
+  ].filter((message): message is string => Boolean(message));
+  const panelErrors = [
+    casesError,
+    routesError,
+    localitiesError,
+    landmarksError,
+    referenceError,
+    localityMoveError,
+  ].filter((message): message is string => Boolean(message));
 
   return (
-    <section className="relative min-h-[calc(100svh-5rem)] overflow-hidden rounded-[28px] bg-background/70">
-      <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
-        <div className="pointer-events-auto max-h-[calc(100svh-8rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[20px] border border-border/80 bg-background/90 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-          <Button
-            type="button"
-            variant={casesVisible ? "secondary" : "outline"}
-            onClick={() =>
-              setCasesVisible((visible) => {
-                if (visible) {
-                  setHoverInfo(null);
-                }
+    <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
+        <div className="pointer-events-none absolute inset-x-4 top-4 z-20">
+          <div className="pointer-events-auto flex flex-wrap items-start gap-3 rounded-[20px] border border-border/80 bg-background/92 px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+            <div className="min-w-32">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Mode actif
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{activeModeLabel}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{activeModeHint}</p>
+            </div>
+            <div className="flex min-w-48 flex-1 flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={casesVisible ? "secondary" : "outline"}
+                onClick={() =>
+                  setCasesVisible((visible) => {
+                    if (visible) {
+                      setHoverInfo(null);
+                    }
 
-                return !visible;
-              })
-            }
-          >
-            {casesVisible ? "Masquer les cases" : "Afficher les cases"}
-          </Button>
-          <Button
-            type="button"
-            variant={editorTool === "create-point" ? "secondary" : "outline"}
-            className="mt-2"
-            disabled={
-              !referenceData ||
-              (referenceData.locality_types.length === 0 &&
-                referenceData.landmark_types.length === 0)
-            }
-            onClick={() => {
-              if (handleToolChangeBlockedByRouteGeometry()) {
-                return;
-              }
-              handleCloseLocalitySelection();
-              handleCloseRouteSelection();
-              setRouteDraft(null);
-              setRouteSaveError(null);
-              if (routePreviewSourceRef.current) {
-                clearEditorRoutePreview(routePreviewSourceRef.current);
-              }
-              setEditorTool((tool) => (tool === "create-point" ? "select" : "create-point"));
-              setPointDraft(null);
-              setLocalitySaveError(null);
-            }}
-          >
-            {editorTool === "create-point" ? "Annuler la creation" : "Creer un point"}
-          </Button>
-          <Button
-            type="button"
-            variant={editorTool === "create-route" ? "secondary" : "outline"}
-            className="mt-2"
-            onClick={() => {
-              if (handleToolChangeBlockedByRouteGeometry()) {
-                return;
-              }
-              handleCloseLocalitySelection();
-              handleCloseRouteSelection();
-              setPointDraft(null);
-              setLocalitySaveError(null);
-              setEditorTool((tool) => {
-                if (tool === "create-route") {
+                    return !visible;
+                  })
+                }
+              >
+                {casesVisible ? "Cases visibles" : "Cases masquees"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={localitiesVisible ? "secondary" : "outline"}
+                onClick={() =>
+                  setLocalitiesVisible((visible) => {
+                    if (visible) {
+                      setHoverInfo(null);
+                    }
+
+                    return !visible;
+                  })
+                }
+              >
+                {localitiesVisible ? "Localites visibles" : "Localites masquees"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={landmarksVisible ? "secondary" : "outline"}
+                onClick={() =>
+                  setLandmarksVisible((visible) => {
+                    if (visible) {
+                      setHoverInfo(null);
+                    }
+
+                    return !visible;
+                  })
+                }
+              >
+                {landmarksVisible ? "Landmarks visibles" : "Landmarks masques"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={routesVisible ? "secondary" : "outline"}
+                onClick={() =>
+                  setRoutesVisible((visible) => {
+                    if (visible) {
+                      setHoverInfo(null);
+                    }
+
+                    return !visible;
+                  })
+                }
+              >
+                {routesVisible ? "Routes visibles" : "Routes masquees"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setLocalityDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
+                }
+              >
+                {localityDisplayMode === "icons" ? "Localites : icones" : "Localites : points"}
+              </Button>
+            </div>
+            <div className="flex min-w-48 flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={editorTool === "create-point" ? "secondary" : "outline"}
+                disabled={
+                  !referenceData ||
+                  (referenceData.locality_types.length === 0 &&
+                    referenceData.landmark_types.length === 0)
+                }
+                onClick={() => {
+                  if (handleToolChangeBlockedByRouteGeometry()) {
+                    return;
+                  }
+                  handleCloseLocalitySelection();
+                  handleCloseRouteSelection();
                   setRouteDraft(null);
                   setRouteSaveError(null);
                   if (routePreviewSourceRef.current) {
                     clearEditorRoutePreview(routePreviewSourceRef.current);
                   }
-                  return "select";
-                }
+                  setEditorTool((tool) => (tool === "create-point" ? "select" : "create-point"));
+                  setPointDraft(null);
+                  setLocalitySaveError(null);
+                }}
+              >
+                {editorTool === "create-point" ? "Annuler point" : "Creer un point"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={editorTool === "create-route" ? "secondary" : "outline"}
+                onClick={() => {
+                  if (handleToolChangeBlockedByRouteGeometry()) {
+                    return;
+                  }
+                  handleCloseLocalitySelection();
+                  handleCloseRouteSelection();
+                  setPointDraft(null);
+                  setLocalitySaveError(null);
+                  setEditorTool((tool) => {
+                    if (tool === "create-route") {
+                      setRouteDraft(null);
+                      setRouteSaveError(null);
+                      if (routePreviewSourceRef.current) {
+                        clearEditorRoutePreview(routePreviewSourceRef.current);
+                      }
+                      return "select";
+                    }
 
-                setRouteDraft(createEmptyRouteDraft());
-                setRouteSaveError(null);
-                return "create-route";
-              });
-            }}
-          >
-            {editorTool === "create-route" ? "Annuler la route" : "Creer une route"}
-          </Button>
-          <Button
-            type="button"
-            variant={routesVisible ? "secondary" : "outline"}
-            className="mt-2"
-            onClick={() =>
-              setRoutesVisible((visible) => {
-                if (visible) {
-                  setHoverInfo(null);
-                }
-
-                return !visible;
-              })
-            }
-          >
-            {routesVisible ? "Masquer les routes" : "Afficher les routes"}
-          </Button>
-          <Button
-            type="button"
-            variant={localitiesVisible ? "secondary" : "outline"}
-            className="mt-2"
-            onClick={() =>
-              setLocalitiesVisible((visible) => {
-                if (visible) {
-                  setHoverInfo(null);
-                }
-
-                return !visible;
-              })
-            }
-          >
-            {localitiesVisible ? "Masquer les localites" : "Afficher les localites"}
-          </Button>
-          <Button
-            type="button"
-            variant={landmarksVisible ? "secondary" : "outline"}
-            className="mt-2"
-            onClick={() =>
-              setLandmarksVisible((visible) => {
-                if (visible) {
-                  setHoverInfo(null);
-                }
-
-                return !visible;
-              })
-            }
-          >
-            {landmarksVisible ? "Masquer les landmarks" : "Afficher les landmarks"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-2"
-            onClick={() =>
-              setLocalityDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
-            }
-          >
-            {localityDisplayMode === "icons" ? "Mode points" : "Mode icones"}
-          </Button>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {casesLoading
-              ? "Chargement des cases..."
-              : casesCount !== null
-                ? `${casesCount} cases chargees`
-                : "Cases non chargees"}
+                    setRouteDraft(createEmptyRouteDraft());
+                    setRouteSaveError(null);
+                    return "create-route";
+                  });
+                }}
+              >
+                {editorTool === "create-route" ? "Annuler route" : "Creer une route"}
+              </Button>
+            </div>
+          </div>
+        </div>
+        {mapStatusMessages.length > 0 || panelErrors.length > 0 ? (
+          <div className="pointer-events-none absolute bottom-4 left-4 z-20 max-w-[min(28rem,calc(100vw-2rem))] rounded-[18px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+            <div className="space-y-1.5">
+              {mapStatusMessages.map((message) => (
+                <p key={message} className="text-xs text-muted-foreground">
+                  {message}
+                </p>
+              ))}
+              {panelErrors[0] ? (
+                <p className="text-xs text-destructive">{panelErrors[0]}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        <div
+          ref={mapElementRef}
+          className="h-[72svh] w-full lg:h-[calc(100svh-5rem)]"
+          aria-label="Carte editeur"
+        />
+      </div>
+      <aside className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]">
+        <div className="space-y-1">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Panneau lateral
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {routesLoading
-              ? "Chargement des routes..."
-              : routesCount !== null
-                ? `${routesCount} routes chargees`
-                : "Routes non chargees"}
+          <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>
+          <p className="text-sm text-muted-foreground">{panelIntro}</p>
+        </div>
+        <div className="mt-4 rounded-[22px] border border-border/70 bg-background/50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Etat
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {localitiesLoading
-              ? "Chargement des localites..."
-              : localitiesCount !== null
-                ? `${localitiesCount} localites chargees`
-                : "Localites non chargees"}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {landmarksLoading
-              ? "Chargement des landmarks..."
-              : landmarksCount !== null
-                ? `${landmarksCount} landmarks charges`
-                : "Landmarks non charges"}
-          </p>
-          {editorTool === "create-point" ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Cliquez sur la carte pour placer le point.
-            </p>
-          ) : null}
-          {editorTool === "create-route" ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Cliquez sur la carte pour ajouter des points. Deux points minimum.
-            </p>
-          ) : null}
-          {routeGeometryDraft ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Edition geometrique active :{" "}
-              {routeGeometryTool === "prepend-vertex"
-                ? "ajout au debut"
-                : routeGeometryTool === "append-vertex"
-                  ? "ajout en fin"
-                  : routeGeometryTool === "insert-before-vertex"
-                    ? "insertion avant le sommet selectionne"
-                    : routeGeometryTool === "insert-after-vertex"
-                      ? "insertion apres le sommet selectionne"
-                      : "selection et deplacement des sommets"}
-            </p>
-          ) : null}
-          <p className="mt-2 text-xs text-muted-foreground">
-            {selectedCaseId
-              ? `Case selectionnee : ${selectedCaseId}`
-              : "Aucune case selectionnee"}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {selectedRoute ? `Route selectionnee : ${selectedRoute.name}` : "Aucune route selectionnee"}
-          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Couches</p>
+              <div className="mt-2 space-y-1.5 text-sm text-foreground">
+                <p>
+                  {casesLoading
+                    ? "Chargement des cases..."
+                    : casesCount !== null
+                      ? `${casesCount} cases chargees`
+                      : "Cases non chargees"}
+                </p>
+                <p>
+                  {routesLoading
+                    ? "Chargement des routes..."
+                    : routesCount !== null
+                      ? `${routesCount} routes chargees`
+                      : "Routes non chargees"}
+                </p>
+                <p>
+                  {localitiesLoading
+                    ? "Chargement des localites..."
+                    : localitiesCount !== null
+                      ? `${localitiesCount} localites chargees`
+                      : "Localites non chargees"}
+                </p>
+                <p>
+                  {landmarksLoading
+                    ? "Chargement des landmarks..."
+                    : landmarksCount !== null
+                      ? `${landmarksCount} landmarks charges`
+                      : "Landmarks non charges"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Selection
+              </p>
+              <div className="mt-2 space-y-1.5 text-sm text-foreground">
+                <p>{selectedCaseId ? `Case : ${selectedCaseId}` : "Aucune case selectionnee"}</p>
+                <p>{selectedRoute ? `Route : ${selectedRoute.name}` : "Aucune route selectionnee"}</p>
+                <p>
+                  {selectedLocality
+                    ? `Localite : ${selectedLocality.name}`
+                    : selectedLandmark
+                      ? `Landmark : ${selectedLandmark.name}`
+                      : "Aucun point selectionne"}
+                </p>
+              </div>
+              {selectedCaseId ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setSelectedCaseId(null)}
+                >
+                  Deselectionner la case
+                </Button>
+              ) : null}
+            </div>
+          </div>
           {localityEditDirty || landmarkEditDirty ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-3 text-xs text-muted-foreground">
               Enregistrez ou annulez les modifications avant de deplacer le point.
             </p>
           ) : null}
-          {localityDragging ? (
-            <p className="mt-2 text-xs text-muted-foreground">Deplacement en cours...</p>
+          {panelErrors.length > 0 ? (
+            <div className="mt-3 space-y-1.5">
+              {panelErrors.map((message) => (
+                <p key={message} className="text-xs text-destructive">
+                  {message}
+                </p>
+              ))}
+            </div>
           ) : null}
-          {localityMoveSaving ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Sauvegarde du deplacement...
+        </div>
+        {!routeDraft &&
+        !pointDraft &&
+        !selectedRoute &&
+        !selectedLocality &&
+        !selectedLandmark ? (
+          <div className="mt-4 rounded-[22px] border border-dashed border-border/70 bg-background/35 px-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Utilisez la toolbar pour afficher les couches, creer un point ou une route, puis
+              cliquez sur la carte pour selectionner un objet.
             </p>
-          ) : null}
-          {localityMoveError ? (
-            <p className="mt-2 text-xs text-destructive">{localityMoveError}</p>
-          ) : null}
-          {routeGeometryDragging ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Deplacement de sommet en cours...
-            </p>
-          ) : null}
-          {selectedCaseId ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-2"
-              onClick={() => setSelectedCaseId(null)}
-            >
-              Deselectionner
-            </Button>
-          ) : null}
-          {casesError ? <p className="mt-2 text-xs text-destructive">{casesError}</p> : null}
-          {routesError ? <p className="mt-2 text-xs text-destructive">{routesError}</p> : null}
-          {localitiesError ? (
-            <p className="mt-2 text-xs text-destructive">{localitiesError}</p>
-          ) : null}
-          {landmarksError ? (
-            <p className="mt-2 text-xs text-destructive">{landmarksError}</p>
-          ) : null}
-          {referenceError ? (
-            <p className="mt-2 text-xs text-destructive">{referenceError}</p>
-          ) : null}
-          {routeDraft ? (
+          </div>
+        ) : null}
+        {routeDraft ? (
             <form
-              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              className="mt-4 space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleSaveRouteCreate();
@@ -3473,7 +3563,7 @@ export function EditorMapCanvas() {
           ) : null}
           {selectedLocality && localityEditDraft ? (
             <form
-              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              className="mt-4 space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleSaveLocalityEdit();
@@ -3621,7 +3711,7 @@ export function EditorMapCanvas() {
           ) : null}
           {selectedLandmark && landmarkEditDraft ? (
             <form
-              className="mt-4 space-y-3 border-t border-border/70 pt-3"
+              className="mt-4 space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleSaveLandmarkEdit();
@@ -3784,13 +3874,7 @@ export function EditorMapCanvas() {
               </div>
             </form>
           ) : null}
-        </div>
-      </div>
-      <div
-        ref={mapElementRef}
-        className="h-[calc(100svh-5rem)] w-full"
-        aria-label="Carte editeur"
-      />
+      </aside>
       {hoverInfo && (casesVisible || routesVisible || localitiesVisible || landmarksVisible) ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
