@@ -11,6 +11,7 @@ import type {
 import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { SlotCalculationResult } from "@/map/rules";
 import type { StableCaseProperties } from "@/map/types";
 
 type AdminPanelMode = "read" | "edit";
@@ -157,6 +158,27 @@ function formatBonusOption(option: AdminBonusContextuel): string {
   return `${option.label} (${signedValue})`;
 }
 
+function formatSignedNumber(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function getSlotCalculationRows(calculation: SlotCalculationResult): Array<{ label: string; value: string }> {
+  if (!calculation.available) {
+    return [{ label: "Etat", value: calculation.reason }];
+  }
+
+  return [
+    { label: "emplacements_base", value: String(calculation.emplacements_base) },
+    { label: "malus_colline", value: formatSignedNumber(calculation.malus_colline) },
+    { label: "modificateur_peuple", value: formatSignedNumber(calculation.modificateur_peuple) },
+    { label: "bonus_contextuel", value: formatSignedNumber(calculation.bonus_contextuel) },
+    { label: "emplacements_bruts", value: String(calculation.emplacements_bruts) },
+    { label: "emplacements_max", value: String(calculation.emplacements_max) },
+    { label: "emplacements_utilises", value: String(calculation.emplacements_utilises) },
+    { label: "emplacements_restants", value: String(calculation.emplacements_restants) },
+  ];
+}
+
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
@@ -187,6 +209,53 @@ function CompactInfoList({
         <CompactInfoRow key={row.label} label={row.label} value={row.value} />
       ))}
     </div>
+  );
+}
+
+function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationResult }) {
+  const rows = getSlotCalculationRows(calculation);
+
+  return (
+    <details className="rounded-[18px] border border-border/70 bg-background/35 p-4">
+      <summary className="cursor-pointer select-none text-sm font-semibold text-foreground">
+        Detail du calcul
+      </summary>
+      <div className="mt-4 space-y-4">
+        {calculation.available && calculation.depassement ? (
+          <p className="rounded-[14px] border border-destructive/50 bg-destructive/12 px-3 py-2 text-sm text-destructive">
+            Depassement detecte : les emplacements utilises excedent le maximum calcule.
+          </p>
+        ) : null}
+        <CompactInfoList rows={rows} emptyMessage="Calcul indisponible." />
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Modificateurs appliques
+          </p>
+          {calculation.modifiers.length === 0 ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">Aucun modificateur applique.</p>
+          ) : (
+            <div className="mt-3 rounded-[14px] border border-border/50 bg-background/30">
+              {calculation.modifiers.map((modifier, index) => (
+                <div
+                  key={`${modifier.label}:${modifier.declencheur ?? ""}:${index}`}
+                  className="flex items-start justify-between gap-4 border-b border-border/45 px-3 py-2.5 last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{modifier.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {modifier.type_declencheur ?? modifier.source}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-foreground">
+                    {formatSignedNumber(modifier.valeur)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -392,6 +461,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const terrainMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.terrain.meta)) : formatMeta(activeAdminRecord?.terrain.meta);
   const controlMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta)) : formatMeta(activeAdminRecord?.control.meta);
   const dynamicSections = !isMultiSelection ? activeAdminRecord?.dynamic_sections ?? [] : [];
+  const slotDetails =
+    adminModeEnabled && !isMultiSelection && activeAdminRecord
+      ? <SlotCalculationDetails calculation={activeAdminRecord.emplacements} />
+      : null;
   const slotSummary =
     !isMultiSelection && activeAdminRecord
       ? activeAdminRecord.emplacements.available
@@ -637,8 +710,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
 
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Terrain" />
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                   <CompactInfoList rows={terrainRows} emptyMessage="Aucune donnee de terrain renseignee." />
+                  {slotDetails}
                 </div>
               </section>
 

@@ -34,6 +34,7 @@ import {
   type ContextualBonus,
   type PeupleModifier,
   type SlotConsumer,
+  validateLocalityUpgradeLink,
   validateSlotConsumption,
 } from "@/map/rules";
 import { ensureDatabaseReady, getPool } from "@/server/db";
@@ -509,6 +510,42 @@ async function validateEditorObjectReferences(
       input.depends_on_locality_id,
       "La dependance de localite est invalide.",
     );
+
+    if (input.depends_on_locality_id) {
+      const dependencyResult = await client.query<{
+        upgrades_from_type_id: string | null;
+        dependency_type_key: string;
+        dependency_case_id: string | null;
+        dependency_status: string | null;
+      }>(
+        `
+          SELECT
+            type_ref.upgrades_from_type_id,
+            dependency.type_key AS dependency_type_key,
+            dependency.id_case_detected AS dependency_case_id,
+            dependency.status AS dependency_status
+          FROM reference_locality_types AS type_ref
+          INNER JOIN map_localities AS dependency ON dependency.id_locality = $2
+          WHERE type_ref.type_key = $1
+          LIMIT 1
+        `,
+        [input.type_key, input.depends_on_locality_id],
+      );
+      const dependency = dependencyResult.rows[0];
+      const validation = validateLocalityUpgradeLink({
+        current_id: input.id,
+        current_case_id: input.id_case_detected,
+        dependency_id: input.depends_on_locality_id,
+        expected_previous_type_key: dependency?.upgrades_from_type_id,
+        dependency_type_key: dependency?.dependency_type_key,
+        dependency_case_id: dependency?.dependency_case_id,
+        dependency_status: dependency?.dependency_status,
+      });
+
+      if (!validation.valid) {
+        throw new EditorValidationError(validation.reason ?? "La chaine d'amelioration est invalide.");
+      }
+    }
   }
 }
 

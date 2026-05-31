@@ -97,6 +97,16 @@ export type SlotConsumer = {
   emp_requis: number;
 };
 
+export type LocalityUpgradeValidationInput = {
+  current_id?: string | null;
+  current_case_id?: string | null;
+  dependency_id?: string | null;
+  expected_previous_type_key?: string | null;
+  dependency_type_key?: string | null;
+  dependency_case_id?: string | null;
+  dependency_status?: string | null;
+};
+
 export type AppliedModifierLine = {
   source: "terrain_base" | "attribut" | "peuple" | "bonus_contextuel";
   label: string;
@@ -148,6 +158,38 @@ export function countConsumedSlots(consumers: readonly SlotConsumer[]): number {
 
     return total + Math.max(0, Math.trunc(consumer.emp_requis));
   }, 0);
+}
+
+export function validateLocalityUpgradeLink(
+  input: LocalityUpgradeValidationInput,
+): { valid: boolean; reason?: string } {
+  const dependencyId = input.dependency_id?.trim() ?? "";
+
+  if (!dependencyId) {
+    return { valid: true };
+  }
+
+  if (input.current_id && dependencyId === input.current_id) {
+    return { valid: false, reason: "Une localite ne peut pas dependre d'elle-meme." };
+  }
+
+  if (!input.expected_previous_type_key) {
+    return { valid: false, reason: "Ce type de localite ne declare pas d'amelioration." };
+  }
+
+  if (input.dependency_status === "archived") {
+    return { valid: false, reason: "La localite amelioree ne peut pas etre archivee." };
+  }
+
+  if (input.dependency_type_key !== input.expected_previous_type_key) {
+    return { valid: false, reason: "La localite amelioree n'a pas le type attendu." };
+  }
+
+  if (!input.current_case_id || !input.dependency_case_id || input.current_case_id !== input.dependency_case_id) {
+    return { valid: false, reason: "Une amelioration doit rester sur la meme case." };
+  }
+
+  return { valid: true };
 }
 
 export function isLogicalGroupActive(group: string, attributes: CaseRuleAttributes): boolean {

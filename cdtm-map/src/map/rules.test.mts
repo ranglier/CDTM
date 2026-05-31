@@ -5,6 +5,7 @@ import {
   calculateCaseSlots,
   countConsumedSlots,
   PEUPLE_MODIFICATEURS_V1,
+  validateLocalityUpgradeLink,
   validateSlotConsumption,
 } from "./rules.ts";
 
@@ -169,4 +170,63 @@ test("forcage admin possible sur depassement", () => {
 
   assert.equal(validation.valid, true);
   assert.equal(validation.forced, true);
+});
+
+test("chaine d'amelioration valide sur meme case et type attendu", () => {
+  const validation = validateLocalityUpgradeLink({
+    current_id: "ville_1",
+    current_case_id: "case_1",
+    dependency_id: "bourg_1",
+    expected_previous_type_key: "bourg",
+    dependency_type_key: "bourg",
+    dependency_case_id: "case_1",
+    dependency_status: "published",
+  });
+
+  assert.equal(validation.valid, true);
+});
+
+test("chaine d'amelioration refuse une dependance sans case", () => {
+  const validation = validateLocalityUpgradeLink({
+    current_id: "ville_1",
+    current_case_id: "case_1",
+    dependency_id: "bourg_1",
+    expected_previous_type_key: "bourg",
+    dependency_type_key: "bourg",
+    dependency_case_id: null,
+    dependency_status: "published",
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.reason, "Une amelioration doit rester sur la meme case.");
+});
+
+test("chaine d'amelioration refuse un mauvais type precedent", () => {
+  const validation = validateLocalityUpgradeLink({
+    current_id: "ville_1",
+    current_case_id: "case_1",
+    dependency_id: "hameau_1",
+    expected_previous_type_key: "bourg",
+    dependency_type_key: "hameau",
+    dependency_case_id: "case_1",
+    dependency_status: "published",
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.reason, "La localite amelioree n'a pas le type attendu.");
+});
+
+test("chaine d'amelioration refuse une dependance archivee", () => {
+  const validation = validateLocalityUpgradeLink({
+    current_id: "ville_1",
+    current_case_id: "case_1",
+    dependency_id: "bourg_1",
+    expected_previous_type_key: "bourg",
+    dependency_type_key: "bourg",
+    dependency_case_id: "case_1",
+    dependency_status: "archived",
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.reason, "La localite amelioree ne peut pas etre archivee.");
 });

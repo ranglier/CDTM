@@ -62,9 +62,11 @@ Payload :
 `depends_on_locality_id` est un lien optionnel entre instances de localites dans l'editeur.
 Il ne definit pas les chaines d'amelioration V1. Les chaines d'amelioration sont portees par `upgrades_from_type_id` dans `reference_locality_types`.
 Lorsqu'une localite active reference explicitement une localite qu'elle ameliore, l'ancienne localite n'est plus comptee dans les emplacements consommes.
+L'API verifie que le type de la dependance correspond a `upgrades_from_type_id`, que la dependance n'est pas archivee, et que l'amelioration reste sur la meme case.
 
 Si le type consomme des emplacements, l'API refuse par defaut une creation qui depasse la capacite calculee de la case.
-Le champ optionnel `force_slot_override: true` autorise le forçage admin.
+Le champ optionnel `force_slot_override: true` autorise le forcage admin.
+`slot_override_reason` peut etre fourni avec le forcage, mais il reste informatif en V1.
 
 ### `GET /api/admin/editor/localities/[id]`
 ### `PATCH /api/admin/editor/localities/[id]`
@@ -79,8 +81,10 @@ Contraintes :
 - une chaine vide sur un champ nullable devient `null`.
 - `x` et `y`, s'ils sont fournis, doivent etre des nombres finis ;
 - `null`, `""` et les chaines blanches sont refuses pour `x` / `y` ;
-- `status`, s'il est fourni, doit etre strictement `draft`, `published` ou `archived`.
-- `force_slot_override`, s'il vaut `true`, autorise un depassement d'emplacements.
+- `status`, s'il est fourni, doit etre strictement `draft`, `published` ou `archived` ;
+- `force_slot_override`, s'il vaut `true`, autorise un depassement d'emplacements ;
+- `slot_override_reason` est accepte avec le forcage, sans stockage dedie en V1 ;
+- `depends_on_locality_id`, s'il est fourni, doit pointer vers une localite du type attendu par `upgrades_from_type_id`.
 
 Exemples :
 
@@ -127,7 +131,7 @@ Retrait d'icone :
 ### `DELETE /api/admin/editor/landmarks/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
-Les landmarks dont le type consomme des emplacements suivent la meme validation et le meme forçage admin.
+Les landmarks dont le type consomme des emplacements suivent la meme validation et le meme forcage admin.
 
 `PATCH` suit les memes regles : objet partiel, id non modifiable, body vide refuse.
 

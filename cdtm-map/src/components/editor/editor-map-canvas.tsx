@@ -29,6 +29,7 @@ import type {
   EditorMapRouteInput,
   EditorMapRoutePatch,
   EditorReferenceData,
+  EditorReferenceOption,
 } from "@/editor/types";
 import {
   buildCasePropertiesById,
@@ -114,6 +115,9 @@ type MapObjectCreateDraft = {
   type_key: string;
   icon_key: string | null;
   description: string;
+  depends_on_locality_id: string | null;
+  force_slot_override: boolean;
+  slot_override_reason: string;
 };
 
 type LocalityEditDraft = {
@@ -122,6 +126,9 @@ type LocalityEditDraft = {
   type_key: string;
   icon_key: string | null;
   status: "draft" | "published" | "archived";
+  depends_on_locality_id: string | null;
+  force_slot_override: boolean;
+  slot_override_reason: string;
   description: string;
 };
 
@@ -131,6 +138,8 @@ type LandmarkEditDraft = {
   type_key: string;
   icon_key: string | null;
   status: "draft" | "published" | "archived";
+  force_slot_override: boolean;
+  slot_override_reason: string;
   description: string;
 };
 
@@ -228,6 +237,9 @@ function createLocalityEditDraft(locality: EditorMapLocality): LocalityEditDraft
     type_key: locality.type_key,
     icon_key: locality.icon_key,
     status: locality.status,
+    depends_on_locality_id: locality.depends_on_locality_id,
+    force_slot_override: false,
+    slot_override_reason: "",
     description: locality.description ?? "",
   };
 }
@@ -239,8 +251,54 @@ function createLandmarkEditDraft(landmark: EditorMapLandmark): LandmarkEditDraft
     type_key: landmark.type_key,
     icon_key: landmark.icon_key,
     status: landmark.status,
+    force_slot_override: false,
+    slot_override_reason: "",
     description: landmark.description ?? "",
   };
+}
+
+function getReferenceOption(
+  options: readonly EditorReferenceOption[] | undefined,
+  value: string,
+): EditorReferenceOption | null {
+  return options?.find((option) => option.value === value) ?? null;
+}
+
+function formatSlotRequirement(option: EditorReferenceOption | null): string | null {
+  if (!option?.consumes_slot) {
+    return null;
+  }
+
+  const requiredSlots = Math.max(0, Math.trunc(option.emp_requis ?? 0));
+  return `${requiredSlots} emplacement${requiredSlots > 1 ? "s" : ""} requis`;
+}
+
+function getLocalityUpgradeDependencyOptions({
+  referenceData,
+  localities,
+  typeKey,
+  idCase,
+  excludedLocalityId,
+}: {
+  referenceData: EditorReferenceData | null;
+  localities: readonly EditorMapLocality[];
+  typeKey: string;
+  idCase: string | null;
+  excludedLocalityId?: string | null;
+}): EditorMapLocality[] {
+  const localityType = getReferenceOption(referenceData?.locality_types, typeKey);
+  const upgradedTypeKey = localityType?.upgrades_from_type_id ?? null;
+
+  if (!upgradedTypeKey || !idCase) {
+    return [];
+  }
+
+  return localities
+    .filter((locality) => locality.id_locality !== excludedLocalityId)
+    .filter((locality) => locality.id_case_detected === idCase)
+    .filter((locality) => locality.status !== "archived")
+    .filter((locality) => locality.type_key === upgradedTypeKey)
+    .sort((left, right) => left.name.localeCompare(right.name, "fr"));
 }
 
 function getLandmarkCategoryLabel(category: string | null | undefined): string {
@@ -302,6 +360,9 @@ function createPointDraft(
       name: "",
       type_key: "lieu_unique",
       icon_key: referenceData?.map_icons[0]?.value ?? null,
+      depends_on_locality_id: null,
+      force_slot_override: false,
+      slot_override_reason: "",
       description: "",
     };
   }
@@ -314,6 +375,9 @@ function createPointDraft(
     name: "",
     type_key: family === "locality" ? localityTypeKey : landmarkTypeKey,
     icon_key: null,
+    depends_on_locality_id: null,
+    force_slot_override: false,
+    slot_override_reason: "",
     description: "",
   };
 }
@@ -336,6 +400,8 @@ function changePointDraftFamily(
   return {
     ...nextDraft,
     name: draft.name,
+    force_slot_override: draft.force_slot_override,
+    slot_override_reason: draft.slot_override_reason,
     description: draft.description,
   };
 }
@@ -468,6 +534,8 @@ export function EditorMapCanvas() {
   const localityDraftOpenRef = useRef(false);
   const localityDraggingRef = useRef(false);
   const localityMoveSavingRef = useRef(false);
+  const localityEditDraftRef = useRef<LocalityEditDraft | null>(null);
+  const landmarkEditDraftRef = useRef<LandmarkEditDraft | null>(null);
   const localityTranslateInteractionRef = useRef<Translate | null>(null);
   const routeVertexTranslateInteractionRef = useRef<Translate | null>(null);
   const localityDragOriginRef = useRef<DragOrigin | null>(null);
@@ -488,6 +556,7 @@ export function EditorMapCanvas() {
   const [, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState<string | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
+  const [localities, setLocalities] = useState<EditorMapLocality[]>([]);
   const [, setLocalitiesCount] = useState<number | null>(null);
   const [, setLocalitiesLoading] = useState(false);
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
@@ -642,6 +711,14 @@ export function EditorMapCanvas() {
   useEffect(() => {
     localityMoveSavingRef.current = localityMoveSaving;
   }, [localityMoveSaving]);
+
+  useEffect(() => {
+    localityEditDraftRef.current = localityEditDraft;
+  }, [localityEditDraft]);
+
+  useEffect(() => {
+    landmarkEditDraftRef.current = landmarkEditDraft;
+  }, [landmarkEditDraft]);
 
   useEffect(() => {
     if (!routeVerticesSourceRef.current || !routeVerticesLayerRef.current) {
@@ -1091,6 +1168,15 @@ export function EditorMapCanvas() {
 
     try {
       if (origin.family === "locality" && locality) {
+        const slotOverride =
+          selectedLocalityIdRef.current === locality.id_locality &&
+          localityEditDraftRef.current?.force_slot_override
+            ? {
+                force_slot_override: true,
+                slot_override_reason:
+                  localityEditDraftRef.current.slot_override_reason.trim() || null,
+              }
+            : {};
         const updated = await fetchJson<EditorMapLocality>(
           `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
           {
@@ -1099,7 +1185,11 @@ export function EditorMapCanvas() {
               x,
               y,
               id_case_detected: idCaseDetected,
-            } satisfies Pick<EditorMapLocalityPatch, "x" | "y" | "id_case_detected">),
+              ...slotOverride,
+            } satisfies Pick<
+              EditorMapLocalityPatch,
+              "x" | "y" | "id_case_detected" | "force_slot_override" | "slot_override_reason"
+            >),
           },
         );
 
@@ -1109,6 +1199,9 @@ export function EditorMapCanvas() {
             locality: updated,
           });
         }
+        setLocalities((items) =>
+          items.map((item) => (item.id_locality === updated.id_locality ? updated : item)),
+        );
 
         if (selectedLocalityIdRef.current === updated.id_locality) {
           const nextDraft = createLocalityEditDraft(updated);
@@ -1118,6 +1211,15 @@ export function EditorMapCanvas() {
           setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
         }
       } else if (origin.family === "landmark" && landmark) {
+        const slotOverride =
+          selectedLandmarkIdRef.current === landmark.id_landmark &&
+          landmarkEditDraftRef.current?.force_slot_override
+            ? {
+                force_slot_override: true,
+                slot_override_reason:
+                  landmarkEditDraftRef.current.slot_override_reason.trim() || null,
+              }
+            : {};
         const updated = await fetchJson<EditorMapLandmark>(
           `/api/admin/editor/landmarks/${encodeURIComponent(landmark.id_landmark)}`,
           {
@@ -1126,7 +1228,11 @@ export function EditorMapCanvas() {
               x,
               y,
               id_case_detected: idCaseDetected,
-            } satisfies Pick<EditorMapLandmarkPatch, "x" | "y" | "id_case_detected">),
+              ...slotOverride,
+            } satisfies Pick<
+              EditorMapLandmarkPatch,
+              "x" | "y" | "id_case_detected" | "force_slot_override" | "slot_override_reason"
+            >),
           },
         );
 
@@ -1963,6 +2069,7 @@ export function EditorMapCanvas() {
           localities: items,
           landmarks: landmarkFeatures,
         });
+        setLocalities(items);
         setLocalitiesCount(items.length);
       } catch (error) {
         if (cancelled) {
@@ -1970,6 +2077,7 @@ export function EditorMapCanvas() {
         }
 
         console.error("Impossible de charger les localites dans l'editeur.", error);
+        setLocalities([]);
         setLocalitiesCount(0);
         setLocalitiesError(
           error instanceof Error ? error.message : "Chargement des localites impossible.",
@@ -2119,7 +2227,9 @@ export function EditorMapCanvas() {
           faction: null,
           controleur: null,
           status: "draft",
-          depends_on_locality_id: null,
+          depends_on_locality_id: pointDraft.depends_on_locality_id,
+          force_slot_override: pointDraft.force_slot_override,
+          slot_override_reason: pointDraft.slot_override_reason.trim() || null,
           description: pointDraft.description.trim() || null,
         };
 
@@ -2136,6 +2246,7 @@ export function EditorMapCanvas() {
         }
 
         setLocalitiesCount((count) => (count === null ? 1 : count + 1));
+        setLocalities((items) => [...items, created]);
         selectLocality(created);
       } else {
         const payload: EditorMapLandmarkInput = {
@@ -2148,6 +2259,8 @@ export function EditorMapCanvas() {
           faction: null,
           controleur: null,
           status: "draft",
+          force_slot_override: pointDraft.force_slot_override,
+          slot_override_reason: pointDraft.slot_override_reason.trim() || null,
           description: pointDraft.description.trim() || null,
         };
 
@@ -2200,6 +2313,9 @@ export function EditorMapCanvas() {
         type_key: typeKey,
         icon_key: localityEditDraft.icon_key,
         status: localityEditDraft.status,
+        depends_on_locality_id: localityEditDraft.depends_on_locality_id,
+        force_slot_override: localityEditDraft.force_slot_override,
+        slot_override_reason: localityEditDraft.slot_override_reason.trim() || null,
         description:
           localityEditDraft.description.trim().length > 0
             ? localityEditDraft.description.trim()
@@ -2223,6 +2339,9 @@ export function EditorMapCanvas() {
 
       const nextDraft = createLocalityEditDraft(updated);
 
+      setLocalities((items) =>
+        items.map((item) => (item.id_locality === updated.id_locality ? updated : item)),
+      );
       setSelectedLocality(updated);
       setLocalityEditDraft(nextDraft);
       setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
@@ -2268,6 +2387,8 @@ export function EditorMapCanvas() {
         type_key: typeKey,
         icon_key: typeCategory === "unique" ? landmarkEditDraft.icon_key : null,
         status: landmarkEditDraft.status,
+        force_slot_override: landmarkEditDraft.force_slot_override,
+        slot_override_reason: landmarkEditDraft.slot_override_reason.trim() || null,
         description:
           landmarkEditDraft.description.trim().length > 0
             ? landmarkEditDraft.description.trim()
@@ -2535,6 +2656,38 @@ export function EditorMapCanvas() {
         null
       : null;
   const selectedLandmarkCategory = selectedLandmarkTypeOption?.category ?? null;
+  const pointDraftTypeOption =
+    pointDraft?.family === "locality"
+      ? getReferenceOption(referenceData?.locality_types, pointDraft.type_key)
+      : pointDraft?.family === "landmark"
+        ? getReferenceOption(referenceData?.landmark_types, pointDraft.type_key)
+        : null;
+  const pointDraftSlotRequirement = formatSlotRequirement(pointDraftTypeOption);
+  const pointDraftUpgradeOptions =
+    pointDraft?.family === "locality"
+      ? getLocalityUpgradeDependencyOptions({
+          referenceData,
+          localities,
+          typeKey: pointDraft.type_key,
+          idCase: pointDraft.id_case_detected,
+        })
+      : [];
+  const localityEditTypeOption =
+    localityEditDraft
+      ? getReferenceOption(referenceData?.locality_types, localityEditDraft.type_key)
+      : null;
+  const localityEditSlotRequirement = formatSlotRequirement(localityEditTypeOption);
+  const localityEditUpgradeOptions =
+    selectedLocality && localityEditDraft
+      ? getLocalityUpgradeDependencyOptions({
+          referenceData,
+          localities,
+          typeKey: localityEditDraft.type_key,
+          idCase: selectedLocality.id_case_detected,
+          excludedLocalityId: selectedLocality.id_locality,
+        })
+      : [];
+  const landmarkEditSlotRequirement = formatSlotRequirement(selectedLandmarkTypeOption);
   const panelTitle = routeDraft
     ? "Nouvelle route"
     : pointDraft
@@ -3351,7 +3504,13 @@ export function EditorMapCanvas() {
                     value={pointDraft.type_key}
                     onChange={(event) =>
                       setPointDraft((draft) =>
-                        draft ? { ...draft, type_key: event.target.value } : draft,
+                        draft
+                          ? {
+                              ...draft,
+                              type_key: event.target.value,
+                              depends_on_locality_id: null,
+                            }
+                          : draft,
                       )
                     }
                     className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
@@ -3369,6 +3528,36 @@ export function EditorMapCanvas() {
                   </select>
                 </label>
               )}
+              {pointDraftSlotRequirement ? (
+                <p className="text-xs text-muted-foreground">{pointDraftSlotRequirement}</p>
+              ) : null}
+              {pointDraft.family === "locality" && pointDraftTypeOption?.upgrades_from_type_id ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Ameliore</span>
+                  <select
+                    value={pointDraft.depends_on_locality_id ?? ""}
+                    onChange={(event) =>
+                      setPointDraft((draft) =>
+                        draft
+                          ? {
+                              ...draft,
+                              depends_on_locality_id:
+                                event.target.value.trim().length > 0 ? event.target.value : null,
+                            }
+                          : draft,
+                      )
+                    }
+                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                  >
+                    <option value="">Nouvelle chaine</option>
+                    {pointDraftUpgradeOptions.map((locality) => (
+                      <option key={locality.id_locality} value={locality.id_locality}>
+                        {locality.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {pointDraft.family === "unique" ? (
                 <label className="block text-xs text-muted-foreground">
                   <span className="mb-1 block">Icone</span>
@@ -3442,6 +3631,33 @@ export function EditorMapCanvas() {
                   ? `Case detectee : ${pointDraft.id_case_detected}`
                   : "Aucune case detectee"}
               </p>
+              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                  checked={pointDraft.force_slot_override}
+                  onChange={(event) =>
+                    setPointDraft((draft) =>
+                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
+                    )
+                  }
+                />
+                <span>Forcer si les emplacements sont depasses</span>
+              </label>
+              {pointDraft.force_slot_override ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Justification</span>
+                  <textarea
+                    value={pointDraft.slot_override_reason}
+                    onChange={(event) =>
+                      setPointDraft((draft) =>
+                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
+                      )
+                    }
+                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                  />
+                </label>
+              ) : null}
               {pointDraft.family === "unique" && (referenceData?.map_icons.length ?? 0) === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   Aucune icone active n&apos;est disponible. Le lieu unique sera cree avec le fallback visuel.
@@ -3498,7 +3714,13 @@ export function EditorMapCanvas() {
                   value={localityEditDraft.type_key}
                   onChange={(event) =>
                     setLocalityEditDraft((draft) =>
-                      draft ? { ...draft, type_key: event.target.value } : draft,
+                      draft
+                        ? {
+                            ...draft,
+                            type_key: event.target.value,
+                            depends_on_locality_id: null,
+                          }
+                        : draft,
                     )
                   }
                   className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
@@ -3510,6 +3732,36 @@ export function EditorMapCanvas() {
                   ))}
                 </select>
               </label>
+              {localityEditSlotRequirement ? (
+                <p className="text-xs text-muted-foreground">{localityEditSlotRequirement}</p>
+              ) : null}
+              {localityEditTypeOption?.upgrades_from_type_id ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Ameliore</span>
+                  <select
+                    value={localityEditDraft.depends_on_locality_id ?? ""}
+                    onChange={(event) =>
+                      setLocalityEditDraft((draft) =>
+                        draft
+                          ? {
+                              ...draft,
+                              depends_on_locality_id:
+                                event.target.value.trim().length > 0 ? event.target.value : null,
+                            }
+                          : draft,
+                      )
+                    }
+                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                  >
+                    <option value="">Nouvelle chaine</option>
+                    {localityEditUpgradeOptions.map((locality) => (
+                      <option key={locality.id_locality} value={locality.id_locality}>
+                        {locality.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Icone</span>
                 <select
@@ -3568,6 +3820,33 @@ export function EditorMapCanvas() {
                   className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
                 />
               </label>
+              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                  checked={localityEditDraft.force_slot_override}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
+                    )
+                  }
+                />
+                <span>Forcer si les emplacements sont depasses</span>
+              </label>
+              {localityEditDraft.force_slot_override ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Justification</span>
+                  <textarea
+                    value={localityEditDraft.slot_override_reason}
+                    onChange={(event) =>
+                      setLocalityEditDraft((draft) =>
+                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
+                      )
+                    }
+                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                  />
+                </label>
+              ) : null}
               <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
                 {localityEditError ? (
                   <p className="text-xs text-destructive">{localityEditError}</p>
@@ -3657,6 +3936,9 @@ export function EditorMapCanvas() {
                   ))}
                 </select>
               </label>
+              {landmarkEditSlotRequirement ? (
+                <p className="text-xs text-muted-foreground">{landmarkEditSlotRequirement}</p>
+              ) : null}
               {selectedLandmarkCategory === "unique" ? (
                 <label className="block text-xs text-muted-foreground">
                   <span className="mb-1 block">Icone</span>
@@ -3716,6 +3998,33 @@ export function EditorMapCanvas() {
                   className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
                 />
               </label>
+              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                  checked={landmarkEditDraft.force_slot_override}
+                  onChange={(event) =>
+                    setLandmarkEditDraft((draft) =>
+                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
+                    )
+                  }
+                />
+                <span>Forcer si les emplacements sont depasses</span>
+              </label>
+              {landmarkEditDraft.force_slot_override ? (
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Justification</span>
+                  <textarea
+                    value={landmarkEditDraft.slot_override_reason}
+                    onChange={(event) =>
+                      setLandmarkEditDraft((draft) =>
+                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
+                      )
+                    }
+                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                  />
+                </label>
+              ) : null}
               {selectedLandmarkCategory === "unique" && (referenceData?.map_icons.length ?? 0) === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   Aucune icone active n&apos;est disponible. Le lieu unique gardera le fallback visuel.
