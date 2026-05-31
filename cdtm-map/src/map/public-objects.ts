@@ -193,10 +193,11 @@ export function buildPublicLocalityHoverRows(
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
 
-export function buildPublicLandmarkHoverRows(
-  landmark: PublicMapLandmark,
-): Array<{ label: string; value: string }> {
-  return [{ label: "Type", value: landmark.type_label ?? landmark.type_key }];
+export function buildPublicLandmarkHoverRows(): Array<{
+  label: string;
+  value: string;
+}> {
+  return [];
 }
 
 export function buildPublicRouteHoverRows(

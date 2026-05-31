@@ -114,6 +114,20 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+function areStringSetsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function CasesMap({
   dataUrl,
   activeCaseId,
@@ -290,9 +304,7 @@ export function CasesMap({
       const publicLandmark = publicLandmarksByIdRef.current[target.id];
       coordinate = [target.x, target.y];
       title = publicLandmark?.name ?? target.label;
-      rows = publicLandmark
-        ? buildPublicLandmarkHoverRows(publicLandmark)
-        : [{ label: "Type", value: "Landmark" }];
+      rows = buildPublicLandmarkHoverRows();
     } else {
       const publicRoute = publicRoutesByIdRef.current[target.id];
       const xs = target.points.map(([x]) => x);
@@ -317,7 +329,7 @@ export function CasesMap({
     const pixel = map.getPixelFromCoordinate(coordinate);
     const mapRect = map.getTargetElement().getBoundingClientRect();
     const tooltipWidth = 260;
-    const tooltipHeight = rows.length > 2 ? 180 : 140;
+    const tooltipHeight = rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
     const preferredX = mapRect.left + pixel[0] + 18;
     const preferredY = mapRect.top + pixel[1] + 18;
 
@@ -372,6 +384,13 @@ export function CasesMap({
     const previousSelectedIds = selectedCaseIdsRef.current;
     const nextSelectedIds = new Set(selectedCaseIds);
     selectedCaseIdsRef.current = nextSelectedIds;
+
+    if (
+      previousActiveCaseId === activeCaseId &&
+      areStringSetsEqual(previousSelectedIds, nextSelectedIds)
+    ) {
+      return;
+    }
 
     const source = sourceRef.current;
 
@@ -640,7 +659,8 @@ export function CasesMap({
       ) => {
         target.style.cursor = "pointer";
         const tooltipWidth = 260;
-        const tooltipHeight = rows.length > 2 ? 180 : 140;
+        const tooltipHeight =
+          rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
 
         setHoverInfo({
           x:
@@ -695,10 +715,7 @@ export function CasesMap({
               landmark && publicLandmarksByIdRef.current[landmark.id_landmark];
 
             if (publicLandmark) {
-              setTooltip(
-                publicLandmark.name,
-                buildPublicLandmarkHoverRows(publicLandmark),
-              );
+              setTooltip(publicLandmark.name, buildPublicLandmarkHoverRows());
               return;
             }
           }
@@ -1079,21 +1096,23 @@ export function CasesMap({
           <p className="text-sm font-semibold text-foreground">
             {hoverInfo.title}
           </p>
-          <div className="mt-2 space-y-1.5">
-            {hoverInfo.rows.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-start justify-between gap-3"
-              >
-                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  {row.label}
-                </span>
-                <span className="text-right text-sm text-foreground">
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
+          {hoverInfo.rows.length > 0 ? (
+            <div className="mt-2 space-y-1.5">
+              {hoverInfo.rows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-start justify-between gap-3"
+                >
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    {row.label}
+                  </span>
+                  <span className="text-right text-sm text-foreground">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

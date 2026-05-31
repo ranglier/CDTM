@@ -389,7 +389,11 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     },
   ];
   return (
-    <aside aria-live="polite" onPointerEnter={onPanelPointerEnter}>
+    <aside
+      className="[overflow-anchor:none]"
+      aria-live="polite"
+      onPointerEnter={onPanelPointerEnter}
+    >
       <SectionPanel className="flex h-full flex-col">
         <div className="flex flex-1 flex-col p-4 sm:p-5">
           <header className="space-y-3">

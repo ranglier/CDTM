@@ -94,6 +94,14 @@ function buildEditorHref(
   return `/editeur?${params.toString()}`;
 }
 
+function areCaseSelectionsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((idCase, index) => idCase === right[index]);
+}
+
 export default function HomePage() {
   const [totalCases, setTotalCases] = useState(0);
   const [casesVisible, setCasesVisible] = useState(true);
@@ -186,8 +194,16 @@ export default function HomePage() {
 
   const applySelectionState = useCallback(
     (nextActiveCaseId: string | null, nextSelectedCaseIds: string[]) => {
-      setActiveCaseId(nextActiveCaseId);
-      setSelectedCaseIds(nextSelectedCaseIds);
+      setActiveCaseId((currentActiveCaseId) =>
+        currentActiveCaseId === nextActiveCaseId
+          ? currentActiveCaseId
+          : nextActiveCaseId,
+      );
+      setSelectedCaseIds((currentSelectedCaseIds) =>
+        areCaseSelectionsEqual(currentSelectedCaseIds, nextSelectedCaseIds)
+          ? currentSelectedCaseIds
+          : nextSelectedCaseIds,
+      );
       setSearchError(null);
       setAdminError(null);
     },
@@ -224,7 +240,16 @@ export default function HomePage() {
       const nextCaseId = selectedCase ? getRegistryCaseId(selectedCase) : null;
 
       if (intent === "replace") {
-        applySelectionState(nextCaseId, nextCaseId ? [nextCaseId] : []);
+        const nextSelectedCaseIds = nextCaseId ? [nextCaseId] : [];
+
+        if (
+          activeCaseId === nextCaseId &&
+          areCaseSelectionsEqual(selectedCaseIds, nextSelectedCaseIds)
+        ) {
+          return;
+        }
+
+        applySelectionState(nextCaseId, nextSelectedCaseIds);
         return;
       }
 
@@ -250,7 +275,7 @@ export default function HomePage() {
         return nextSelectedCaseIds;
       });
     },
-    [activeCaseId, applySelectionState],
+    [activeCaseId, applySelectionState, selectedCaseIds],
   );
 
   const focusOnCase = useCallback(
@@ -562,8 +587,8 @@ export default function HomePage() {
         id="carte"
         className={
           panelVisible
-            ? "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
-            : "grid min-h-[calc(100svh-6rem)] flex-1 gap-6"
+            ? "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 [overflow-anchor:none] xl:grid-cols-[minmax(0,1.65fr)_24rem]"
+            : "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 [overflow-anchor:none]"
         }
         aria-label="Carte publique des cases"
       >

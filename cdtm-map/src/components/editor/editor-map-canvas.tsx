@@ -569,6 +569,31 @@ function getFirstTranslatedFeature(
   return feature instanceof Feature ? (feature as Feature<Geometry>) : null;
 }
 
+function buildStatusHoverRow(status: string): {
+  label: string;
+  value: string;
+} | null {
+  return status === "published" ? null : { label: "Statut", value: status };
+}
+
+function isPublishedPointFeatureLocked(
+  feature: Feature<Geometry>,
+  lockPublishedObjects: boolean,
+): boolean {
+  if (!lockPublishedObjects) {
+    return false;
+  }
+
+  const locality = getEditorLocalityFromPointFeature(feature);
+
+  if (locality) {
+    return locality.status === "published";
+  }
+
+  const landmark = getEditorLandmarkFromPointFeature(feature);
+  return landmark?.status === "published";
+}
+
 export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
@@ -614,11 +639,13 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const selectedLocalityIdRef = useRef<string | null>(null);
   const selectedLandmarkIdRef = useRef<string | null>(null);
   const selectedRouteIdRef = useRef<string | null>(null);
+  const selectedRouteStatusRef = useRef<string | null>(null);
   const routeGeometryDraftRef = useRef<RouteGeometryEditDraft | null>(null);
   const routeGeometryToolRef = useRef<RouteGeometryTool>("select-vertex");
   const selectedRouteVertexIndexRef = useRef<number | null>(null);
   const routeGeometryDraggingRef = useRef(false);
   const editorToolRef = useRef<EditorTool>("select");
+  const publishedObjectsLockedRef = useRef(true);
   const localityDraftOpenRef = useRef(false);
   const localityDraggingRef = useRef(false);
   const localityMoveSavingRef = useRef(false);
@@ -671,6 +698,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [searchValue, setSearchValue] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
+  const [publishedObjectsLocked, setPublishedObjectsLocked] = useState(true);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [selectedLocality, setSelectedLocality] =
@@ -725,6 +753,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     string | null
   >(null);
   const [localityEditSaving, setLocalityEditSaving] = useState(false);
+  const [localityDeleteSaving, setLocalityDeleteSaving] = useState(false);
   const [localityEditError, setLocalityEditError] = useState<string | null>(
     null,
   );
@@ -1044,7 +1073,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
   useEffect(() => {
     selectedRouteIdRef.current = selectedRoute?.id_route ?? null;
+    selectedRouteStatusRef.current = selectedRoute?.status ?? null;
   }, [selectedRoute]);
+
+  useEffect(() => {
+    publishedObjectsLockedRef.current = publishedObjectsLocked;
+  }, [publishedObjectsLocked]);
 
   useEffect(() => {
     routeGeometryDraftRef.current = routeGeometryDraft;
@@ -1141,6 +1175,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         editorTool === "select" &&
         !pointDraft &&
         !routeDraft &&
+        !(publishedObjectsLocked && selectedRoute?.status === "published") &&
         !routeGeometrySaving,
     );
   }, [
@@ -1151,6 +1186,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     routeGeometryDraft,
     routeGeometrySaving,
     routeGeometryTool,
+    publishedObjectsLocked,
+    selectedRoute,
   ]);
 
   const handleCloseLocalitySelection = useCallback(() => {
@@ -1180,6 +1217,13 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       return;
     }
 
+    if (publishedObjectsLocked && selectedRoute.status === "published") {
+      setRouteGeometryError(
+        "Route publiee verrouillee. Desactivez Lock publies pour editer sa geometrie.",
+      );
+      return;
+    }
+
     const draft = createRouteGeometryDraft(selectedRoute);
 
     setRouteGeometryDraft(draft);
@@ -1187,7 +1231,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     setSelectedRouteVertexIndex(null);
     setRouteGeometryError(null);
     setRouteGeometryTool("select-vertex");
-  }, [selectedRoute]);
+  }, [publishedObjectsLocked, selectedRoute]);
 
   const handleCancelRouteGeometryEdit = useCallback(() => {
     if (selectedRoute) {
@@ -1944,6 +1988,14 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     ]);
     const translateInteraction = new Translate({
       layers: [pointsLayer],
+      filter: (candidateFeature) =>
+        !(
+          candidateFeature instanceof Feature &&
+          isPublishedPointFeatureLocked(
+            candidateFeature as Feature<Geometry>,
+            publishedObjectsLockedRef.current,
+          )
+        ),
     });
     const routeVertexTranslateInteraction = new Translate({
       layers: [routeVerticesLayer],
@@ -1991,6 +2043,18 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         );
 
         if (locality && localityCoordinates) {
+          if (
+            publishedObjectsLockedRef.current &&
+            locality.status === "published"
+          ) {
+            localityDragOriginRef.current = null;
+            setLocalityMoveError(
+              "Objet publie verrouille. Desactivez Lock publies pour le deplacer.",
+            );
+            setHoverInfo(null);
+            return;
+          }
+
           localityDragOriginRef.current = {
             family: "locality",
             id: locality.id_locality,
@@ -2012,6 +2076,18 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         );
 
         if (landmark && landmarkCoordinates) {
+          if (
+            publishedObjectsLockedRef.current &&
+            landmark.status === "published"
+          ) {
+            localityDragOriginRef.current = null;
+            setLocalityMoveError(
+              "Objet publie verrouille. Desactivez Lock publies pour le deplacer.",
+            );
+            setHoverInfo(null);
+            return;
+          }
+
           localityDragOriginRef.current = {
             family: "landmark",
             id: landmark.id_landmark,
@@ -2053,6 +2129,16 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           !routeVertex ||
           routeVertex.routeId !== selectedRouteIdRef.current
         ) {
+          return;
+        }
+
+        if (
+          publishedObjectsLockedRef.current &&
+          selectedRouteStatusRef.current === "published"
+        ) {
+          setRouteGeometryError(
+            "Route publiee verrouillee. Desactivez Lock publies pour editer sa geometrie.",
+          );
           return;
         }
 
@@ -2466,24 +2552,13 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               pointFeature as Feature<Geometry>,
             );
             if (landmark) {
-              const typeOption = referenceDataRef.current?.landmark_types.find(
-                (option) => option.value === landmark.type_key,
-              );
               target.style.cursor = "pointer";
               const position = getTooltipPosition(event.originalEvent);
               setHoverInfo({
                 x: position.x,
                 y: position.y,
                 title: landmark.name,
-                rows: [
-                  {
-                    label: "Type",
-                    value: typeOption?.label ?? landmark.type_key,
-                  },
-                ].filter(
-                  (row): row is { label: string; value: string } =>
-                    row !== null,
-                ),
+                rows: [],
               });
               return;
             }
@@ -2501,7 +2576,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 title: locality.name,
                 rows: [
                   { label: "Type", value: locality.type_key },
-                  { label: "Statut", value: locality.status },
+                  buildStatusHoverRow(locality.status),
                 ].filter(
                   (row): row is { label: string; value: string } =>
                     row !== null,
@@ -2551,9 +2626,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   label: "Style",
                   value: getRouteStrokeStyleLabel(route.stroke_style),
                 },
-                { label: "Statut", value: route.status },
+                buildStatusHoverRow(route.status),
                 { label: "Points", value: String(route.points.length) },
-              ],
+              ].filter(
+                (row): row is { label: string; value: string } => row !== null,
+              ),
             });
             return;
           }
@@ -3492,6 +3569,126 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     }
   }
 
+  async function handleDeleteLocality() {
+    if (!selectedLocality || localityDeleteSaving) {
+      return;
+    }
+
+    const dirtyWarning = localityEditDirty
+      ? "\nLes modifications non enregistrees seront perdues."
+      : "";
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        `Supprimer la localite "${selectedLocality.name}" ?${dirtyWarning}`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setLocalityDeleteSaving(true);
+    setLocalityEditError(null);
+
+    try {
+      const id = selectedLocality.id_locality;
+
+      await fetchJson<{ deleted: boolean; id: string }>(
+        `/api/admin/editor/localities/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      const feature = pointsSourceRef.current?.getFeatureById(`locality:${id}`);
+      if (feature) {
+        pointsSourceRef.current?.removeFeature(feature);
+      }
+
+      setLocalitiesCount((count) =>
+        count === null ? null : Math.max(count - 1, 0),
+      );
+      setLocalities((items) =>
+        items
+          .filter((item) => item.id_locality !== id)
+          .map((item) =>
+            item.depends_on_locality_id === id
+              ? { ...item, depends_on_locality_id: null }
+              : item,
+          ),
+      );
+      setHoverInfo(null);
+      handleCloseLocalitySelection();
+    } catch (error) {
+      setLocalityEditError(
+        error instanceof Error
+          ? error.message
+          : "Suppression de localite impossible.",
+      );
+    } finally {
+      setLocalityDeleteSaving(false);
+    }
+  }
+
+  async function handleDeleteLandmark() {
+    if (!selectedLandmark || localityDeleteSaving) {
+      return;
+    }
+
+    const selectedTypeCategory =
+      referenceData?.landmark_types.find(
+        (option) => option.value === selectedLandmark.type_key,
+      )?.category ?? null;
+    const label =
+      selectedTypeCategory === "unique" ? "le lieu unique" : "le landmark";
+    const dirtyWarning = landmarkEditDirty
+      ? "\nLes modifications non enregistrees seront perdues."
+      : "";
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        `Supprimer ${label} "${selectedLandmark.name}" ?${dirtyWarning}`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setLocalityDeleteSaving(true);
+    setLocalityEditError(null);
+
+    try {
+      const id = selectedLandmark.id_landmark;
+
+      await fetchJson<{ deleted: boolean; id: string }>(
+        `/api/admin/editor/landmarks/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      const feature = pointsSourceRef.current?.getFeatureById(`landmark:${id}`);
+      if (feature) {
+        pointsSourceRef.current?.removeFeature(feature);
+      }
+
+      setLandmarksCount((count) =>
+        count === null ? null : Math.max(count - 1, 0),
+      );
+      setLandmarks((items) => items.filter((item) => item.id_landmark !== id));
+      setHoverInfo(null);
+      handleCloseLocalitySelection();
+    } catch (error) {
+      setLocalityEditError(
+        error instanceof Error
+          ? error.message
+          : "Suppression de landmark impossible.",
+      );
+    } finally {
+      setLocalityDeleteSaving(false);
+    }
+  }
+
   function handlePopLastRoutePoint() {
     setRouteDraft((draft) =>
       draft ? { ...draft, points: draft.points.slice(0, -1) } : draft,
@@ -3818,6 +4015,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     localityMoveError,
   ].filter((message): message is string => Boolean(message));
   const objectsVisible = localitiesVisible || landmarksVisible || routesVisible;
+  const selectedRoutePublishedLocked =
+    publishedObjectsLocked && selectedRoute?.status === "published";
 
   return (
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -3954,6 +4153,22 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   {localityDisplayMode === "icons"
                     ? "Objets : icones"
                     : "Objets : points"}
+                </Button>
+              ) : null}
+              {canEditMapObjects ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={publishedObjectsLocked ? "secondary" : "outline"}
+                  title="Verrouille ou deverrouille le deplacement des objets publies"
+                  onClick={() => {
+                    setPublishedObjectsLocked((locked) => !locked);
+                    setLocalityMoveError(null);
+                    setRouteGeometryError(null);
+                    setHoverInfo(null);
+                  }}
+                >
+                  {publishedObjectsLocked ? "Lock publies" : "Publies libres"}
                 </Button>
               ) : null}
             </div>
@@ -4379,7 +4594,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 type="button"
                 variant={routeGeometryDraft ? "secondary" : "outline"}
                 size="sm"
-                disabled={routeGeometrySaving || routeSaving}
+                disabled={
+                  routeGeometrySaving ||
+                  routeSaving ||
+                  (!routeGeometryDraft && selectedRoutePublishedLocked)
+                }
                 onClick={() => {
                   if (routeGeometryDraft) {
                     handleCloseRouteGeometryEdit();
@@ -4392,6 +4611,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   ? "Fermer l'edition geometrique"
                   : "Editer la geometrie"}
               </Button>
+              {selectedRoutePublishedLocked ? (
+                <p className="basis-full text-xs text-muted-foreground">
+                  Route publiee verrouillee par Lock publies.
+                </p>
+              ) : null}
               {routeGeometryDraft ? (
                 <>
                   <Button
@@ -4402,7 +4626,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                         : "outline"
                     }
                     size="sm"
-                    disabled={routeGeometrySaving}
+                    disabled={
+                      routeGeometrySaving || selectedRoutePublishedLocked
+                    }
                     onClick={() => {
                       setRouteGeometryTool("prepend-vertex");
                       setRouteGeometryError(null);
@@ -4418,7 +4644,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                         : "outline"
                     }
                     size="sm"
-                    disabled={routeGeometrySaving}
+                    disabled={
+                      routeGeometrySaving || selectedRoutePublishedLocked
+                    }
                     onClick={() => {
                       setRouteGeometryTool("append-vertex");
                       setRouteGeometryError(null);
@@ -4435,7 +4663,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     }
                     size="sm"
                     disabled={
-                      routeGeometrySaving || selectedRouteVertexIndex === null
+                      routeGeometrySaving ||
+                      selectedRoutePublishedLocked ||
+                      selectedRouteVertexIndex === null
                     }
                     onClick={() => {
                       setRouteGeometryTool("insert-before-vertex");
@@ -4453,7 +4683,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     }
                     size="sm"
                     disabled={
-                      routeGeometrySaving || selectedRouteVertexIndex === null
+                      routeGeometrySaving ||
+                      selectedRoutePublishedLocked ||
+                      selectedRouteVertexIndex === null
                     }
                     onClick={() => {
                       setRouteGeometryTool("insert-after-vertex");
@@ -4468,6 +4700,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      selectedRoutePublishedLocked ||
                       selectedRouteVertexIndex === null ||
                       routeGeometryDraft.points.length <= 2
                     }
@@ -4502,6 +4735,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      selectedRoutePublishedLocked ||
                       routeGeometryDraft.points.length < 2 ||
                       !routeGeometryDirty
                     }
@@ -5195,6 +5429,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   size="sm"
                   disabled={
                     localityEditSaving ||
+                    localityDeleteSaving ||
                     localityEditDraft.name.trim().length === 0 ||
                     localityEditDraft.type_key.trim().length === 0 ||
                     !localityEditDirty
@@ -5206,16 +5441,32 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={localityEditSaving || !localityEditDirty}
+                  disabled={
+                    localityEditSaving ||
+                    localityDeleteSaving ||
+                    !localityEditDirty
+                  }
                   onClick={handleCancelLocalityEdit}
                 >
                   Annuler
                 </Button>
                 <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={localityEditSaving || localityDeleteSaving}
+                  onClick={() => {
+                    void handleDeleteLocality();
+                  }}
+                >
+                  {localityDeleteSaving ? "Suppression..." : "Supprimer"}
+                </Button>
+                <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={localityEditSaving}
+                  disabled={localityEditSaving || localityDeleteSaving}
                   onClick={handleCloseLocalitySelection}
                 >
                   Fermer
@@ -5394,6 +5645,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   size="sm"
                   disabled={
                     localityEditSaving ||
+                    localityDeleteSaving ||
                     landmarkEditDraft.name.trim().length === 0 ||
                     landmarkEditDraft.type_key.trim().length === 0 ||
                     !landmarkEditDirty
@@ -5405,16 +5657,32 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={localityEditSaving || !landmarkEditDirty}
+                  disabled={
+                    localityEditSaving ||
+                    localityDeleteSaving ||
+                    !landmarkEditDirty
+                  }
                   onClick={handleCancelLandmarkEdit}
                 >
                   Annuler
                 </Button>
                 <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={localityEditSaving || localityDeleteSaving}
+                  onClick={() => {
+                    void handleDeleteLandmark();
+                  }}
+                >
+                  {localityDeleteSaving ? "Suppression..." : "Supprimer"}
+                </Button>
+                <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={localityEditSaving}
+                  disabled={localityEditSaving || localityDeleteSaving}
                   onClick={handleCloseLocalitySelection}
                 >
                   Fermer
@@ -5440,21 +5708,23 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           <p className="text-sm font-semibold text-foreground">
             {hoverInfo.title}
           </p>
-          <div className="mt-2 space-y-1.5">
-            {hoverInfo.rows.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-start justify-between gap-3"
-              >
-                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  {row.label}
-                </span>
-                <span className="text-right text-sm text-foreground">
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
+          {hoverInfo.rows.length > 0 ? (
+            <div className="mt-2 space-y-1.5">
+              {hoverInfo.rows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-start justify-between gap-3"
+                >
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    {row.label}
+                  </span>
+                  <span className="text-right text-sm text-foreground">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

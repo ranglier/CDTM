@@ -194,6 +194,39 @@ function getPixelExtent(coordinates: unknown): PixelExtent | null {
   return [minX, minY, maxX, maxY];
 }
 
+function transformCoordinate(
+  coordinate: [number, number],
+  transform: DOMMatrixReadOnly,
+): [number, number] {
+  return [
+    coordinate[0] * transform.a + coordinate[1] * transform.c + transform.e,
+    coordinate[0] * transform.b + coordinate[1] * transform.d + transform.f,
+  ];
+}
+
+function transformCoordinates(
+  coordinates: unknown,
+  transform: DOMMatrixReadOnly,
+): unknown {
+  if (isCoordinate(coordinates)) {
+    return transformCoordinate(coordinates, transform);
+  }
+
+  if (!Array.isArray(coordinates)) {
+    return coordinates;
+  }
+
+  return coordinates.map((item) => transformCoordinates(item, transform));
+}
+
+function transformAnchor(
+  anchor: PixelAnchor,
+  transform: DOMMatrixReadOnly,
+): PixelAnchor {
+  const [x, y] = transformCoordinate([anchor.x, anchor.y], transform);
+  return { x, y };
+}
+
 function appendRingPath(
   context: CanvasRenderingContext2D,
   ring: Array<[number, number]>,
@@ -355,16 +388,21 @@ function drawAnchoredPattern(
   anchor: PixelAnchor,
   patternType: MapPatternType,
   patternColor: string,
+  pixelRatio: number,
 ) {
   const spec = getPatternSpec(patternType);
+  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  const step = spec.step * ratio;
+  const lineWidth = spec.lineWidth * ratio;
+  const dotRadius = spec.dotRadius * ratio;
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
-  context.lineWidth = spec.lineWidth;
+  context.lineWidth = lineWidth;
   context.lineCap = "round";
 
   if (spec.kind === "dots") {
-    drawDots(context, extent, anchor, spec.step, spec.dotRadius);
+    drawDots(context, extent, anchor, step, dotRadius);
     return;
   }
 
@@ -372,24 +410,24 @@ function drawAnchoredPattern(
 
   switch (spec.kind) {
     case "diagonal":
-      drawDiagonalLines(context, extent, anchor, spec.step, false);
+      drawDiagonalLines(context, extent, anchor, step, false);
       break;
     case "diagonal_reverse":
-      drawDiagonalLines(context, extent, anchor, spec.step, true);
+      drawDiagonalLines(context, extent, anchor, step, true);
       break;
     case "crosshatch":
-      drawDiagonalLines(context, extent, anchor, spec.step, false);
-      drawDiagonalLines(context, extent, anchor, spec.step, true);
+      drawDiagonalLines(context, extent, anchor, step, false);
+      drawDiagonalLines(context, extent, anchor, step, true);
       break;
     case "horizontal":
-      drawHorizontalLines(context, extent, anchor, spec.step);
+      drawHorizontalLines(context, extent, anchor, step);
       break;
     case "vertical":
-      drawVerticalLines(context, extent, anchor, spec.step);
+      drawVerticalLines(context, extent, anchor, step);
       break;
     case "grid":
-      drawHorizontalLines(context, extent, anchor, spec.step);
-      drawVerticalLines(context, extent, anchor, spec.step);
+      drawHorizontalLines(context, extent, anchor, step);
+      drawVerticalLines(context, extent, anchor, step);
       break;
   }
 
@@ -409,13 +447,18 @@ function getPatternOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    const pixelExtent = getPixelExtent(coordinates);
     const safeResolution =
       Number.isFinite(state.resolution) && state.resolution > 0
         ? state.resolution
         : 1;
+    const renderTransform = state.context.getTransform();
+    const screenCoordinates = transformCoordinates(
+      coordinates,
+      renderTransform,
+    );
+    const screenExtent = getPixelExtent(screenCoordinates);
 
-    if (!pixelExtent) {
+    if (!screenExtent) {
       return;
     }
 
@@ -425,17 +468,20 @@ function getPatternOverlayStyle(
       worldCoordinates,
       safeResolution,
     );
+    const screenAnchor = transformAnchor(anchor, renderTransform);
 
     state.context.save();
+    state.context.setTransform(1, 0, 0, 1, 0, 0);
     state.context.beginPath();
-    appendGeometryPath(state.context, coordinates);
+    appendGeometryPath(state.context, screenCoordinates);
     state.context.clip("evenodd");
     drawAnchoredPattern(
       state.context,
-      pixelExtent,
-      anchor,
+      screenExtent,
+      screenAnchor,
       patternType,
       patternColor,
+      state.pixelRatio,
     );
     state.context.restore();
   };
