@@ -98,7 +98,11 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
 
   await client.query(`
     DELETE FROM reference_nomenclature_values
-    WHERE group_key IN ('peuple_majoritaire', 'peuple', 'visibilite')
+    WHERE group_key IN ('peuple_majoritaire', 'peuple', 'visibilite', 'relief')
+  `);
+  await client.query(`
+    DELETE FROM reference_styles
+    WHERE cible_type = 'relief'
   `);
   await client.query(`
     DELETE FROM reference_nomenclature_values
@@ -159,6 +163,41 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
     );
   }
 
+  await client.query(
+    `
+      INSERT INTO reference_nomenclature_values (id_entry, group_key, entry_key, label)
+      VALUES ('case_attribute:colline', 'case_attribute', 'colline', 'Colline')
+      ON CONFLICT (group_key, entry_key) DO UPDATE
+      SET
+        label = EXCLUDED.label,
+        updated_at = NOW()
+    `,
+  );
+
+  await client.query(
+    `
+      INSERT INTO reference_styles (
+        id_style,
+        cible_type,
+        cible_id,
+        fill,
+        stroke,
+        pattern_type,
+        pattern_color
+      )
+      VALUES (
+        'case_attribute:colline',
+        'case_attribute',
+        'colline',
+        NULL,
+        NULL,
+        'dots_spaced',
+        '#281e0e'
+      )
+      ON CONFLICT (id_style) DO NOTHING
+    `,
+  );
+
   const countResult = await client.query<{ count: string }>(
     "SELECT COUNT(*)::text AS count FROM reference_nomenclature_values",
   );
@@ -197,6 +236,7 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
       groupKey === "terrain_type" ||
       groupKey === "faction" ||
       groupKey === "peuple" ||
+      groupKey === "relief" ||
       groupKey === "visibilite"
     ) {
       continue;

@@ -1063,9 +1063,39 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   }, [routeGeometryDragging]);
 
   useEffect(() => {
+    const previousActiveCaseId = activeCaseIdRef.current;
+    const previousSelectedCaseIds = selectedCaseIdsRef.current;
+    const nextSelectedCaseIds = new Set(selectedCaseIds);
+
     activeCaseIdRef.current = activeCaseId;
-    selectedCaseIdsRef.current = new Set(selectedCaseIds);
-    casesLayerRef.current?.changed();
+    selectedCaseIdsRef.current = nextSelectedCaseIds;
+
+    const source = casesSourceRef.current;
+    if (!source) {
+      return;
+    }
+
+    const changedIds = new Set<string>();
+
+    if (previousActiveCaseId) {
+      changedIds.add(previousActiveCaseId);
+    }
+
+    if (activeCaseId) {
+      changedIds.add(activeCaseId);
+    }
+
+    for (const idCase of previousSelectedCaseIds) {
+      changedIds.add(idCase);
+    }
+
+    for (const idCase of nextSelectedCaseIds) {
+      changedIds.add(idCase);
+    }
+
+    for (const idCase of changedIds) {
+      source.getFeatureById(idCase)?.changed();
+    }
   }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {

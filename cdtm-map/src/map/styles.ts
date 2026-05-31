@@ -521,7 +521,13 @@ export function getCaseStyle({
   const cached = styleCache.get(cacheKey);
 
   if (cached) {
-    const overlayStyles = getCaseOverlayStyles(resolved, properties, zIndex);
+    const overlayStyles = getCaseOverlayStyles(
+      resolved,
+      properties,
+      styles,
+      displayMode,
+      zIndex,
+    );
     return overlayStyles.length > 0 ? [cached, ...overlayStyles] : cached;
   }
 
@@ -537,13 +543,21 @@ export function getCaseStyle({
   });
 
   styleCache.set(cacheKey, style);
-  const overlayStyles = getCaseOverlayStyles(resolved, properties, zIndex);
+  const overlayStyles = getCaseOverlayStyles(
+    resolved,
+    properties,
+    styles,
+    displayMode,
+    zIndex,
+  );
   return overlayStyles.length > 0 ? [style, ...overlayStyles] : style;
 }
 
 function getCaseOverlayStyles(
   resolved: ResolvedStyle | null,
   properties: StableCaseProperties | null,
+  styles: PublicMapStyles,
+  displayMode: MapDisplayMode,
   baseZIndex: number,
 ): Style[] {
   const overlays: Style[] = [];
@@ -558,11 +572,12 @@ function getCaseOverlayStyles(
     );
   }
 
-  if (properties?.colline === true) {
+  if (displayMode === "topographic" && properties?.colline === true) {
+    const hillStyle = getStyleForTarget(styles, "case_attribute", "colline");
     overlays.push(
       getPatternOverlayStyle(
-        HILL_PATTERN_TYPE,
-        HILL_PATTERN_COLOR,
+        hillStyle?.pattern_type ?? HILL_PATTERN_TYPE,
+        hillStyle?.pattern_color ?? HILL_PATTERN_COLOR,
         baseZIndex + 0.2,
       ),
     );

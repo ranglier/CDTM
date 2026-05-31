@@ -28,6 +28,7 @@ Le champ fonctionnel attendu pour le peuple de la case est `case_control_current
 
 Les attributs geographiques V1 stockes sur les cases sont `cote`, `lac`, `fluvial` et `colline`.
 `colline` est un booleen de `case_terrain_current`; le champ `relief` ne porte plus la logique de colline.
+Le motif cartographique des collines est pilote par `reference_styles` avec la cible `case_attribute:colline`.
 
 Les emplacements V1 sont recalcules depuis :
 

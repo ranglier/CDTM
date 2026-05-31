@@ -274,11 +274,12 @@ export function TechnicalAdminPage() {
           supportsTerrainParentSelect: true,
         },
         {
-          id: "nomenclatures:relief",
+          id: "nomenclatures:case_attribute",
           tableKey: "nomenclatures",
-          title: "Reliefs legacy",
-          groupKey: "relief",
-          rowCount: nomenclatureGroupCounts.relief ?? 0,
+          title: "Attributs de case",
+          groupKey: "case_attribute",
+          rowCount: nomenclatureGroupCounts.case_attribute ?? 0,
+          styleTargetType: "case_attribute",
         },
       ],
     });

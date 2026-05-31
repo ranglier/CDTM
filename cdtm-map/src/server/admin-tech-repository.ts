@@ -48,7 +48,7 @@ const MAP_STYLE_TARGET_TYPES: MapStyleTargetType[] = [
   "faction",
   "controleur",
   "terrain_type",
-  "relief",
+  "case_attribute",
 ];
 
 function assertSafeSqlIdentifier(identifier: string): string {
@@ -231,7 +231,7 @@ function getReferenceStyleTargetType(
 
     if (
       normalizedGroupKey === "terrain_type" ||
-      normalizedGroupKey === "relief"
+      normalizedGroupKey === "case_attribute"
     ) {
       return normalizedGroupKey;
     }
@@ -1021,7 +1021,6 @@ export async function getStaticAdminReferenceData(
     const [
       terrainCategories,
       terrainTypeRows,
-      reliefOptions,
       bonusContextuelRows,
       peupleOptions,
       factionOptions,
@@ -1041,7 +1040,6 @@ export async function getStaticAdminReferenceData(
             ORDER BY LOWER(COALESCE(label, entry_key)) ASC, entry_key ASC
           `,
       ),
-      listReferenceOptionsInternal(client, "nomenclatures", "relief"),
       client.query<{
         slug: string;
         label: string | null;
@@ -1079,7 +1077,7 @@ export async function getStaticAdminReferenceData(
     return {
       terrain_categories: terrainCategories,
       terrain_types_by_category: terrainTypesByCategory,
-      relief_options: reliefOptions,
+      relief_options: [],
       bonus_contextuel_options: bonusContextuelRows.rows.map((row) => ({
         slug: row.slug,
         label: row.label?.trim().length ? row.label : row.slug,
@@ -1987,7 +1985,6 @@ export async function validateStaticAdminDraftSelections(
   const terrainSecondaire = normalizeNullableText(
     draft.terrain.terrain_secondaire,
   );
-  const relief = normalizeNullableText(draft.terrain.relief);
   const peuple = normalizeNullableText(draft.control.peuple);
   const faction = normalizeNullableText(draft.control.faction);
   const controleur = normalizeNullableText(draft.control.controleur);
@@ -2019,10 +2016,6 @@ export async function validateStaticAdminDraftSelections(
     )
   ) {
     throw new Error("La valeur du champ terrain_secondaire est invalide.");
-  }
-
-  if (!isAllowedOption(referenceData.relief_options, relief)) {
-    throw new Error("La valeur du champ relief est invalide.");
   }
 
   if (!isAllowedOption(referenceData.peuple_options, peuple)) {
@@ -2099,17 +2092,6 @@ export async function validateStaticBulkPatchSelections(
       )
     ) {
       throw new Error("La valeur du champ terrain_secondaire est invalide.");
-    }
-  }
-
-  if (patch.terrain?.relief !== undefined) {
-    if (
-      !isAllowedOption(
-        referenceData.relief_options,
-        patch.terrain.relief ?? null,
-      )
-    ) {
-      throw new Error("La valeur du champ relief est invalide.");
     }
   }
 

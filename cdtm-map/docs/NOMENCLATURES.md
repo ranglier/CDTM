@@ -6,6 +6,7 @@ La table technique unique est `reference_nomenclature_values`, mais l'interface 
 
 - `terrain_cat`
 - `terrain_type`
+- `case_attribute`
 - `controle_type`
 - `localite_niveau`
 - `localite_type`
@@ -23,7 +24,7 @@ Les notions suivantes ont leur propre referentiel et ne doivent plus vivre dans 
 
 Le groupe `terrain_type` peut utiliser `parent_entry_key` pour rattacher un type a une categorie de terrain.
 
-`relief` ne porte plus de logique de regles V1. Il peut subsister comme heritage visuel ou donnees historiques, mais le mode topographique public s'appuie sur `terrain_type` et l'attribut `colline`.
+Le groupe `case_attribute` expose les attributs stylables de case. En V1, il contient `colline` pour permettre le choix du motif topographique applique aux cases en colline.
 
 ## Supprime
 
@@ -34,3 +35,4 @@ Les groupes suivants ne doivent plus etre consideres comme actifs :
 - `bonus_special`
 - `visibilite`
 - `statut_note`
+- `relief`
