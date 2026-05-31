@@ -3969,7 +3969,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           aria-label="Carte editeur"
         />
       </div>
-      <aside className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]">
+      <aside
+        className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+        onPointerEnter={() => setHoverInfo(null)}
+      >
         <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>
         <form
           className="mt-4 flex flex-wrap gap-2"

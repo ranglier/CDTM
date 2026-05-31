@@ -25,6 +25,7 @@ type CaseInfoPanelProps = {
   searchOptions: MapSearchTarget[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
+  onPanelPointerEnter?: () => void;
 };
 
 const fieldClassName =
@@ -217,7 +218,7 @@ function SectionTitle({ title }: { title: string }) {
   return <h3 className="text-xl font-semibold text-foreground">{title}</h3>;
 }
 
-function AdminSearchBox({
+function MapSearchBox({
   searchValue,
   searchError,
   searchOptions,
@@ -283,13 +284,11 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     searchOptions,
     onSearchValueChange,
     onSearchSubmit,
+    onPanelPointerEnter,
   } = props;
 
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
-  const dynamicSections = !isMultiSelection
-    ? (activeAdminRecord?.dynamic_sections ?? [])
-    : [];
   const slotDetails =
     adminModeEnabled && !isMultiSelection && activeAdminRecord ? (
       <SlotCalculationDetails calculation={activeAdminRecord.emplacements} />
@@ -310,8 +309,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
       label: "Case active",
       value: activeCase?.id_case ?? "Aucune",
     },
-  ];
-  const localizationRows = [
     {
       label: "Region",
       value: summarizeStrings(selectedCases.map((item) => item.region)),
@@ -319,18 +316,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     {
       label: "Sous-region",
       value: summarizeStrings(selectedCases.map((item) => item.sous_region)),
-    },
-    {
-      label: "Cote",
-      value: summarizeBooleans(selectedCases.map((item) => item.cote)),
-    },
-    {
-      label: "Lac",
-      value: summarizeBooleans(selectedCases.map((item) => item.lac)),
-    },
-    {
-      label: "Fluvial",
-      value: summarizeBooleans(selectedCases.map((item) => item.fluvial)),
     },
   ];
   const terrainRows = [
@@ -376,47 +361,21 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
       ),
     },
   ];
-  const visibleDynamicSections = dynamicSections
-    .map((section) => ({
-      ...section,
-      rows: section.fields
-        .map((field) => {
-          const rawValue = section.values[field.field_key];
-          const value =
-            rawValue === null || rawValue === undefined
-              ? "Non renseigne"
-              : typeof rawValue === "boolean"
-                ? rawValue
-                  ? "Oui"
-                  : "Non"
-                : String(rawValue);
-
-          return {
-            label: field.label,
-            value,
-          };
-        })
-        .filter((row) => !isDisplayValueEmpty(row.value)),
-    }))
-    .filter((section) => section.rows.length > 0);
-
   return (
-    <aside aria-live="polite">
+    <aside aria-live="polite" onPointerEnter={onPanelPointerEnter}>
       <SectionPanel className="flex h-full flex-col">
         <div className="flex flex-1 flex-col p-5 sm:p-6">
           <header className="space-y-4">
             <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
               Informations de case
             </h2>
-            {adminModeEnabled ? (
-              <AdminSearchBox
-                searchValue={searchValue}
-                searchError={searchError}
-                searchOptions={searchOptions}
-                onSearchValueChange={onSearchValueChange}
-                onSearchSubmit={onSearchSubmit}
-              />
-            ) : null}
+            <MapSearchBox
+              searchValue={searchValue}
+              searchError={searchError}
+              searchOptions={searchOptions}
+              onSearchValueChange={onSearchValueChange}
+              onSearchSubmit={onSearchSubmit}
+            />
             {adminModeEnabled && hasSelection ? (
               <div className="rounded-[22px] border border-primary/25 bg-primary/8 p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -472,21 +431,11 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
           ) : (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Identite" />
+                <SectionTitle title="Case" />
                 <div className="mt-4">
                   <CompactInfoList
                     rows={identityRows}
                     emptyMessage="Aucune case selectionnee."
-                  />
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Localisation" />
-                <div className="mt-4">
-                  <CompactInfoList
-                    rows={localizationRows}
-                    emptyMessage="Aucune donnee de localisation renseignee."
                   />
                 </div>
               </section>
@@ -523,39 +472,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   </div>
                 </section>
               ) : null}
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Donnees personnalisees" />
-                <div className="mt-4 space-y-4">
-                  {visibleDynamicSections.length === 0 ? (
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Aucune donnee complementaire renseignee.
-                    </p>
-                  ) : (
-                    visibleDynamicSections.map((section) => (
-                      <div
-                        key={section.table_key}
-                        className="rounded-[18px] border border-border/60 bg-background/30 p-4"
-                      >
-                        <p className="text-sm font-semibold text-foreground">
-                          {section.title}
-                        </p>
-                        {section.description ? (
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                            {section.description}
-                          </p>
-                        ) : null}
-                        <div className="mt-3">
-                          <CompactInfoList
-                            rows={section.rows}
-                            emptyMessage="Aucune donnee complementaire renseignee."
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
             </div>
           )}
         </div>

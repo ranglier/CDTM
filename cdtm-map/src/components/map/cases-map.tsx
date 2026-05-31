@@ -78,6 +78,7 @@ type CasesMapProps = {
   focusRequest: number;
   focusSearchTarget: MapSearchTarget | null;
   focusSearchRequest: number;
+  clearHoverRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
@@ -123,6 +124,7 @@ export function CasesMap({
   focusRequest,
   focusSearchTarget,
   focusSearchRequest,
+  clearHoverRequest,
   casesVisible,
   panelVisible,
   onDisplayModeChange,
@@ -352,6 +354,16 @@ export function CasesMap({
       cancelAnimationFrame(frame);
     };
   }, [displayMode]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setHoverInfo(null);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [clearHoverRequest]);
 
   useEffect(() => {
     const previousActiveCaseId = activeCaseIdRef.current;

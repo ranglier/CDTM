@@ -113,6 +113,7 @@ export default function HomePage() {
   const [focusSearchTarget, setFocusSearchTarget] =
     useState<MapSearchTarget | null>(null);
   const [focusSearchRequest, setFocusSearchRequest] = useState(0);
+  const [clearMapHoverRequest, setClearMapHoverRequest] = useState(0);
   const [publicObjects, setPublicObjects] =
     useState<PublicMapObjectsResponse | null>(null);
   const [adminSession, setAdminSession] = useState<AdminSession>(
@@ -577,6 +578,7 @@ export default function HomePage() {
           focusRequest={focusRequest}
           focusSearchTarget={focusSearchTarget}
           focusSearchRequest={focusSearchRequest}
+          clearHoverRequest={clearMapHoverRequest}
           casesVisible={casesVisible}
           panelVisible={panelVisible}
           onDisplayModeChange={handleDisplayModeChange}
@@ -606,6 +608,9 @@ export default function HomePage() {
               setSearchError(null);
             }}
             onSearchSubmit={handleSearchSubmit}
+            onPanelPointerEnter={() =>
+              setClearMapHoverRequest((value) => value + 1)
+            }
           />
         ) : null}
       </section>
