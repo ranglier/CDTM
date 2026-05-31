@@ -2563,12 +2563,15 @@ export function EditorMapCanvas() {
   return (
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
-        <div className="pointer-events-none absolute inset-x-4 top-4 z-20">
+        <div className="pointer-events-none absolute right-4 top-4 z-20 w-[min(46rem,calc(100vw-7rem))]">
           <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
             <div className="flex flex-wrap items-center gap-2">
               <details className="group relative">
-                <summary className="flex h-9 cursor-pointer list-none items-center rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-                  Filtres
+                <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+                  <span>Filtres</span>
+                  <span className="text-xs text-muted-foreground transition group-open:rotate-180">
+                    ▾
+                  </span>
                 </summary>
                 <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
                   <div className="flex flex-col gap-2">
