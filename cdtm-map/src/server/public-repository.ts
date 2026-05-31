@@ -275,7 +275,7 @@ async function listPublicRoutes(): Promise<PublicMapRoute[]> {
         id_route AS id,
         name,
         route_type,
-        points AS points_json,
+        points_json,
         geometry_mode,
         stroke_style,
         stroke_width,

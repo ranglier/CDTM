@@ -9,6 +9,7 @@ type MapToolbarProps = {
   localitiesVisible: boolean;
   landmarksVisible: boolean;
   routesVisible: boolean;
+  objectDisplayMode: "icons" | "points";
   panelVisible: boolean;
   displayMode: MapDisplayMode;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
@@ -16,6 +17,7 @@ type MapToolbarProps = {
   onToggleLocalities: () => void;
   onToggleLandmarks: () => void;
   onToggleRoutes: () => void;
+  onToggleObjectDisplayMode: () => void;
   onToggleAllObjects: () => void;
   onTogglePanel: () => void;
 };
@@ -25,6 +27,7 @@ export function MapToolbar({
   localitiesVisible,
   landmarksVisible,
   routesVisible,
+  objectDisplayMode,
   panelVisible,
   displayMode,
   onDisplayModeChange,
@@ -32,6 +35,7 @@ export function MapToolbar({
   onToggleLocalities,
   onToggleLandmarks,
   onToggleRoutes,
+  onToggleObjectDisplayMode,
   onToggleAllObjects,
   onTogglePanel,
 }: MapToolbarProps) {
@@ -131,6 +135,14 @@ export function MapToolbar({
           </div>
         </div>
       </details>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onToggleObjectDisplayMode}
+      >
+        {objectDisplayMode === "icons" ? "Objets : icones" : "Objets : points"}
+      </Button>
       <Separator orientation="vertical" className="mx-1 h-6" />
       <Button
         type="button"

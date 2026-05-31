@@ -97,6 +97,8 @@ type HoverInfo = {
   }>;
 };
 
+type PublicObjectDisplayMode = "icons" | "points";
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
 
@@ -156,12 +158,15 @@ export function CasesMap({
   const landmarkCategoryByTypeRef = useRef<
     Record<string, "landmark" | "unique" | null>
   >({});
+  const objectDisplayModeRef = useRef<PublicObjectDisplayMode>("icons");
   const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
   const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
   const [routesVisible, setRoutesVisible] = useState(true);
+  const [objectDisplayMode, setObjectDisplayMode] =
+    useState<PublicObjectDisplayMode>("icons");
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const view = useMemo(() => createCdtmView(), []);
@@ -312,6 +317,11 @@ export function CasesMap({
   }, [landmarksVisible, localitiesVisible, routesVisible]);
 
   useEffect(() => {
+    objectDisplayModeRef.current = objectDisplayMode;
+    pointsLayerRef.current?.changed();
+  }, [objectDisplayMode]);
+
+  useEffect(() => {
     const map = mapRef.current;
 
     if (!map) {
@@ -367,6 +377,7 @@ export function CasesMap({
           landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
         getLandmarkTypeCategory: (typeKey) =>
           landmarkCategoryByTypeRef.current[typeKey] ?? null,
+        getDisplayMode: () => objectDisplayModeRef.current,
         isFamilyVisible: (family) =>
           family === "locality"
             ? localitiesVisibleRef.current
@@ -763,6 +774,7 @@ export function CasesMap({
             localitiesVisible={localitiesVisible}
             landmarksVisible={landmarksVisible}
             routesVisible={routesVisible}
+            objectDisplayMode={objectDisplayMode}
             panelVisible={panelVisible}
             displayMode={displayMode}
             onDisplayModeChange={onDisplayModeChange}
@@ -770,6 +782,9 @@ export function CasesMap({
             onToggleLocalities={() => setLocalitiesVisible((visible) => !visible)}
             onToggleLandmarks={() => setLandmarksVisible((visible) => !visible)}
             onToggleRoutes={() => setRoutesVisible((visible) => !visible)}
+            onToggleObjectDisplayMode={() =>
+              setObjectDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
+            }
             onToggleAllObjects={() => {
               const nextVisible = !(localitiesVisible || landmarksVisible || routesVisible);
               setLocalitiesVisible(nextVisible);
