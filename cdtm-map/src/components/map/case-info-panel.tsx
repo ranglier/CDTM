@@ -5,6 +5,7 @@ import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { SlotCalculationResult } from "@/map/rules";
+import type { MapSearchTarget } from "@/map/search";
 import type { StableCaseProperties } from "@/map/types";
 
 type CaseInfoPanelProps = {
@@ -21,7 +22,7 @@ type CaseInfoPanelProps = {
   editorHref?: string | null;
   searchValue: string;
   searchError: string | null;
-  availableCaseIds: string[];
+  searchOptions: MapSearchTarget[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
 };
@@ -219,13 +220,13 @@ function SectionTitle({ title }: { title: string }) {
 function AdminSearchBox({
   searchValue,
   searchError,
-  availableCaseIds,
+  searchOptions,
   onSearchValueChange,
   onSearchSubmit,
 }: {
   searchValue: string;
   searchError: string | null;
-  availableCaseIds: string[];
+  searchOptions: MapSearchTarget[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
 }) {
@@ -244,13 +245,13 @@ function AdminSearchBox({
         <input
           list="case-id-list"
           className={fieldClassName}
-          placeholder="Aller a une case"
+          placeholder="Rechercher une case ou un objet"
           value={searchValue}
           onChange={(event) => onSearchValueChange(event.target.value)}
         />
         <datalist id="case-id-list">
-          {availableCaseIds.map((caseId) => (
-            <option key={caseId} value={caseId} />
+          {searchOptions.map((option) => (
+            <option key={`${option.kind}:${option.id}`} value={option.value} />
           ))}
         </datalist>
         <Button type="submit" variant="outline">
@@ -279,7 +280,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     editorHref,
     searchValue,
     searchError,
-    availableCaseIds,
+    searchOptions,
     onSearchValueChange,
     onSearchSubmit,
   } = props;
@@ -411,7 +412,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               <AdminSearchBox
                 searchValue={searchValue}
                 searchError={searchError}
-                availableCaseIds={availableCaseIds}
+                searchOptions={searchOptions}
                 onSearchValueChange={onSearchValueChange}
                 onSearchSubmit={onSearchSubmit}
               />

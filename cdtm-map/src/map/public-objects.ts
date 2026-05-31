@@ -158,7 +158,9 @@ export function toRenderablePublicLandmarks(
   }));
 }
 
-export function toRenderablePublicRoutes(routes: PublicMapRoute[]): EditorMapRoute[] {
+export function toRenderablePublicRoutes(
+  routes: PublicMapRoute[],
+): EditorMapRoute[] {
   return routes.map((route) => ({
     id_route: route.id,
     name: route.name,
@@ -183,7 +185,10 @@ export function buildPublicLocalityHoverRows(
   return [
     locality.type_label ? { label: "Type", value: locality.type_label } : null,
     shortenDescription(locality.description)
-      ? { label: "Description", value: shortenDescription(locality.description)! }
+      ? {
+          label: "Description",
+          value: shortenDescription(locality.description)!,
+        }
       : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 }
@@ -191,18 +196,7 @@ export function buildPublicLocalityHoverRows(
 export function buildPublicLandmarkHoverRows(
   landmark: PublicMapLandmark,
 ): Array<{ label: string; value: string }> {
-  return [
-    landmark.type_label ? { label: "Type", value: landmark.type_label } : null,
-    landmark.category
-      ? {
-          label: "Categorie",
-          value: landmark.category === "unique" ? "Lieu unique" : "Landmark",
-        }
-      : null,
-    shortenDescription(landmark.description)
-      ? { label: "Description", value: shortenDescription(landmark.description)! }
-      : null,
-  ].filter((row): row is { label: string; value: string } => row !== null);
+  return [{ label: "Type", value: landmark.type_label ?? landmark.type_key }];
 }
 
 export function buildPublicRouteHoverRows(

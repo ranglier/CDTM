@@ -60,6 +60,7 @@ import {
   mergeStableCases,
 } from "@/map/case-data";
 import { buildCaseHoverRows } from "@/map/case-hover";
+import { MAP_MAX_ZOOM } from "@/map/config";
 import {
   createCasesVectorLayer,
   createCasesVectorSource,
@@ -116,6 +117,11 @@ import {
   type StableCaseProperties,
 } from "@/map/types";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
+import {
+  buildCaseSearchTargets,
+  buildEditorObjectSearchTargets,
+  resolveMapSearchTarget,
+} from "@/map/search";
 
 type HoverInfo = {
   x: number;
@@ -354,10 +360,6 @@ function getLocalityUpgradeDependencyOptions({
     .filter((locality) => locality.status !== "archived")
     .filter((locality) => locality.type_key === upgradedTypeKey)
     .sort((left, right) => left.name.localeCompare(right.name, "fr"));
-}
-
-function getLandmarkCategoryLabel(category: string | null | undefined): string {
-  return category === "unique" ? "Lieu unique" : "Landmark";
 }
 
 function getRouteGeometryLabel(
@@ -644,6 +646,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [casesError, setCasesError] = useState<string | null>(null);
   const [, setCasesLoading] = useState(false);
   const [routesVisible, setRoutesVisible] = useState(true);
+  const [routes, setRoutes] = useState<EditorMapRoute[]>([]);
   const [, setRoutesCount] = useState<number | null>(null);
   const [, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState<string | null>(null);
@@ -653,6 +656,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [, setLocalitiesLoading] = useState(false);
   const [localitiesError, setLocalitiesError] = useState<string | null>(null);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
+  const [landmarks, setLandmarks] = useState<EditorMapLandmark[]>([]);
   const [, setLandmarksCount] = useState<number | null>(null);
   const [, setLandmarksLoading] = useState(false);
   const [landmarksError, setLandmarksError] = useState<string | null>(null);
@@ -663,6 +667,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     useState<LocalityDisplayMode>("icons");
   const [mapDisplayMode, setMapDisplayMode] =
     useState<MapDisplayMode>("influence");
+  const [searchValue, setSearchValue] = useState("");
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
@@ -771,6 +777,17 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         stableCases.map((item) => [getRegistryCaseId(item), item]),
       ),
     [stableCases],
+  );
+  const searchOptions = useMemo(
+    () => [
+      ...buildCaseSearchTargets(stableCases),
+      ...buildEditorObjectSearchTargets({
+        localities,
+        landmarks,
+        routes,
+      }),
+    ],
+    [landmarks, localities, routes, stableCases],
   );
   const activeCase = useMemo(
     () => (activeCaseId ? (stableCasesById.get(activeCaseId) ?? null) : null),
@@ -1298,6 +1315,67 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     [applyCaseSelectionState, confirmDiscardCaseChanges],
   );
 
+  const focusCaseById = useCallback((idCase: string, duration = 250) => {
+    const source = casesSourceRef.current;
+    const map = mapRef.current;
+
+    if (!source || !map) {
+      return;
+    }
+
+    const feature = source.getFeatureById(idCase);
+    const geometry = feature?.getGeometry();
+
+    if (!geometry) {
+      return;
+    }
+
+    map.getView().fit(geometry.getExtent(), {
+      duration,
+      padding: [70, 70, 70, 70],
+      maxZoom: MAP_MAX_ZOOM,
+    });
+  }, []);
+
+  const focusPoint = useCallback((x: number, y: number, duration = 250) => {
+    const map = mapRef.current;
+
+    if (!map) {
+      return;
+    }
+
+    map.getView().fit([x - 20, y - 20, x + 20, y + 20], {
+      duration,
+      padding: [80, 80, 80, 80],
+      maxZoom: MAP_MAX_ZOOM,
+    });
+  }, []);
+
+  const focusRoute = useCallback(
+    (points: Array<[number, number]>, duration = 250) => {
+      const map = mapRef.current;
+
+      if (!map || points.length === 0) {
+        return;
+      }
+
+      const xs = points.map(([x]) => x);
+      const ys = points.map(([, y]) => y);
+
+      map
+        .getView()
+        .fit(
+          [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+          {
+            duration,
+            padding: [80, 80, 80, 80],
+            maxZoom: MAP_MAX_ZOOM,
+          },
+        );
+    },
+    [],
+  );
+
   function handleToolChangeBlockedByRouteGeometry(): boolean {
     if (!routeGeometryDraft) {
       return false;
@@ -1426,6 +1504,75 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       handleCloseRouteGeometryEdit,
     ],
   );
+
+  const handleSearchSubmit = useCallback(() => {
+    const searchTarget = resolveMapSearchTarget(searchOptions, searchValue);
+
+    if (!searchTarget) {
+      setSearchError("Aucune case ou objet ne correspond a cette recherche.");
+      return;
+    }
+
+    setSearchValue(searchTarget.value);
+    setSearchError(null);
+
+    if (searchTarget.kind === "case") {
+      setCasesVisible(true);
+      handleCaseSelectionChange(searchTarget.id, "replace");
+      focusCaseById(searchTarget.id);
+      return;
+    }
+
+    if (searchTarget.kind === "locality") {
+      const locality = localities.find(
+        (item) => item.id_locality === searchTarget.id,
+      );
+
+      setLocalitiesVisible(true);
+      focusPoint(searchTarget.x, searchTarget.y);
+
+      if (locality) {
+        selectLocality(locality);
+      }
+      return;
+    }
+
+    if (searchTarget.kind === "landmark") {
+      const landmark = landmarks.find(
+        (item) => item.id_landmark === searchTarget.id,
+      );
+
+      setLandmarksVisible(true);
+      focusPoint(searchTarget.x, searchTarget.y);
+
+      if (landmark) {
+        selectLandmark(landmark);
+      }
+      return;
+    }
+
+    const route = routes.find((item) => item.id_route === searchTarget.id);
+
+    setRoutesVisible(true);
+    focusRoute(searchTarget.points);
+
+    if (route) {
+      selectRoute(route);
+    }
+  }, [
+    focusCaseById,
+    focusPoint,
+    focusRoute,
+    handleCaseSelectionChange,
+    landmarks,
+    localities,
+    routes,
+    searchOptions,
+    searchValue,
+    selectLandmark,
+    selectLocality,
+    selectRoute,
+  ]);
 
   const detectCaseIdAtCoordinate = useCallback(
     (map: Map | null, coordinate: [number, number]): string | null => {
@@ -1719,7 +1866,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       },
       {
         visible: casesVisibleRef.current,
-        fallbackWhenUnstyled: true,
       },
     );
     const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
@@ -2290,26 +2436,17 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               const typeOption = referenceDataRef.current?.landmark_types.find(
                 (option) => option.value === landmark.type_key,
               );
-              const category =
-                typeOption?.category ??
-                landmarkCategoryByTypeRef.current[landmark.type_key] ??
-                null;
               target.style.cursor = "pointer";
               const position = getTooltipPosition(event.originalEvent);
               setHoverInfo({
                 x: position.x,
                 y: position.y,
-                title: landmark.name,
+                title: "Landmark",
                 rows: [
                   {
                     label: "Type",
                     value: typeOption?.label ?? landmark.type_key,
                   },
-                  {
-                    label: "Categorie",
-                    value: getLandmarkCategoryLabel(category),
-                  },
-                  { label: "Statut", value: landmark.status },
                 ].filter(
                   (row): row is { label: string; value: string } =>
                     row !== null,
@@ -2540,6 +2677,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         }
 
         replaceEditorRouteFeatures(routesSourceRef.current, items);
+        setRoutes(items);
         setRoutesCount(items.length);
       } catch (error) {
         if (cancelled) {
@@ -2550,6 +2688,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           "Impossible de charger les routes dans l'editeur.",
           error,
         );
+        setRoutes([]);
         setRoutesCount(0);
         setRoutesError(
           error instanceof Error
@@ -2632,6 +2771,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           localities: localityFeatures,
           landmarks: items,
         });
+        setLandmarks(items);
         setLandmarksCount(items.length);
       } catch (error) {
         if (cancelled) {
@@ -2642,6 +2782,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           "Impossible de charger les landmarks dans l'editeur.",
           error,
         );
+        setLandmarks([]);
         setLandmarksCount(0);
         setLandmarksError(
           error instanceof Error
@@ -3104,6 +3245,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         }
 
         setLandmarksCount((count) => (count === null ? 1 : count + 1));
+        setLandmarks((items) => [...items, created]);
         selectLandmark(created);
       }
 
@@ -3248,6 +3390,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
       const nextDraft = createLandmarkEditDraft(updated);
 
+      setLandmarks((items) =>
+        items.map((item) =>
+          item.id_landmark === updated.id_landmark ? updated : item,
+        ),
+      );
       setSelectedLandmark(updated);
       setLandmarkEditDraft(nextDraft);
       setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
@@ -3328,6 +3475,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       }
 
       setRoutesCount((count) => (count === null ? 1 : count + 1));
+      setRoutes((items) => [...items, created]);
       setRouteDraft(null);
       setEditorTool("select");
       if (routePreviewSourceRef.current) {
@@ -3396,6 +3544,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
       const nextDraft = createRouteEditDraft(updated);
 
+      setRoutes((items) =>
+        items.map((item) =>
+          item.id_route === updated.id_route ? updated : item,
+        ),
+      );
       setSelectedRoute(updated);
       setRouteEditDraft(nextDraft);
       setRouteEditSnapshot(getRouteEditSnapshot(nextDraft));
@@ -3484,6 +3637,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           ? getRouteEditSnapshot(routeEditDraft) !== routeEditSnapshot
           : false;
 
+      setRoutes((items) =>
+        items.map((item) =>
+          item.id_route === updated.id_route ? updated : item,
+        ),
+      );
       setSelectedRoute(updated);
       if (!routeDraftIsDirty) {
         const nextDraft = createRouteEditDraft(updated);
@@ -3813,6 +3971,38 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       </div>
       <aside className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]">
         <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>
+        <form
+          className="mt-4 flex flex-wrap gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSearchSubmit();
+          }}
+        >
+          <input
+            list="editor-map-search-options"
+            value={searchValue}
+            onChange={(event) => {
+              setSearchValue(event.target.value);
+              setSearchError(null);
+            }}
+            placeholder="Rechercher une case ou un objet"
+            className="h-10 min-w-0 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+          />
+          <datalist id="editor-map-search-options">
+            {searchOptions.map((option) => (
+              <option
+                key={`${option.kind}:${option.id}`}
+                value={option.value}
+              />
+            ))}
+          </datalist>
+          <Button type="submit" size="sm" variant="outline">
+            Rechercher
+          </Button>
+        </form>
+        {searchError ? (
+          <p className="mt-2 text-xs text-destructive">{searchError}</p>
+        ) : null}
         {localityEditDirty || landmarkEditDirty ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Enregistrez ou annulez les modifications avant de deplacer le point.

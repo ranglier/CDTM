@@ -88,7 +88,11 @@ function drawDiagonalPattern(
   context: CanvasRenderingContext2D,
   reverse = false,
 ) {
-  for (let offset = -PATTERN_TILE_SIZE; offset <= PATTERN_TILE_SIZE * 2; offset += PATTERN_STEP) {
+  for (
+    let offset = -PATTERN_TILE_SIZE;
+    offset <= PATTERN_TILE_SIZE * 2;
+    offset += PATTERN_STEP
+  ) {
     if (reverse) {
       context.moveTo(offset, 0);
       context.lineTo(offset + PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
@@ -123,7 +127,8 @@ function createCanvasPattern(
   }
 
   const normalizedFill = normalizeHexColor(fill);
-  const normalizedPatternColor = normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
+  const normalizedPatternColor =
+    normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
   const cacheKey = `${normalizedFill ?? "transparent"}|${patternType}|${normalizedPatternColor}`;
   const cached = patternCache.get(cacheKey);
 
@@ -205,7 +210,11 @@ function buildBaseFill(
     return DEFAULT_FILL;
   }
 
-  const pattern = createCanvasPattern(style.fill, style.pattern_type, style.pattern_color);
+  const pattern = createCanvasPattern(
+    style.fill,
+    style.pattern_type,
+    style.pattern_color,
+  );
 
   if (pattern) {
     return pattern;
@@ -242,22 +251,48 @@ export function getCaseStyle({
   styles,
 }: CaseStyleOptions): Style {
   const resolved = resolveBaseStyle(displayMode, properties, styles);
+  const isUnstyled = resolved === null;
   const baseStrokeColor = resolved?.stroke ?? DEFAULT_STROKE;
 
   const strokeColor =
     selectionState === "active"
-      ? "rgba(220, 193, 130, 0.98)"
+      ? isUnstyled
+        ? "rgba(255, 228, 145, 1)"
+        : "rgba(220, 193, 130, 0.98)"
       : selectionState === "selected"
-        ? "rgba(174, 150, 98, 0.92)"
+        ? isUnstyled
+          ? "rgba(240, 210, 140, 0.94)"
+          : "rgba(174, 150, 98, 0.92)"
         : baseStrokeColor;
 
   const strokeWidth =
-    selectionState === "active" ? 2.2 : selectionState === "selected" ? 1.9 : DEFAULT_STROKE_WIDTH;
+    selectionState === "active"
+      ? isUnstyled
+        ? 3
+        : 2.2
+      : selectionState === "selected"
+        ? isUnstyled
+          ? 2.2
+          : 1.9
+        : DEFAULT_STROKE_WIDTH;
 
-  const fillColorWithSelection: string | CanvasPattern = buildBaseFill(displayMode, resolved);
+  const fillColorWithSelection: string | CanvasPattern =
+    selectionState === "active" && isUnstyled
+      ? "rgba(220, 193, 130, 0.24)"
+      : selectionState === "selected" && isUnstyled
+        ? "rgba(220, 193, 130, 0.16)"
+        : buildBaseFill(displayMode, resolved);
 
-  const zIndex = selectionState === "active" ? 10 : selectionState === "selected" ? 8 : 1;
-  const cacheKey = buildCacheKey(displayMode, selectionState, resolved, strokeColor, strokeWidth, zIndex);
+  const zIndex =
+    selectionState === "active" ? 10 : selectionState === "selected" ? 8 : 1;
+  const cacheKey = buildCacheKey(
+    displayMode,
+    selectionState,
+    resolved,
+    strokeColor,
+    strokeWidth,
+    zIndex,
+  );
   const cached = styleCache.get(cacheKey);
 
   if (cached) {

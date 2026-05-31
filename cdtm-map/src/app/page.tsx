@@ -20,6 +20,13 @@ import { CaseInfoPanel } from "@/components/map/case-info-panel";
 import { CasesMap } from "@/components/map/cases-map";
 import { loadJsonData } from "@/data/loaders";
 import { getRegistryCaseId } from "@/map/case-data";
+import type { PublicMapObjectsResponse } from "@/map/public-objects";
+import {
+  buildCaseSearchTargets,
+  buildPublicObjectSearchTargets,
+  resolveMapSearchTarget,
+  type MapSearchTarget,
+} from "@/map/search";
 import {
   CASES_DATA_URL,
   type CaseSelectionIntent,
@@ -103,6 +110,11 @@ export default function HomePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [focusCaseId, setFocusCaseId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [focusSearchTarget, setFocusSearchTarget] =
+    useState<MapSearchTarget | null>(null);
+  const [focusSearchRequest, setFocusSearchRequest] = useState(0);
+  const [publicObjects, setPublicObjects] =
+    useState<PublicMapObjectsResponse | null>(null);
   const [adminSession, setAdminSession] = useState<AdminSession>(
     createLoggedOutSession(),
   );
@@ -129,9 +141,16 @@ export default function HomePage() {
       ) as Record<string, StableCaseProperties>,
     [stableCases],
   );
-  const availableCaseIds = useMemo(
-    () => stableCases.map((item) => item.id_case),
-    [stableCases],
+  const searchOptions = useMemo(
+    () => [
+      ...buildCaseSearchTargets(stableCases),
+      ...buildPublicObjectSearchTargets({
+        localities: publicObjects?.localities ?? [],
+        landmarks: publicObjects?.landmarks ?? [],
+        routes: publicObjects?.routes ?? [],
+      }),
+    ],
+    [publicObjects, stableCases],
   );
   const activeCase = useMemo(
     () => (activeCaseId ? (stableCasesById.get(activeCaseId) ?? null) : null),
@@ -235,10 +254,35 @@ export default function HomePage() {
 
   const focusOnCase = useCallback(
     (query: string) => {
-      const stableCase = resolveCaseSearchMatch(stableCases, query);
+      const searchTarget = resolveMapSearchTarget(searchOptions, query);
+      const stableCase =
+        searchTarget?.kind === "case"
+          ? (stableCasesById.get(searchTarget.id) ?? null)
+          : resolveCaseSearchMatch(stableCases, query);
+
+      if (searchTarget && searchTarget.kind !== "case") {
+        setCasesVisible(true);
+        setPanelVisible(true);
+        setSearchValue(searchTarget.value);
+        setSearchError(null);
+        setFocusSearchTarget(searchTarget);
+        setFocusSearchRequest((value) => value + 1);
+
+        if (
+          "id_case_detected" in searchTarget &&
+          searchTarget.id_case_detected &&
+          stableCasesById.has(searchTarget.id_case_detected)
+        ) {
+          applySelectionState(searchTarget.id_case_detected, [
+            searchTarget.id_case_detected,
+          ]);
+        }
+
+        return;
+      }
 
       if (!stableCase) {
-        setSearchError("Aucune case ne correspond a cet id_case.");
+        setSearchError("Aucune case ou objet ne correspond a cette recherche.");
         return;
       }
 
@@ -251,7 +295,7 @@ export default function HomePage() {
       setFocusRequest((value) => value + 1);
       applySelectionState(registryId, [registryId]);
     },
-    [applySelectionState, stableCases],
+    [applySelectionState, searchOptions, stableCases, stableCasesById],
   );
 
   const handleLoginSubmit = useCallback(async (payload: LoginPayload) => {
@@ -357,6 +401,34 @@ export default function HomePage() {
     }
 
     void loadStableCases();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublicObjects() {
+      try {
+        const data =
+          await fetchJson<PublicMapObjectsResponse>("/api/map/objects");
+
+        if (!cancelled) {
+          setPublicObjects(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "Impossible de charger l'index des objets publics.",
+            error,
+          );
+        }
+      }
+    }
+
+    void loadPublicObjects();
 
     return () => {
       cancelled = true;
@@ -503,6 +575,8 @@ export default function HomePage() {
           displayMode={mapDisplayMode}
           focusCaseId={focusCaseId}
           focusRequest={focusRequest}
+          focusSearchTarget={focusSearchTarget}
+          focusSearchRequest={focusSearchRequest}
           casesVisible={casesVisible}
           panelVisible={panelVisible}
           onDisplayModeChange={handleDisplayModeChange}
@@ -526,7 +600,7 @@ export default function HomePage() {
             editorHref={editorHref}
             searchValue={searchValue}
             searchError={searchError}
-            availableCaseIds={availableCaseIds}
+            searchOptions={searchOptions}
             onSearchValueChange={(value) => {
               setSearchValue(value);
               setSearchError(null);

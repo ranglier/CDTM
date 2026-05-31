@@ -4,9 +4,6 @@ import type Geometry from "ol/geom/Geometry";
 import type Projection from "ol/proj/Projection";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
-import Fill from "ol/style/Fill";
-import Stroke from "ol/style/Stroke";
-import Style from "ol/style/Style";
 
 import { getCaseStyle } from "@/map/styles";
 import {
@@ -34,24 +31,9 @@ type CaseLayerStyleContext = {
 type CreateCasesVectorLayerOptions = {
   visible?: boolean;
   opacity?: number;
-  fallbackWhenUnstyled?: boolean;
 };
 
 const geoJsonFormat = new GeoJSON();
-const fallbackInfluenceCaseStyle = new Style({
-  fill: new Fill({ color: "rgba(220, 193, 130, 0.06)" }),
-  stroke: new Stroke({ color: "rgba(220, 193, 130, 0.35)", width: 1 }),
-});
-const selectedFallbackInfluenceCaseStyle = new Style({
-  fill: new Fill({ color: "rgba(220, 193, 130, 0.16)" }),
-  stroke: new Stroke({ color: "rgba(240, 210, 140, 0.94)", width: 2.2 }),
-  zIndex: 8,
-});
-const activeFallbackInfluenceCaseStyle = new Style({
-  fill: new Fill({ color: "rgba(220, 193, 130, 0.24)" }),
-  stroke: new Stroke({ color: "rgba(255, 228, 145, 1)", width: 3 }),
-  zIndex: 10,
-});
 
 export function createCasesVectorSource(): VectorSource {
   return new VectorSource();
@@ -72,25 +54,6 @@ function resolveCaseLookupId(
   }
 
   return null;
-}
-
-function hasInfluenceStyle(
-  properties: StableCaseProperties | null,
-  styles: PublicMapStyles,
-): boolean {
-  if (!properties) {
-    return false;
-  }
-
-  if (properties.controleur && styles.controleur[properties.controleur]) {
-    return true;
-  }
-
-  if (properties.faction && styles.faction[properties.faction]) {
-    return true;
-  }
-
-  return false;
 }
 
 export function resolveCaseFeatureProperties(
@@ -115,7 +78,7 @@ export function createCasesVectorLayer(
   context: CaseLayerStyleContext,
   options: CreateCasesVectorLayerOptions = {},
 ): VectorLayer {
-  const { visible = true, opacity, fallbackWhenUnstyled = false } = options;
+  const { visible = true, opacity } = options;
 
   return new VectorLayer({
     source,
@@ -138,22 +101,6 @@ export function createCasesVectorLayer(
         context.getSelectionState?.(
           typeof idCase === "string" ? idCase : null,
         ) ?? "default";
-
-      if (
-        fallbackWhenUnstyled &&
-        displayMode === "influence" &&
-        !hasInfluenceStyle(properties, styles)
-      ) {
-        if (selectionState === "active") {
-          return activeFallbackInfluenceCaseStyle;
-        }
-
-        if (selectionState === "selected") {
-          return selectedFallbackInfluenceCaseStyle;
-        }
-
-        return fallbackInfluenceCaseStyle;
-      }
 
       return getCaseStyle({
         selectionState,
