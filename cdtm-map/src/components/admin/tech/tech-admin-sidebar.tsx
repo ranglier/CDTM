@@ -49,7 +49,8 @@ export function TechAdminSidebar({
           key={section.id}
           title={section.title}
           selected={
-            (activeTab === "references" && activeSidebarRootId === section.id) ||
+            (activeTab === "references" &&
+              activeSidebarRootId === section.id) ||
             (activeTab === "schema" && section.id === "schema") ||
             (activeTab === "accounts" && section.id === "accounts")
           }
@@ -68,11 +69,17 @@ export function TechAdminSidebar({
               onSelectAccountsRoot();
             }
           }}
-          open={sidebarSectionOpenState[section.id] ?? activeSidebarSectionIds.includes(section.id)}
+          open={
+            sidebarSectionOpenState[section.id] ??
+            activeSidebarSectionIds.includes(section.id)
+          }
           onToggle={() =>
             setSidebarSectionOpenState((current) => ({
               ...current,
-              [section.id]: !(current[section.id] ?? activeSidebarSectionIds.includes(section.id)),
+              [section.id]: !(
+                current[section.id] ??
+                activeSidebarSectionIds.includes(section.id)
+              ),
             }))
           }
         >
@@ -80,10 +87,12 @@ export function TechAdminSidebar({
             {section.items.map((item) => {
               const isActive =
                 item.kind === "reference"
-                  ? activeTab === "references" && item.id === activeReferenceViewId
+                  ? activeTab === "references" &&
+                    item.id === activeReferenceViewId
                   : item.kind === "schema"
                     ? activeTab === "schema" && item.id === activeSchemaKey
-                    : activeTab === "accounts" && item.id === String(activeAccountId);
+                    : activeTab === "accounts" &&
+                      item.id === String(activeAccountId);
 
               return (
                 <button
@@ -109,7 +118,9 @@ export function TechAdminSidebar({
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-foreground">{item.label}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {item.label}
+                    </span>
                     {item.count !== null ? (
                       <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                         {item.count}

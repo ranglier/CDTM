@@ -29,7 +29,7 @@ type CaseInfoPanelProps = {
 };
 
 const fieldClassName =
-  "w-full rounded-[16px] border border-border/80 bg-background/55 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-[14px] border border-border/80 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60";
 
 function summarizeStrings(values: Array<string | null | undefined>): string {
   const normalizedValues = values.map((value) => (value ?? "").trim());
@@ -45,13 +45,16 @@ function summarizeStrings(values: Array<string | null | undefined>): string {
   return uniqueValues.length === 1 ? uniqueValues[0] : "Etat mixte";
 }
 
-function summarizeBooleans(values: Array<boolean | null | undefined>): string {
-  const normalizedValues = values.map((value) =>
-    value === true ? "Oui" : value === false ? "Non" : "Non renseigne",
-  );
-  const uniqueValues = Array.from(new Set(normalizedValues));
+function summarizeVisibleTrueBoolean(
+  values: Array<boolean | null | undefined>,
+): string | null {
+  const hasTrueValue = values.some((value) => value === true);
 
-  return uniqueValues.length === 1 ? uniqueValues[0] : "Etat mixte";
+  if (!hasTrueValue) {
+    return null;
+  }
+
+  return values.every((value) => value === true) ? "Oui" : "Etat mixte";
 }
 
 function summarizeStringLists(values: string[][]): string {
@@ -125,7 +128,7 @@ function getSlotCalculationRows(
 
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
+    <div className="flex items-start justify-between gap-3 border-b border-border/50 py-1.5 first:pt-0 last:border-b-0 last:pb-0">
       <p className="shrink-0 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
@@ -215,7 +218,7 @@ function SlotCalculationDetails({
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <h3 className="text-xl font-semibold text-foreground">{title}</h3>;
+  return <h3 className="text-lg font-semibold text-foreground">{title}</h3>;
 }
 
 function MapSearchBox({
@@ -232,12 +235,12 @@ function MapSearchBox({
   onSearchSubmit: () => void;
 }) {
   return (
-    <div className="rounded-[22px] border border-primary/20 bg-primary/8 p-4">
+    <div className="rounded-[18px] border border-primary/20 bg-primary/8 p-3">
       <p className="text-[11px] uppercase tracking-[0.18em] text-primary">
         Recherche
       </p>
       <form
-        className="mt-3 flex flex-col gap-3 sm:flex-row"
+        className="mt-2 flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
           event.preventDefault();
           onSearchSubmit();
@@ -255,7 +258,7 @@ function MapSearchBox({
             <option key={`${option.kind}:${option.id}`} value={option.value} />
           ))}
         </datalist>
-        <Button type="submit" variant="outline">
+        <Button type="submit" size="sm" variant="outline">
           Rechercher
         </Button>
       </form>
@@ -327,10 +330,34 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
       label: "Type",
       value: summarizeStrings(selectedCases.map((item) => item.terrain_type)),
     },
-    {
-      label: "Colline",
-      value: summarizeBooleans(selectedCases.map((item) => item.colline)),
-    },
+    ...[
+      {
+        label: "Cote",
+        value: summarizeVisibleTrueBoolean(
+          selectedCases.map((item) => item.cote),
+        ),
+      },
+      {
+        label: "Lac",
+        value: summarizeVisibleTrueBoolean(
+          selectedCases.map((item) => item.lac),
+        ),
+      },
+      {
+        label: "Fluvial",
+        value: summarizeVisibleTrueBoolean(
+          selectedCases.map((item) => item.fluvial),
+        ),
+      },
+      {
+        label: "Colline",
+        value: summarizeVisibleTrueBoolean(
+          selectedCases.map((item) => item.colline),
+        ),
+      },
+    ].filter(
+      (row): row is { label: string; value: string } => row.value !== null,
+    ),
     { label: "Emplacements", value: slotSummary },
   ];
   const controlRows = [
@@ -364,9 +391,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   return (
     <aside aria-live="polite" onPointerEnter={onPanelPointerEnter}>
       <SectionPanel className="flex h-full flex-col">
-        <div className="flex flex-1 flex-col p-5 sm:p-6">
-          <header className="space-y-4">
-            <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
+        <div className="flex flex-1 flex-col p-4 sm:p-5">
+          <header className="space-y-3">
+            <h2 className="font-chronicle text-2xl tracking-[0.04em] text-foreground">
               Informations de case
             </h2>
             <MapSearchBox
@@ -406,10 +433,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
             ) : null}
           </header>
 
-          <Separator className="my-5" />
+          <Separator className="my-4" />
 
           {!casesVisible ? (
-            <div className="rounded-[24px] border border-border/70 bg-background/40 p-5 text-sm leading-7 text-muted-foreground">
+            <div className="rounded-[20px] border border-border/70 bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
               <p className="font-medium text-foreground">
                 La couche des cases est masquee.
               </p>
@@ -419,7 +446,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               </p>
             </div>
           ) : !hasSelection ? (
-            <div className="rounded-[24px] border border-border/70 bg-background/40 p-5 text-sm leading-7 text-muted-foreground">
+            <div className="rounded-[20px] border border-border/70 bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
               <p className="font-medium text-foreground">
                 Aucune case selectionnee.
               </p>
@@ -429,10 +456,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               </p>
             </div>
           ) : (
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+            <div className="flex flex-1 flex-col gap-3">
+              <section className="rounded-[20px] border border-border/70 bg-background/40 p-3">
                 <SectionTitle title="Case" />
-                <div className="mt-4">
+                <div className="mt-3">
                   <CompactInfoList
                     rows={identityRows}
                     emptyMessage="Aucune case selectionnee."
@@ -440,9 +467,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                 </div>
               </section>
 
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+              <section className="rounded-[20px] border border-border/70 bg-background/40 p-3">
                 <SectionTitle title="Terrain" />
-                <div className="mt-4 space-y-4">
+                <div className="mt-3 space-y-3">
                   <CompactInfoList
                     rows={terrainRows}
                     emptyMessage="Aucune donnee de terrain renseignee."
@@ -451,9 +478,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                 </div>
               </section>
 
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+              <section className="rounded-[20px] border border-border/70 bg-background/40 p-3">
                 <SectionTitle title="Controle" />
-                <div className="mt-4">
+                <div className="mt-3">
                   <CompactInfoList
                     rows={controlRows}
                     emptyMessage="Aucune donnee de controle renseignee."
@@ -462,9 +489,9 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               </section>
 
               {adminModeEnabled ? (
-                <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
+                <section className="rounded-[20px] border border-border/70 bg-background/40 p-3">
                   <SectionTitle title="Bonus contextuels" />
-                  <div className="mt-4">
+                  <div className="mt-3">
                     <CompactInfoList
                       rows={bonusRows}
                       emptyMessage="Aucun bonus contextuel applique."

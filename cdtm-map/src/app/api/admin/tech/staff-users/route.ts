@@ -67,7 +67,10 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture des comptes impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Lecture des comptes impossible.";
 
     return NextResponse.json(
       {
@@ -105,7 +108,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Creation de compte impossible.";
+    const message =
+      error instanceof Error ? error.message : "Creation de compte impossible.";
     const status =
       message.includes("obligatoires") ||
       message.includes("Role invalide") ||

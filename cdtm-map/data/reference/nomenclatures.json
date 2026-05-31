@@ -7,11 +7,7 @@
     "lac",
     "fluvial"
   ],
-  "water_boolean_fields": [
-    "cote",
-    "lac",
-    "fluvial"
-  ],
+  "water_boolean_fields": ["cote", "lac", "fluvial"],
   "reserved_business_fields": [
     "terrain_cat",
     "terrain_type",
@@ -23,37 +19,13 @@
     "controle_type"
   ],
   "future_business": {
-    "terrain_cat": [
-      "plaine",
-      "desert",
-      "marais",
-      "foret",
-      "montagne"
-    ],
+    "terrain_cat": ["plaine", "desert", "marais", "foret", "montagne"],
     "terrain_type_by_cat": {
-      "plaine": [
-        "prairie",
-        "plaine_aride",
-        "bocage",
-        "toundra"
-      ],
-      "foret": [
-        "foret",
-        "taiga",
-        "foret_luxuriante"
-      ],
-      "montagne": [
-        "montagne",
-        "montagne_riche"
-      ],
-      "marais": [
-        "marais"
-      ],
-      "desert": [
-        "desert",
-        "terres_gelees",
-        "terre_desolee"
-      ]
+      "plaine": ["prairie", "plaine_aride", "bocage", "toundra"],
+      "foret": ["foret", "taiga", "foret_luxuriante"],
+      "montagne": ["montagne", "montagne_riche"],
+      "marais": ["marais"],
+      "desert": ["desert", "terres_gelees", "terre_desolee"]
     },
     "terrain_type": [
       "prairie",
@@ -79,19 +51,8 @@
       "vassalise",
       "inconnu"
     ],
-    "localite_niveau": [
-      "hameau",
-      "village",
-      "bourg",
-      "ville",
-      "cite"
-    ],
-    "localite_type": [
-      "avant_poste",
-      "fort",
-      "domaine",
-      "ruine"
-    ],
+    "localite_niveau": ["hameau", "village", "bourg", "ville", "cite"],
+    "localite_type": ["avant_poste", "fort", "domaine", "ruine"],
     "faction": [
       "royaume_des_hommes",
       "gondor",

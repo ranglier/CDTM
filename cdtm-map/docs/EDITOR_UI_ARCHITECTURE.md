@@ -5,21 +5,25 @@
 L'interface cartographique de `/editeur` est en reconstruction progressive.
 
 Le lot 1 reintroduit seulement :
+
 - un noyau OpenLayers commun avec la carte publique ;
 - le fond de carte dans `/editeur`.
 
 Le lot 2 ajoute ensuite :
+
 - le chargement de `cases.geojson` dans l'editeur ;
 - la couche des cases en lecture seule ;
 - un bouton simple pour afficher ou masquer les cases.
 
 Le lot 3 :
+
 - retire le bloc explicatif au-dessus de la carte pour les `tech_admin` ;
 - ajoute une selection simple de case par clic ;
 - affiche seulement l'identifiant de la case selectionnee ;
 - n'ajoute pas encore de panneau detail ni d'edition.
 
 Le lot 4 :
+
 - charge les styles publics et les proprietes publiques des cases ;
 - affiche l'editeur en mode influence ;
 - ajoute le tooltip de survol identique a la carte publique ;
@@ -27,6 +31,7 @@ Le lot 4 :
 - ne permet toujours aucune edition.
 
 Le lot 5 :
+
 - charge les localites depuis `/api/admin/editor/localities` ;
 - les affiche en lecture seule au-dessus des cases ;
 - ajoute un bouton pour afficher ou masquer les localites ;
@@ -34,6 +39,7 @@ Le lot 5 :
 - ne permet pas encore de creer, modifier ou deplacer les localites.
 
 Le lot 6 :
+
 - ajoute un mode minimal `Creer une localite` ;
 - permet de cliquer sur la carte pour choisir une position ;
 - affiche un petit formulaire de creation ;
@@ -42,12 +48,14 @@ Le lot 6 :
 - ne permet toujours pas d'editer, supprimer ou deplacer une localite.
 
 Le lot 7 :
+
 - ajoute la selection de localite ;
 - ajoute l'edition simple de nom, type, statut, description ;
 - utilise `PATCH /api/admin/editor/localities/[id]` ;
 - ne permet pas encore deplacer, supprimer, drag-and-drop ou icones reelles.
 
 Le lot 8 :
+
 - ajoute le deplacement direct des localites par drag-and-drop ;
 - sauvegarde uniquement au relachement via `PATCH /api/admin/editor/localities/[id]` ;
 - envoie seulement `x`, `y`, `id_case_detected` pour ce deplacement ;
@@ -56,6 +64,7 @@ Le lot 8 :
 - ne concerne toujours pas landmarks, forces ou routes.
 
 Le lot 9 :
+
 - enrichit `reference-data` avec les metadonnees d'icones utiles aux localites ;
 - affiche une icone si `icon_key` est defini sur la localite ;
 - sinon utilise `default_icon_key` du type de localite si disponible ;
@@ -64,12 +73,14 @@ Le lot 9 :
 - ne traite toujours pas landmarks, uniques ou forces.
 
 Le rendu actuel des localites ajoute aussi :
+
 - un mode `Icones` / `Points` dans l'editeur ;
 - des SVG qui remplacent les points en mode icones ;
 - une taille d'icone liee au zoom, plus grande de pres et reduite au dezoom ;
 - la suppression du diagnostic d'icone dans l'UI.
 
 Le lot courant ajoute :
+
 - la lecture seule des landmarks au-dessus des cases et des localites ;
 - une creation unifiee `Creer un point` avec trois familles :
   - `Localite`
@@ -83,6 +94,7 @@ Le lot courant ajoute :
 - la possibilite de surcharger l'icone d'une localite, tout en gardant par defaut l'icone de son type.
 
 Le lot routes 1 ajoute :
+
 - le chargement de `/api/admin/editor/routes` dans l'editeur ;
 - une couche OpenLayers lecture seule dediee aux routes, placee sous les points ;
 - le rendu `straight` ou `curved` a partir des points de controle ;
@@ -92,6 +104,7 @@ Le lot routes 1 ajoute :
 - aucune creation ou edition interactive de route dans l'UI a ce stade.
 
 Le lot routes 2 ajoute :
+
 - un mode `Creer une route` distinct du mode creation de point ;
 - une creation par clics successifs sur la carte ;
 - une previsualisation immediate de la route et de ses sommets ;
@@ -101,6 +114,7 @@ Le lot routes 2 ajoute :
 - aucun deplacement ni aucune edition de sommet existant a ce stade.
 
 Le lot routes 3 ajoute :
+
 - la selection des routes existantes par clic ;
 - l'affichage d'un formulaire d'edition simple dans l'overlay ;
 - l'edition de `name`, `route_type`, `geometry_mode`, `stroke_style`, `stroke_width`, `stroke_color`, `status`, `description` ;
@@ -110,6 +124,7 @@ Le lot routes 3 ajoute :
 - aucun changement des points de controle dans ce lot.
 
 Le lot routes 4 ajoute :
+
 - un mode d'edition geometrique explicite pour une route selectionnee ;
 - l'affichage des sommets de la route selectionnee ;
 - la selection d'un sommet ;
@@ -121,6 +136,7 @@ Le lot routes 4 ajoute :
 - une annulation locale des modifications geometriques.
 
 Le lot UI/UX courant reorganise l'editeur autour de trois zones stables :
+
 - une carte centrale qui garde seulement :
   - la toolbar compacte des controles globaux ;
   - les tooltips de survol ;
@@ -135,6 +151,7 @@ Le lot UI/UX courant reorganise l'editeur autour de trois zones stables :
 - une separation nette entre controles globaux de carte et formulaires d'edition.
 
 Dans cette organisation :
+
 - les toggles `Cases`, `Localites`, `Landmarks`, `Routes` restent dans la toolbar ;
 - le mode `Localites : icones / points` reste global a la carte ;
 - les actions importantes d'enregistrement et d'annulation restent collees en bas du panneau ;
@@ -142,17 +159,20 @@ Dans cette organisation :
 
 En parallele, la carte publique reutilise maintenant les memes briques de rendu OpenLayers
 pour les objets publies, mais sans aucune logique d'edition :
+
 - elle charge `/api/map/objects` ;
 - elle n'utilise pas `/api/admin/editor/*` ;
 - elle ne rend que des objets en statut `published`.
 
 Le lot ne fait toujours pas :
+
 - de gestion des forces ;
 - de snapping, d'undo/redo avance ni d'edition multi-routes.
 
 ## Ce qui reste en place
 
 Les fondations serveur et donnees sont conservees :
+
 - `src/editor/types.ts`
 - `src/server/editor-repository.ts`
 - `/api/admin/editor/reference-data`
@@ -161,12 +181,14 @@ Les fondations serveur et donnees sont conservees :
 - `/api/admin/editor/forces`
 
 Le modele reste separe par famille d'objets :
+
 - `map_localities`
 - `map_landmarks`
 - `map_forces`
 - `map_routes`
 
 Les statuts restent :
+
 - `draft`
 - `published`
 - `archived`
@@ -177,6 +199,7 @@ L'editeur UI devra etre reconstruit a partir de zero, par petits lots valides
 en conditions reelles.
 
 Principes gardes pour la suite :
+
 - ne pas reintroduire un modele generique `map_points`
 - ne pas coupler fortement l'editeur a `TechnicalAdminPage`
 - garder une toolbar carte compacte et un panneau lateral contextuel plutot qu'un overlay de formulaire

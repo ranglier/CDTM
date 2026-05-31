@@ -59,7 +59,11 @@ export type ReferencePanelProps = {
   setReferenceSearchInput: (value: string) => void;
   setReferenceSearch: (value: string) => void;
   onAddReferenceRow: () => void;
-  onReferenceRowValueChange: (localId: string, fieldName: string, value: string) => void;
+  onReferenceRowValueChange: (
+    localId: string,
+    fieldName: string,
+    value: string,
+  ) => void;
   onMapIconUpload: (row: EditableRow, file: File | null) => Promise<void>;
   onSaveReferenceRow: (row: EditableRow) => Promise<void>;
   onDeleteReferenceRow: (row: EditableRow) => Promise<void>;
@@ -73,7 +77,15 @@ export type FieldEditorProps = {
   field: {
     name: string;
     label: string;
-    type: DynamicCaseTableFieldType | "text" | "textarea" | "boolean" | "integer" | "number" | "datetime" | "reference";
+    type:
+      | DynamicCaseTableFieldType
+      | "text"
+      | "textarea"
+      | "boolean"
+      | "integer"
+      | "number"
+      | "datetime"
+      | "reference";
     readOnly?: boolean;
     reference_table_key?: ReferenceTableKey | null;
   };

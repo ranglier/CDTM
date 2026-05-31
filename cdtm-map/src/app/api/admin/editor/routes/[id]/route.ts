@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { EditorMapRoutePatch } from "@/editor/types";
-import { editorErrorResponse, ensureTechAdmin } from "@/app/api/admin/editor/utils";
+import {
+  editorErrorResponse,
+  ensureTechAdmin,
+} from "@/app/api/admin/editor/utils";
 import {
   deleteEditorRoute,
   getEditorRoute,

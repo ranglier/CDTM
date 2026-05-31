@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture du schema impossible.";
+    const message =
+      error instanceof Error ? error.message : "Lecture du schema impossible.";
 
     return NextResponse.json(
       {
@@ -102,7 +103,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Creation de table impossible.";
+    const message =
+      error instanceof Error ? error.message : "Creation de table impossible.";
     const status =
       message.includes("obligatoire") ||
       message.includes("existe deja") ||

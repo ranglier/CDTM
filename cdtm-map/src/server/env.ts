@@ -7,7 +7,10 @@ type ServerEnv = {
   uploadsDir: string;
 };
 
-function parsePositiveInteger(value: string | undefined, fallback: number): number {
+function parsePositiveInteger(
+  value: string | undefined,
+  fallback: number,
+): number {
   if (!value) {
     return fallback;
   }
@@ -25,7 +28,12 @@ export function getServerEnv(): ServerEnv {
     databaseUrl: process.env.DATABASE_URL ?? null,
     bootstrapAdminUsername: process.env.ADMIN_USERNAME ?? null,
     bootstrapAdminPassword: process.env.ADMIN_PASSWORD ?? null,
-    sessionTtlHours: parsePositiveInteger(process.env.ADMIN_SESSION_TTL_HOURS, 168),
-    uploadsDir: process.env.UPLOADS_DIR ?? (appEnv === "production" ? "/app/uploads" : "./uploads"),
+    sessionTtlHours: parsePositiveInteger(
+      process.env.ADMIN_SESSION_TTL_HOURS,
+      168,
+    ),
+    uploadsDir:
+      process.env.UPLOADS_DIR ??
+      (appEnv === "production" ? "/app/uploads" : "./uploads"),
   };
 }

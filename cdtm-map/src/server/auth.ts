@@ -47,7 +47,11 @@ function clearAdminSessionCookie(response: NextResponse): void {
   });
 }
 
-export function setAdminSessionCookie(response: NextResponse, token: string, expiresAt: Date): void {
+export function setAdminSessionCookie(
+  response: NextResponse,
+  token: string,
+  expiresAt: Date,
+): void {
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: token,
@@ -122,7 +126,9 @@ export async function requireTechAdminUser(
   return user;
 }
 
-export async function getAdminSessionState(request: NextRequest): Promise<AdminSession> {
+export async function getAdminSessionState(
+  request: NextRequest,
+): Promise<AdminSession> {
   const user = await getCurrentStaffUser(request);
 
   return {
@@ -146,7 +152,11 @@ export async function loginStaffUser(
   const normalizedUsername = username.trim();
   const rawPassword = password;
 
-  if (!normalizedUsername || rawPassword.length === 0 || rawPassword.trim().length === 0) {
+  if (
+    !normalizedUsername ||
+    rawPassword.length === 0 ||
+    rawPassword.trim().length === 0
+  ) {
     throw new Error("Identifiant et mot de passe obligatoires.");
   }
 
@@ -164,7 +174,11 @@ export async function loginStaffUser(
 
   const user = result.rows[0];
 
-  if (!user || !user.is_active || !(await verifySecret(rawPassword, user.password_hash))) {
+  if (
+    !user ||
+    !user.is_active ||
+    !(await verifySecret(rawPassword, user.password_hash))
+  ) {
     throw new Error("Identifiants invalides.");
   }
 
@@ -201,7 +215,10 @@ export async function loginStaffUser(
   };
 }
 
-export async function logoutStaffUser(request: NextRequest, response: NextResponse): Promise<void> {
+export async function logoutStaffUser(
+  request: NextRequest,
+  response: NextResponse,
+): Promise<void> {
   const hasDatabase = await ensureDatabaseReady();
   const rawToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 

@@ -25,7 +25,9 @@ export function buildCaseHoverRows(
   }
 
   const rows = [
-    properties.terrain_type ? { label: "Terrain", value: properties.terrain_type } : null,
+    properties.terrain_type
+      ? { label: "Terrain", value: properties.terrain_type }
+      : null,
     properties.colline ? { label: "Attribut", value: "Colline" } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 

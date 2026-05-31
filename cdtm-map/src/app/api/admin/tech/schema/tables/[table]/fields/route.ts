@@ -62,7 +62,8 @@ export async function POST(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ajout de champ impossible.";
+    const message =
+      error instanceof Error ? error.message : "Ajout de champ impossible.";
     const status =
       message.includes("obligatoire") ||
       message.includes("snake_case") ||

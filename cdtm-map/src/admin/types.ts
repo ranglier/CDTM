@@ -291,7 +291,9 @@ export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
   };
 }
 
-export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft {
+export function toAdminCaseDraft(
+  record: AdminCaseRecord | null,
+): AdminCaseDraft {
   if (!record) {
     return createEmptyAdminCaseDraft();
   }

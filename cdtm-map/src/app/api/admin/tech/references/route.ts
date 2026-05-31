@@ -54,7 +54,10 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture des referentiels impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Lecture des referentiels impossible.";
 
     return NextResponse.json(
       {

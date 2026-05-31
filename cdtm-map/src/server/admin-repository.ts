@@ -16,10 +16,7 @@ import {
   type SlotCalculationResult,
   type SlotConsumer,
 } from "@/map/rules";
-import {
-  ensureDatabaseReady,
-  getPool,
-} from "@/server/db";
+import { ensureDatabaseReady, getPool } from "@/server/db";
 import {
   getDynamicCaseSectionsForCase,
   getStaticAdminReferenceData,
@@ -112,7 +109,10 @@ function getPresentEntries<T extends EditableSectionPatch>(
     (entry): entry is [keyof T & string, string | boolean | null] => {
       const [key, currentValue] = entry;
 
-      return Object.prototype.hasOwnProperty.call(value, key) && currentValue !== undefined;
+      return (
+        Object.prototype.hasOwnProperty.call(value, key) &&
+        currentValue !== undefined
+      );
     },
   );
 }
@@ -140,7 +140,10 @@ async function listCaseContextualBonuses(
   return result.rows;
 }
 
-async function assertBonusContextuelsExist(client: PoolClient, bonusSlugs: string[]): Promise<void> {
+async function assertBonusContextuelsExist(
+  client: PoolClient,
+  bonusSlugs: string[],
+): Promise<void> {
   if (bonusSlugs.length === 0) {
     return;
   }
@@ -188,7 +191,10 @@ async function replaceCaseContextualBonuses(
   }
 }
 
-async function getCasePeupleSlug(client: PoolClient, idCase: string): Promise<string | null> {
+async function getCasePeupleSlug(
+  client: PoolClient,
+  idCase: string,
+): Promise<string | null> {
   const result = await client.query<{ peuple: string | null }>(
     `
       SELECT peuple
@@ -222,7 +228,10 @@ async function listPeupleModifiers(
   return result.rows;
 }
 
-async function listCaseSlotConsumers(client: PoolClient, idCase: string): Promise<SlotConsumer[]> {
+async function listCaseSlotConsumers(
+  client: PoolClient,
+  idCase: string,
+): Promise<SlotConsumer[]> {
   const result = await client.query<SlotConsumer>(
     `
       SELECT type_ref.consumes_slot, type_ref.emp_requis
@@ -505,7 +514,10 @@ async function mapCaseLookupRow(
   };
 }
 
-async function ensureCaseExists(client: PoolClient, idCase: string): Promise<void> {
+async function ensureCaseExists(
+  client: PoolClient,
+  idCase: string,
+): Promise<void> {
   const result = await client.query<{ id_case: string }>(
     `
       SELECT id_case
@@ -520,7 +532,10 @@ async function ensureCaseExists(client: PoolClient, idCase: string): Promise<voi
   }
 }
 
-async function ensureCasesExist(client: PoolClient, idCases: string[]): Promise<void> {
+async function ensureCasesExist(
+  client: PoolClient,
+  idCases: string[],
+): Promise<void> {
   const uniqueIds = Array.from(new Set(idCases));
   const result = await client.query<{ id_case: string }>(
     `
@@ -560,7 +575,9 @@ async function applyCurrentSectionPatch(
   const insertColumns = ["id_case", ...columnNames, "updated_by_user_id"];
   const placeholders = insertColumns.map((_, index) => `$${index + 1}`);
   const updateAssignments = [
-    ...columnNames.map((columnName) => `${columnName} = EXCLUDED.${columnName}`),
+    ...columnNames.map(
+      (columnName) => `${columnName} = EXCLUDED.${columnName}`,
+    ),
     "updated_by_user_id = EXCLUDED.updated_by_user_id",
     "updated_at = NOW()",
   ];
@@ -576,11 +593,15 @@ async function applyCurrentSectionPatch(
   );
 }
 
-async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promise<AdminCaseRecord> {
+async function selectAdminCaseRecord(
+  client: PoolClient,
+  idCase: string,
+): Promise<AdminCaseRecord> {
   await ensureCaseExists(client, idCase);
 
   const stableCaseIndex = await loadStableCaseIndex();
-  const sourceCase = stableCaseIndex.get(idCase) ?? createSourceFallback(idCase);
+  const sourceCase =
+    stableCaseIndex.get(idCase) ?? createSourceFallback(idCase);
 
   const result = await client.query<CaseLookupRow>(
     `
@@ -624,7 +645,9 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
     : await createEmptyAdminRecord(client, idCase, sourceCase);
 }
 
-export async function getAdminCaseRecord(idCase: string): Promise<AdminCaseRecord> {
+export async function getAdminCaseRecord(
+  idCase: string,
+): Promise<AdminCaseRecord> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -666,9 +689,9 @@ export async function saveAdminCaseRecord(
         public_id_case: normalizePublicId(draft.public.id_case, idCase),
         region: normalizeNullableField(draft.public.region),
         sous_region: normalizeNullableField(draft.public.sous_region),
-        cote: draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
-        lac:
-          draft.public.lac.length > 0 ? draft.public.lac === "true" : null,
+        cote:
+          draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
+        lac: draft.public.lac.length > 0 ? draft.public.lac === "true" : null,
         fluvial:
           draft.public.fluvial.length > 0
             ? draft.public.fluvial === "true"
@@ -684,8 +707,13 @@ export async function saveAdminCaseRecord(
       {
         terrain_cat: normalizeNullableField(draft.terrain.terrain_cat),
         terrain_type: normalizeNullableField(draft.terrain.terrain_type),
-        terrain_secondaire: normalizeNullableField(draft.terrain.terrain_secondaire),
-        colline: draft.terrain.colline.length > 0 ? draft.terrain.colline === "true" : null,
+        terrain_secondaire: normalizeNullableField(
+          draft.terrain.terrain_secondaire,
+        ),
+        colline:
+          draft.terrain.colline.length > 0
+            ? draft.terrain.colline === "true"
+            : null,
         relief: normalizeNullableField(draft.terrain.relief),
       },
       userId,
@@ -706,7 +734,11 @@ export async function saveAdminCaseRecord(
 
     await saveDynamicSectionsForCase(client, idCase, draft.dynamic, userId);
     if (draft.bonus_contextuels !== undefined) {
-      await replaceCaseContextualBonuses(client, idCase, draft.bonus_contextuels);
+      await replaceCaseContextualBonuses(
+        client,
+        idCase,
+        draft.bonus_contextuels,
+      );
     }
 
     const record = await selectAdminCaseRecord(client, idCase);
@@ -743,7 +775,9 @@ export async function saveAdminCaseBulkPatch(
     throw new Error("La base de donnees n'est pas configuree.");
   }
 
-  const uniqueIds = Array.from(new Set(idCases.filter((idCase) => idCase.trim().length > 0)));
+  const uniqueIds = Array.from(
+    new Set(idCases.filter((idCase) => idCase.trim().length > 0)),
+  );
 
   if (uniqueIds.length === 0) {
     throw new Error("Aucune case n'a ete fournie pour l'edition de masse.");
@@ -758,7 +792,13 @@ export async function saveAdminCaseBulkPatch(
 
     for (const idCase of uniqueIds) {
       if (patch.public) {
-        await applyCurrentSectionPatch(client, "case_public_current", idCase, patch.public, userId);
+        await applyCurrentSectionPatch(
+          client,
+          "case_public_current",
+          idCase,
+          patch.public,
+          userId,
+        );
       }
 
       if (patch.terrain) {
@@ -782,7 +822,11 @@ export async function saveAdminCaseBulkPatch(
       }
 
       if (patch.bonus_contextuels) {
-        await replaceCaseContextualBonuses(client, idCase, patch.bonus_contextuels);
+        await replaceCaseContextualBonuses(
+          client,
+          idCase,
+          patch.bonus_contextuels,
+        );
       }
 
       const record = await selectAdminCaseRecord(client, idCase);

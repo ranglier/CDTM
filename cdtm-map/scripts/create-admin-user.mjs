@@ -153,7 +153,9 @@ async function main() {
     const userId = result.rows[0]?.id;
 
     if (!userId) {
-      throw new Error("Impossible de creer ou mettre a jour l'utilisateur admin.");
+      throw new Error(
+        "Impossible de creer ou mettre a jour l'utilisateur admin.",
+      );
     }
 
     await client.query(

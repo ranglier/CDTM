@@ -3,3 +3,5 @@ node_modules
 coverage
 dist
 build
+data/exports/cdtm_cases.geojson
+public/data/cases.geojson

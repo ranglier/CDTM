@@ -105,6 +105,7 @@ import {
   createCdtmBackgroundLayer,
   createCdtmMap,
   fitCdtmCasesExtent,
+  preloadCdtmBackgroundImage,
 } from "@/map/openlayers/map-core";
 import {
   CASES_DATA_URL,
@@ -1845,6 +1846,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       return;
     }
 
+    void preloadCdtmBackgroundImage();
+
     const backgroundLayer = createCdtmBackgroundLayer();
     const casesSource = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
@@ -2336,7 +2339,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       };
     }
 
-    const pointerMoveHandler = (rawEvent: unknown) => {
+    const runPointerMoveHitTests = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
 
@@ -2441,7 +2444,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               setHoverInfo({
                 x: position.x,
                 y: position.y,
-                title: "Landmark",
+                title: landmark.name,
                 rows: [
                   {
                     label: "Type",
@@ -2575,6 +2578,53 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         rows,
       });
     };
+
+    let mapInteracting = false;
+    let pointerMoveFrame: number | null = null;
+    let latestPointerMoveEvent: unknown = null;
+    const clearPointerHover = () => {
+      map.getTargetElement().style.cursor = "";
+      setHoverInfo(null);
+    };
+    const cancelPointerMoveFrame = () => {
+      if (pointerMoveFrame !== null) {
+        window.cancelAnimationFrame(pointerMoveFrame);
+        pointerMoveFrame = null;
+      }
+      latestPointerMoveEvent = null;
+    };
+    const pointerMoveHandler = (rawEvent: unknown) => {
+      latestPointerMoveEvent = rawEvent;
+
+      if (pointerMoveFrame !== null) {
+        return;
+      }
+
+      pointerMoveFrame = window.requestAnimationFrame(() => {
+        pointerMoveFrame = null;
+        const event = latestPointerMoveEvent;
+        latestPointerMoveEvent = null;
+
+        if (!event) {
+          return;
+        }
+
+        if (mapInteracting) {
+          clearPointerHover();
+          return;
+        }
+
+        runPointerMoveHitTests(event);
+      });
+    };
+    const moveStartKey = map.on("movestart", () => {
+      mapInteracting = true;
+      cancelPointerMoveFrame();
+      clearPointerHover();
+    });
+    const moveEndKey = map.on("moveend", () => {
+      mapInteracting = false;
+    });
 
     const pointerMoveKey = map.on("pointermove", pointerMoveHandler);
 
@@ -2831,12 +2881,15 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
+      cancelPointerMoveFrame();
       unByKey(translateStartKey);
       unByKey(translateEndKey);
       unByKey(routeVertexTranslateStartKey);
       unByKey(routeVertexTranslateEndKey);
       unByKey(singleClickKey);
       unByKey(pointerMoveKey);
+      unByKey(moveStartKey);
+      unByKey(moveEndKey);
       map.removeInteraction(translateInteraction);
       map.removeInteraction(routeVertexTranslateInteraction);
       map.getTargetElement().style.cursor = "";

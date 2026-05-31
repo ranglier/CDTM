@@ -1,4 +1,7 @@
-import type { PublicCaseIndexResponse, PublicCaseProperties } from "@/admin/types";
+import type {
+  PublicCaseIndexResponse,
+  PublicCaseProperties,
+} from "@/admin/types";
 import type {
   PublicMapLandmark,
   PublicMapLocality,
@@ -87,7 +90,10 @@ function createEmptyPublicCase(idCase: string): PublicCaseProperties {
   };
 }
 
-function mergePublicCase(row: PublicCaseRow, fallback: PublicCaseProperties): PublicCaseProperties {
+function mergePublicCase(
+  row: PublicCaseRow,
+  fallback: PublicCaseProperties,
+): PublicCaseProperties {
   return {
     registry_id_case: row.id_case,
     id_case: row.public_id_case ?? fallback.id_case,
@@ -118,35 +124,41 @@ function isPublicRoutePoint(value: unknown): value is [number, number] {
   );
 }
 
-function normalizePublicRoutePoints(value: unknown): Array<[number, number]> | null {
+function normalizePublicRoutePoints(
+  value: unknown,
+): Array<[number, number]> | null {
   if (!Array.isArray(value)) {
     return null;
   }
 
-  const points = value.filter(isPublicRoutePoint).map((point) => [point[0], point[1]] as [number, number]);
+  const points = value
+    .filter(isPublicRoutePoint)
+    .map((point) => [point[0], point[1]] as [number, number]);
 
   return points.length >= 2 ? points : null;
 }
 
 export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
   const stableCaseIndex = await loadStableCaseIndex();
-  const fallbackCases = Array.from(stableCaseIndex.values()).map((stableCase) => ({
-    registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
-    id_case: stableCase.id_case,
-    region: stableCase.region ?? null,
-    sous_region: stableCase.sous_region ?? null,
-    cote: stableCase.cote ?? null,
-    lac: stableCase.lac ?? null,
-    fluvial: stableCase.fluvial ?? null,
-    terrain_cat: null,
-    terrain_type: null,
-    colline: null,
-    relief: null,
-    peuple: null,
-    faction: null,
-    controleur: null,
-    controle_type: null,
-  }));
+  const fallbackCases = Array.from(stableCaseIndex.values()).map(
+    (stableCase) => ({
+      registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
+      id_case: stableCase.id_case,
+      region: stableCase.region ?? null,
+      sous_region: stableCase.sous_region ?? null,
+      cote: stableCase.cote ?? null,
+      lac: stableCase.lac ?? null,
+      fluvial: stableCase.fluvial ?? null,
+      terrain_cat: null,
+      terrain_type: null,
+      colline: null,
+      relief: null,
+      peuple: null,
+      faction: null,
+      controleur: null,
+      controle_type: null,
+    }),
+  );
 
   const hasDatabase = await ensureDatabaseReady();
 
@@ -207,7 +219,10 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
 }
 
 export async function getPublicCaseIndexResponse(): Promise<PublicCaseIndexResponse> {
-  const [cases, styles] = await Promise.all([getPublicCaseIndex(), listPublicMapStyles()]);
+  const [cases, styles] = await Promise.all([
+    getPublicCaseIndex(),
+    listPublicMapStyles(),
+  ]);
 
   return {
     cases,
@@ -314,9 +329,14 @@ async function listPublicRoutes(): Promise<PublicMapRoute[]> {
         points,
         geometry_mode: row.geometry_mode === "straight" ? "straight" : "curved",
         stroke_style:
-          row.stroke_style === "dashed" || row.stroke_style === "dotted" ? row.stroke_style : "solid",
+          row.stroke_style === "dashed" || row.stroke_style === "dotted"
+            ? row.stroke_style
+            : "solid",
         stroke_width:
-          Number.isFinite(row.stroke_width) && typeof row.stroke_width === "number" ? row.stroke_width : 3,
+          Number.isFinite(row.stroke_width) &&
+          typeof row.stroke_width === "number"
+            ? row.stroke_width
+            : 3,
         stroke_color: row.stroke_color ?? null,
         description: row.description ?? null,
       } satisfies PublicMapRoute,
@@ -324,7 +344,9 @@ async function listPublicRoutes(): Promise<PublicMapRoute[]> {
   });
 }
 
-async function listPublicMapIconReferences(): Promise<PublicMapReferenceIcon[]> {
+async function listPublicMapIconReferences(): Promise<
+  PublicMapReferenceIcon[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -347,7 +369,9 @@ async function listPublicMapIconReferences(): Promise<PublicMapReferenceIcon[]> 
   return result.rows;
 }
 
-async function listPublicLocalityTypeReferences(): Promise<PublicMapReferenceLocalityType[]> {
+async function listPublicLocalityTypeReferences(): Promise<
+  PublicMapReferenceLocalityType[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -372,7 +396,9 @@ async function listPublicLocalityTypeReferences(): Promise<PublicMapReferenceLoc
   return result.rows;
 }
 
-async function listPublicLandmarkTypeReferences(): Promise<PublicMapReferenceLandmarkType[]> {
+async function listPublicLandmarkTypeReferences(): Promise<
+  PublicMapReferenceLandmarkType[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -401,7 +427,14 @@ async function listPublicLandmarkTypeReferences(): Promise<PublicMapReferenceLan
 }
 
 export async function getPublicMapObjectsResponse(): Promise<PublicMapObjectsResponse> {
-  const [localities, landmarks, routes, mapIcons, localityTypes, landmarkTypes] = await Promise.all([
+  const [
+    localities,
+    landmarks,
+    routes,
+    mapIcons,
+    localityTypes,
+    landmarkTypes,
+  ] = await Promise.all([
     listPublicLocalities(),
     listPublicLandmarks(),
     listPublicRoutes(),

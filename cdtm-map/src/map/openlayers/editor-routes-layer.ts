@@ -15,6 +15,11 @@ import type {
   MapObjectStatus,
   MapRouteStrokeStyle,
 } from "@/editor/types";
+import {
+  MAP_ROUTES_RENDER_BUFFER,
+  MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+  MAP_VECTOR_UPDATE_WHILE_INTERACTING,
+} from "@/map/config";
 
 const DEFAULT_ROUTE_RGB = [255, 255, 255] as const;
 const routeStyleCache = new Map<string, Style[]>();
@@ -71,7 +76,9 @@ function toRgba(color: string | null, alpha: number): string {
     const [, hex] = /^#([0-9a-fA-F]{3})$/.exec(trimmed) ?? [];
 
     if (hex) {
-      const [r, g, b] = hex.split("").map((channel) => Number.parseInt(channel + channel, 16));
+      const [r, g, b] = hex
+        .split("")
+        .map((channel) => Number.parseInt(channel + channel, 16));
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
   }
@@ -102,9 +109,10 @@ function getStatusOpacity(status: MapObjectStatus): number {
   return 0.95;
 }
 
-function getStrokeSpec(
-  strokeStyle: MapRouteStrokeStyle,
-): { lineDash: number[] | undefined; lineCap: CanvasLineCap } {
+function getStrokeSpec(strokeStyle: MapRouteStrokeStyle): {
+  lineDash: number[] | undefined;
+  lineCap: CanvasLineCap;
+} {
   if (strokeStyle === "dashed") {
     return { lineDash: [12, 8], lineCap: "butt" };
   }
@@ -162,13 +170,13 @@ export function buildEditorRouteDisplayCoordinates(
 
       const x =
         0.5 *
-        ((2 * p1[0]) +
+        (2 * p1[0] +
           (-p0[0] + p2[0]) * t +
           (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
           (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
       const y =
         0.5 *
-        ((2 * p1[1]) +
+        (2 * p1[1] +
           (-p0[1] + p2[1]) * t +
           (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
           (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
@@ -182,7 +190,10 @@ export function buildEditorRouteDisplayCoordinates(
 }
 
 function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
-  const displayPoints = buildEditorRouteDisplayCoordinates(route.points, route.geometry_mode);
+  const displayPoints = buildEditorRouteDisplayCoordinates(
+    route.points,
+    route.geometry_mode,
+  );
   const feature = new Feature<LineString>({
     geometry: new LineString(displayPoints),
     route,
@@ -192,13 +203,21 @@ function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
   return feature;
 }
 
-function getCachedRouteStyles(route: EditorMapRoute, resolution?: number): Style[] {
+function getCachedRouteStyles(
+  route: EditorMapRoute,
+  resolution?: number,
+): Style[] {
   const baseWidth =
-    Number.isInteger(route.stroke_width) && route.stroke_width >= 1 && route.stroke_width <= 12
+    Number.isInteger(route.stroke_width) &&
+    route.stroke_width >= 1 &&
+    route.stroke_width <= 12
       ? route.stroke_width
       : 3;
   const widthScale = getRouteWidthScale(resolution);
-  const normalizedWidth = Math.max(1, Math.round(baseWidth * widthScale * 10) / 10);
+  const normalizedWidth = Math.max(
+    1,
+    Math.round(baseWidth * widthScale * 10) / 10,
+  );
   const key = [
     route.status,
     route.stroke_style,
@@ -213,7 +232,10 @@ function getCachedRouteStyles(route: EditorMapRoute, resolution?: number): Style
 
   const opacity = getStatusOpacity(route.status);
   const { lineDash, lineCap } = getStrokeSpec(route.stroke_style);
-  const haloColor = route.status === "archived" ? "rgba(18, 18, 18, 0.25)" : "rgba(18, 18, 18, 0.45)";
+  const haloColor =
+    route.status === "archived"
+      ? "rgba(18, 18, 18, 0.25)"
+      : "rgba(18, 18, 18, 0.45)";
   const styles = [
     new Style({
       stroke: new Stroke({
@@ -226,7 +248,10 @@ function getCachedRouteStyles(route: EditorMapRoute, resolution?: number): Style
     }),
     new Style({
       stroke: new Stroke({
-        color: route.status === "archived" ? "rgba(155, 155, 155, 0.55)" : toRgba(route.stroke_color, opacity),
+        color:
+          route.status === "archived"
+            ? "rgba(155, 155, 155, 0.55)"
+            : toRgba(route.stroke_color, opacity),
         width: normalizedWidth,
         lineDash,
         lineCap,
@@ -249,17 +274,29 @@ export function createEditorRoutePreviewVectorSource(): VectorSource {
 
 export function createEditorRoutesVectorLayer(
   source: VectorSource,
-  options: { visible?: boolean } = {},
+  options: {
+    visible?: boolean;
+    renderBuffer?: number;
+    updateWhileAnimating?: boolean;
+    updateWhileInteracting?: boolean;
+  } = {},
 ): VectorLayer {
   return new VectorLayer({
     source,
     visible: options.visible ?? true,
+    renderBuffer: options.renderBuffer ?? MAP_ROUTES_RENDER_BUFFER,
+    updateWhileAnimating:
+      options.updateWhileAnimating ?? MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+    updateWhileInteracting:
+      options.updateWhileInteracting ?? MAP_VECTOR_UPDATE_WHILE_INTERACTING,
     style: (candidateFeature, resolution) => {
       if (!(candidateFeature instanceof Feature)) {
         return undefined;
       }
 
-      const route = getEditorRouteFromFeature(candidateFeature as Feature<Geometry>);
+      const route = getEditorRouteFromFeature(
+        candidateFeature as Feature<Geometry>,
+      );
 
       return route ? getCachedRouteStyles(route, resolution) : undefined;
     },
@@ -281,25 +318,32 @@ export function createEditorRoutePreviewVectorLayer(
       const previewKind = candidateFeature.get("preview_kind");
 
       if (previewKind === "route-point") {
-        return candidateFeature.get("preview_last_point") ? routePreviewLastPointStyle : routePreviewPointStyle;
+        return candidateFeature.get("preview_last_point")
+          ? routePreviewLastPointStyle
+          : routePreviewPointStyle;
       }
 
-      const previewRoute = candidateFeature.get("route_preview") as EditorRoutePreview | undefined;
+      const previewRoute = candidateFeature.get("route_preview") as
+        | EditorRoutePreview
+        | undefined;
 
       if (!previewRoute) {
         return undefined;
       }
 
-      return getCachedRouteStyles({
-        id_route: "__preview__",
-        faction: null,
-        controleur: null,
-        description: null,
-        created_at: "",
-        updated_at: "",
-        ...previewRoute,
-        status: previewRoute.status ?? "draft",
-      }, resolution);
+      return getCachedRouteStyles(
+        {
+          id_route: "__preview__",
+          faction: null,
+          controleur: null,
+          description: null,
+          created_at: "",
+          updated_at: "",
+          ...previewRoute,
+          status: previewRoute.status ?? "draft",
+        },
+        resolution,
+      );
     },
   });
 }

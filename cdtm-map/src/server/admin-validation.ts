@@ -82,7 +82,9 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
   const publicFields = ensurePlainObject(payload.public ?? emptyDraft.public);
   const terrain = ensurePlainObject(payload.terrain ?? emptyDraft.terrain);
   const control = ensurePlainObject(payload.control ?? emptyDraft.control);
-  const dynamicSections = payload.dynamic ? ensurePlainObject(payload.dynamic) : {};
+  const dynamicSections = payload.dynamic
+    ? ensurePlainObject(payload.dynamic)
+    : {};
 
   return {
     public: {
@@ -162,7 +164,9 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     }
 
     if (hasOwnProperty(publicFields, "fluvial")) {
-      publicPatch.fluvial = parseNullableBooleanPatchValue(publicFields.fluvial);
+      publicPatch.fluvial = parseNullableBooleanPatchValue(
+        publicFields.fluvial,
+      );
     }
 
     if (Object.keys(publicPatch).length > 0) {
@@ -182,7 +186,9 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
     }
 
     if (hasOwnProperty(terrain, "terrain_secondaire")) {
-      terrainPatch.terrain_secondaire = normalizeNullableText(terrain.terrain_secondaire);
+      terrainPatch.terrain_secondaire = normalizeNullableText(
+        terrain.terrain_secondaire,
+      );
     }
 
     if (hasOwnProperty(terrain, "colline")) {
@@ -227,7 +233,9 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
   }
 
   if (Object.keys(result).length === 0) {
-    throw new Error("Aucun champ modifie n'a ete fourni pour l'edition de masse.");
+    throw new Error(
+      "Aucun champ modifie n'a ete fourni pour l'edition de masse.",
+    );
   }
 
   return result;

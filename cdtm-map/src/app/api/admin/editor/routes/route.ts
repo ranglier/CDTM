@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import type { EditorMapRouteInput } from "@/editor/types";
-import { editorErrorResponse, ensureTechAdmin, parseEditorListOptions } from "@/app/api/admin/editor/utils";
-import { createEditorRoute, listEditorRoutes } from "@/server/editor-repository";
+import {
+  editorErrorResponse,
+  ensureTechAdmin,
+  parseEditorListOptions,
+} from "@/app/api/admin/editor/utils";
+import {
+  createEditorRoute,
+  listEditorRoutes,
+} from "@/server/editor-repository";
 
 export const runtime = "nodejs";
 

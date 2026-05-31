@@ -8,10 +8,22 @@ import { fileURLToPath } from "node:url";
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(scriptPath);
 const projectRoot = path.resolve(scriptsDir, "..");
-const nomenclaturesPath = path.join(projectRoot, "data/reference/nomenclatures.json");
-const canonicalCaseFiles = [path.join(projectRoot, "public/data/cases.geojson")];
+const nomenclaturesPath = path.join(
+  projectRoot,
+  "data/reference/nomenclatures.json",
+);
+const canonicalCaseFiles = [
+  path.join(projectRoot, "public/data/cases.geojson"),
+];
 
-const ignoredDirectories = new Set([".git", "node_modules", "dist", "build", "coverage", ".next"]);
+const ignoredDirectories = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".next",
+]);
 const ignoredRelativePrefixes = ["data/reference/", "data/schemas/"];
 
 const fallbackReservedBusinessFields = [
@@ -33,7 +45,14 @@ const fallbackReservedBusinessFields = [
   "controle_type",
 ];
 
-const coreFields = ["id_case", "region", "sous_region", "cote", "lac", "fluvial"];
+const coreFields = [
+  "id_case",
+  "region",
+  "sous_region",
+  "cote",
+  "lac",
+  "fluvial",
+];
 const waterBooleanFields = ["cote", "lac", "fluvial"];
 
 function isPlainObject(value) {
@@ -94,7 +113,9 @@ function isCasesDataFile(filePath) {
   const relativePath = toRelativePath(filePath);
   const fileName = path.basename(filePath).toLowerCase();
 
-  if (ignoredRelativePrefixes.some((prefix) => relativePath.startsWith(prefix))) {
+  if (
+    ignoredRelativePrefixes.some((prefix) => relativePath.startsWith(prefix))
+  ) {
     return false;
   }
 
@@ -115,7 +136,9 @@ async function discoverCaseFiles() {
   }
 
   const files = await walkFiles(projectRoot);
-  return files.filter((filePath) => isCasesDataFile(filePath)).sort((left, right) => left.localeCompare(right));
+  return files
+    .filter((filePath) => isCasesDataFile(filePath))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function extractCases(data, filePath) {
@@ -136,13 +159,23 @@ function extractCases(data, filePath) {
   }
 
   if (!isPlainObject(data)) {
-    pushIssue(issues, `[file ${relativePath}]`, "root", "Unsupported JSON root. Expected an array, a GeoJSON FeatureCollection, a GeoJSON Feature, or an object with a cases array.");
+    pushIssue(
+      issues,
+      `[file ${relativePath}]`,
+      "root",
+      "Unsupported JSON root. Expected an array, a GeoJSON FeatureCollection, a GeoJSON Feature, or an object with a cases array.",
+    );
     return { cases: [], issues };
   }
 
   if (data.type === "FeatureCollection") {
     if (!Array.isArray(data.features)) {
-      pushIssue(issues, `[file ${relativePath}]`, "features", "Invalid GeoJSON FeatureCollection. Expected a features array.");
+      pushIssue(
+        issues,
+        `[file ${relativePath}]`,
+        "features",
+        "Invalid GeoJSON FeatureCollection. Expected a features array.",
+      );
       return { cases: [], issues };
     }
 
@@ -186,16 +219,30 @@ function extractCases(data, filePath) {
     };
   }
 
-  pushIssue(issues, `[file ${relativePath}]`, "root", "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of case records.");
+  pushIssue(
+    issues,
+    `[file ${relativePath}]`,
+    "root",
+    "Unsupported cases format. Expected a GeoJSON FeatureCollection or a JSON array of case records.",
+  );
   return { cases: [], issues };
 }
 
 function validateReferenceData(nomenclatures) {
   const issues = [];
 
-  for (const key of ["case_core_fields", "water_boolean_fields", "reserved_business_fields"]) {
+  for (const key of [
+    "case_core_fields",
+    "water_boolean_fields",
+    "reserved_business_fields",
+  ]) {
     if (!Array.isArray(nomenclatures[key])) {
-      pushIssue(issues, "[reference data/reference/nomenclatures.json]", key, `Expected an array for ${key}.`);
+      pushIssue(
+        issues,
+        "[reference data/reference/nomenclatures.json]",
+        key,
+        `Expected an array for ${key}.`,
+      );
     }
   }
 
@@ -206,27 +253,54 @@ function validateGeometry(geometry, context) {
   const issues = [];
 
   if (!isPlainObject(geometry)) {
-    pushIssue(issues, context.scope, "geometry", "Missing or invalid geometry. Expected a GeoJSON Polygon or MultiPolygon.");
+    pushIssue(
+      issues,
+      context.scope,
+      "geometry",
+      "Missing or invalid geometry. Expected a GeoJSON Polygon or MultiPolygon.",
+    );
     return issues;
   }
 
   if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
-    pushIssue(issues, context.scope, "geometry.type", `Invalid geometry type "${geometry.type}". Expected Polygon or MultiPolygon.`);
+    pushIssue(
+      issues,
+      context.scope,
+      "geometry.type",
+      `Invalid geometry type "${geometry.type}". Expected Polygon or MultiPolygon.`,
+    );
   }
 
   if (!Array.isArray(geometry.coordinates)) {
-    pushIssue(issues, context.scope, "geometry.coordinates", "Missing or invalid geometry coordinates.");
+    pushIssue(
+      issues,
+      context.scope,
+      "geometry.coordinates",
+      "Missing or invalid geometry coordinates.",
+    );
   }
 
   return issues;
 }
 
 function validateCaseRecord(caseRecord, context) {
-  const { scope, seenIds, reservedBusinessFields, relativePath, geometry, requiresGeometry } = context;
+  const {
+    scope,
+    seenIds,
+    reservedBusinessFields,
+    relativePath,
+    geometry,
+    requiresGeometry,
+  } = context;
   const issues = [];
 
   if (!isPlainObject(caseRecord)) {
-    pushIssue(issues, scope, "properties", `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`);
+    pushIssue(
+      issues,
+      scope,
+      "properties",
+      `Invalid case payload in ${relativePath}. Expected an object for feature.properties.`,
+    );
     return issues;
   }
 
@@ -236,36 +310,76 @@ function validateCaseRecord(caseRecord, context) {
   const effectiveScope = hasValidId ? `[case ${normalizedId}]` : scope;
 
   if (!hasValidId) {
-    pushIssue(issues, effectiveScope, "properties.id_case", "Missing or empty id_case.");
+    pushIssue(
+      issues,
+      effectiveScope,
+      "properties.id_case",
+      "Missing or empty id_case.",
+    );
   } else if (seenIds.has(normalizedId)) {
-    pushIssue(issues, effectiveScope, "properties.id_case", `Duplicate id_case "${normalizedId}" across validated files.`);
+    pushIssue(
+      issues,
+      effectiveScope,
+      "properties.id_case",
+      `Duplicate id_case "${normalizedId}" across validated files.`,
+    );
   } else {
     seenIds.add(normalizedId);
   }
 
   for (const field of ["region", "sous_region"]) {
     const value = caseRecord[field];
-    if (value !== undefined && value !== null && (typeof value !== "string" || value.trim().length === 0)) {
-      pushIssue(issues, effectiveScope, `properties.${field}`, `Invalid ${field}. Expected a non-empty string or null.`);
+    if (
+      value !== undefined &&
+      value !== null &&
+      (typeof value !== "string" || value.trim().length === 0)
+    ) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `Invalid ${field}. Expected a non-empty string or null.`,
+      );
     }
   }
 
   for (const field of waterBooleanFields) {
     const value = caseRecord[field];
-    if (value !== undefined && value !== null && value !== true && value !== false) {
-      pushIssue(issues, effectiveScope, `properties.${field}`, [`Invalid value ${JSON.stringify(value)}.`, "Expected boolean true, boolean false, or null."]);
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== true &&
+      value !== false
+    ) {
+      pushIssue(issues, effectiveScope, `properties.${field}`, [
+        `Invalid value ${JSON.stringify(value)}.`,
+        "Expected boolean true, boolean false, or null.",
+      ]);
     }
   }
 
   for (const field of reservedBusinessFields) {
     if (!isNilOrEmpty(caseRecord[field])) {
-      pushIssue(issues, effectiveScope, `properties.${field}`, `${field} is a business field and must not be stored in the stable cases layer.`);
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `${field} is a business field and must not be stored in the stable cases layer.`,
+      );
     }
   }
 
   for (const field of Object.keys(caseRecord)) {
-    if (!coreFields.includes(field) && !reservedBusinessFields.includes(field)) {
-      pushIssue(issues, effectiveScope, `properties.${field}`, `Unknown field "${field}" in stable cases layer. Expected one of: ${coreFields.join(", ")}.`);
+    if (
+      !coreFields.includes(field) &&
+      !reservedBusinessFields.includes(field)
+    ) {
+      pushIssue(
+        issues,
+        effectiveScope,
+        `properties.${field}`,
+        `Unknown field "${field}" in stable cases layer. Expected one of: ${coreFields.join(", ")}.`,
+      );
     }
   }
 
@@ -311,7 +425,9 @@ async function loadNomenclatures() {
 async function main() {
   const nomenclatures = await loadNomenclatures();
   const issues = validateReferenceData(nomenclatures);
-  const reservedBusinessFields = Array.isArray(nomenclatures.reserved_business_fields)
+  const reservedBusinessFields = Array.isArray(
+    nomenclatures.reserved_business_fields,
+  )
     ? nomenclatures.reserved_business_fields
     : fallbackReservedBusinessFields;
   const candidateFiles = await resolveCandidateFiles(process.argv.slice(2));
@@ -325,7 +441,12 @@ async function main() {
     try {
       data = await loadJson(filePath);
     } catch (error) {
-      pushIssue(issues, `[file ${relativePath}]`, "root", `Unable to read or parse JSON: ${error.message}`);
+      pushIssue(
+        issues,
+        `[file ${relativePath}]`,
+        "root",
+        `Unable to read or parse JSON: ${error.message}`,
+      );
       continue;
     }
 
@@ -354,7 +475,9 @@ async function main() {
   }
 
   if (candidateFiles.length === 0) {
-    console.log("Data validation passed: 0 case(s) checked. No cases data file found in the repository.");
+    console.log(
+      "Data validation passed: 0 case(s) checked. No cases data file found in the repository.",
+    );
     process.exitCode = 0;
     return;
   }
@@ -364,6 +487,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`Validation failed: unexpected error\n\n${error.stack ?? error.message}`);
+  console.error(
+    `Validation failed: unexpected error\n\n${error.stack ?? error.message}`,
+  );
   process.exitCode = 1;
 });

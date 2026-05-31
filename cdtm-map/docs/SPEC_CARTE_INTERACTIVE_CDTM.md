@@ -12,6 +12,7 @@
 Les champs publics stables restent dans `cases.geojson`.
 
 Les blocs metier persistants sont :
+
 - public
 - terrain
 - controle
@@ -22,6 +23,7 @@ Il n'y a pas de bloc `notes`.
 ## Referentiels
 
 Les referentiels actifs sont :
+
 - terrains
 - controle
 - races
@@ -36,6 +38,7 @@ Les referentiels actifs sont :
 ## Objets cartographiques
 
 Le modele cible est separe :
+
 - `map_localities`
 - `map_landmarks`
 - `map_forces`

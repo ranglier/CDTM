@@ -26,7 +26,13 @@ export function SiteHeader({
   navigationItems = [{ href: "#carte", label: "Carte", current: true }],
   showAdminAction = true,
 }: SiteHeaderProps) {
-  const adminActionIcon = !adminAuthenticated ? <Lock /> : adminModeEnabled ? <Shield /> : <Eye />;
+  const adminActionIcon = !adminAuthenticated ? (
+    <Lock />
+  ) : adminModeEnabled ? (
+    <Shield />
+  ) : (
+    <Eye />
+  );
   const adminActionLabel = !adminAuthenticated
     ? "Connexion admin"
     : adminModeEnabled
@@ -48,15 +54,30 @@ export function SiteHeader({
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
-          <nav aria-label="Navigation principale" className="flex items-center gap-2">
+          <nav
+            aria-label="Navigation principale"
+            className="flex items-center gap-2"
+          >
             {navigationItems.map((item) => (
-              <Button key={item.href} asChild type="button" variant="ghost" size="sm">
+              <Button
+                key={item.href}
+                asChild
+                type="button"
+                variant="ghost"
+                size="sm"
+              >
                 {item.href.startsWith("/") ? (
-                  <Link href={item.href} aria-current={item.current ? "page" : undefined}>
+                  <Link
+                    href={item.href}
+                    aria-current={item.current ? "page" : undefined}
+                  >
                     {item.label}
                   </Link>
                 ) : (
-                  <a href={item.href} aria-current={item.current ? "page" : undefined}>
+                  <a
+                    href={item.href}
+                    aria-current={item.current ? "page" : undefined}
+                  >
                     {item.label}
                   </a>
                 )}
@@ -78,7 +99,12 @@ export function SiteHeader({
           ) : null}
 
           {adminAuthenticated ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onAdminLogout}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onAdminLogout}
+            >
               Deconnexion
             </Button>
           ) : null}

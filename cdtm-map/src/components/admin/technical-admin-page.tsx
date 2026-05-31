@@ -136,48 +136,66 @@ export function TechnicalAdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("references");
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  const [referenceStatuses, setReferenceStatuses] = useState<ReferenceTableStatus[]>([]);
-  const [activeSidebarRootId, setActiveSidebarRootId] = useState<string | null>(null);
-  const [activeReferenceViewId, setActiveReferenceViewId] = useState<string | null>(null);
+  const [referenceStatuses, setReferenceStatuses] = useState<
+    ReferenceTableStatus[]
+  >([]);
+  const [activeSidebarRootId, setActiveSidebarRootId] = useState<string | null>(
+    null,
+  );
+  const [activeReferenceViewId, setActiveReferenceViewId] = useState<
+    string | null
+  >(null);
   const [referenceRows, setReferenceRows] = useState<EditableRow[]>([]);
-  const [selectedReferenceRowId, setSelectedReferenceRowId] = useState<string | null>(null);
+  const [selectedReferenceRowId, setSelectedReferenceRowId] = useState<
+    string | null
+  >(null);
   const [referenceSearchInput, setReferenceSearchInput] = useState("");
   const [referenceSearch, setReferenceSearch] = useState("");
   const [referencesLoading, setReferencesLoading] = useState(false);
   const [referenceRowsLoading, setReferenceRowsLoading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [referenceFieldOptions, setReferenceFieldOptions] = useState<Record<string, ReferenceOption[]>>({});
-  const [terrainCategoryOptions, setTerrainCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [referenceFieldOptions, setReferenceFieldOptions] = useState<
+    Record<string, ReferenceOption[]>
+  >({});
+  const [terrainCategoryOptions, setTerrainCategoryOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([]);
 
-  const [schemaSummaries, setSchemaSummaries] = useState<DynamicCaseTableSummary[]>([]);
+  const [schemaSummaries, setSchemaSummaries] = useState<
+    DynamicCaseTableSummary[]
+  >([]);
   const [activeSchemaKey, setActiveSchemaKey] = useState<string | null>(null);
-  const [activeSchemaDefinition, setActiveSchemaDefinition] = useState<DynamicCaseTableDefinition | null>(null);
+  const [activeSchemaDefinition, setActiveSchemaDefinition] =
+    useState<DynamicCaseTableDefinition | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
-  const [createTableDraft, setCreateTableDraft] = useState<DynamicCaseTableCreateInput>({
-    table_key: "",
-    title: "",
-    description: "",
-  });
+  const [createTableDraft, setCreateTableDraft] =
+    useState<DynamicCaseTableCreateInput>({
+      table_key: "",
+      title: "",
+      description: "",
+    });
   const [createTablePending, setCreateTablePending] = useState(false);
   const [createTableError, setCreateTableError] = useState<string | null>(null);
   const [createTableKeyEdited, setCreateTableKeyEdited] = useState(false);
   const [showCreateTableForm, setShowCreateTableForm] = useState(false);
-  const [schemaMetaDraft, setSchemaMetaDraft] = useState<DynamicCaseTableUpdateInput>({
-    title: "",
-    description: "",
-    is_active: true,
-  });
+  const [schemaMetaDraft, setSchemaMetaDraft] =
+    useState<DynamicCaseTableUpdateInput>({
+      title: "",
+      description: "",
+      is_active: true,
+    });
   const [schemaMetaPending, setSchemaMetaPending] = useState(false);
   const [schemaMetaError, setSchemaMetaError] = useState<string | null>(null);
   const [showEditSchemaMeta, setShowEditSchemaMeta] = useState(false);
-  const [createFieldDraft, setCreateFieldDraft] = useState<DynamicCaseTableFieldCreateInput>({
-    field_key: "",
-    label: "",
-    field_type: "text",
-    reference_table_key: null,
-    reference_group_key: null,
-  });
+  const [createFieldDraft, setCreateFieldDraft] =
+    useState<DynamicCaseTableFieldCreateInput>({
+      field_key: "",
+      label: "",
+      field_type: "text",
+      reference_table_key: null,
+      reference_group_key: null,
+    });
   const [createFieldPending, setCreateFieldPending] = useState(false);
   const [createFieldError, setCreateFieldError] = useState<string | null>(null);
   const [createFieldKeyEdited, setCreateFieldKeyEdited] = useState(false);
@@ -185,31 +203,45 @@ export function TechnicalAdminPage() {
   const [nomenclatureGroups, setNomenclatureGroups] = useState<string[]>([]);
   const [staffAccounts, setStaffAccounts] = useState<StaffAccountSummary[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<number | null>(null);
-  const [sidebarSectionOpenState, setSidebarSectionOpenState] = useState<Record<string, boolean>>({});
+  const [sidebarSectionOpenState, setSidebarSectionOpenState] = useState<
+    Record<string, boolean>
+  >({});
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
-  const [createAccountDraft, setCreateAccountDraft] = useState<StaffAccountCreateInput>({
-    username: "",
-    password: "",
-    role: "staff",
-  });
+  const [createAccountDraft, setCreateAccountDraft] =
+    useState<StaffAccountCreateInput>({
+      username: "",
+      password: "",
+      role: "staff",
+    });
   const [createAccountPending, setCreateAccountPending] = useState(false);
-  const [createAccountError, setCreateAccountError] = useState<string | null>(null);
+  const [createAccountError, setCreateAccountError] = useState<string | null>(
+    null,
+  );
   const [showCreateAccountForm, setShowCreateAccountForm] = useState(false);
-  const [accountUpdateRole, setAccountUpdateRole] = useState<AdminRole>("staff");
+  const [accountUpdateRole, setAccountUpdateRole] =
+    useState<AdminRole>("staff");
   const [accountUpdateIsActive, setAccountUpdateIsActive] = useState(true);
   const [accountUpdatePending, setAccountUpdatePending] = useState(false);
-  const [accountUpdateError, setAccountUpdateError] = useState<string | null>(null);
+  const [accountUpdateError, setAccountUpdateError] = useState<string | null>(
+    null,
+  );
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
 
   const nomenclatureStatus = useMemo(
-    () => referenceStatuses.find((table) => table.definition.key === "nomenclatures") ?? null,
+    () =>
+      referenceStatuses.find(
+        (table) => table.definition.key === "nomenclatures",
+      ) ?? null,
     [referenceStatuses],
   );
   const nomenclatureGroupCounts = useMemo(
     () =>
       Object.fromEntries(
-        (nomenclatureStatus?.group_counts ?? []).map((group) => [group.group_key, group.row_count]),
+        (nomenclatureStatus?.group_counts ?? []).map((group) => [
+          group.group_key,
+          group.row_count,
+        ]),
       ),
     [nomenclatureStatus],
   );
@@ -268,7 +300,9 @@ export function TechnicalAdminPage() {
           title: "Factions",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "factions")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "factions",
+            )?.row_count ?? 0,
           styleTargetType: "faction",
         },
         {
@@ -277,7 +311,9 @@ export function TechnicalAdminPage() {
           title: "Controleurs",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "controleurs")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "controleurs",
+            )?.row_count ?? 0,
           styleTargetType: "controleur",
         },
       ],
@@ -293,7 +329,8 @@ export function TechnicalAdminPage() {
           title: "Races",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "races")?.row_count ?? 0,
+            referenceStatuses.find((table) => table.definition.key === "races")
+              ?.row_count ?? 0,
         },
         {
           id: "peuples-reference",
@@ -301,7 +338,9 @@ export function TechnicalAdminPage() {
           title: "Peuples",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "peuples")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "peuples",
+            )?.row_count ?? 0,
         },
         {
           id: "peuple_modificateurs",
@@ -309,8 +348,9 @@ export function TechnicalAdminPage() {
           title: "Modificateurs",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "peuple_modificateurs")
-              ?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "peuple_modificateurs",
+            )?.row_count ?? 0,
         },
       ],
     });
@@ -325,8 +365,9 @@ export function TechnicalAdminPage() {
           title: "Bonus contextuels",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "bonus_contextuel")
-              ?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "bonus_contextuel",
+            )?.row_count ?? 0,
         },
       ],
     });
@@ -341,7 +382,9 @@ export function TechnicalAdminPage() {
           title: "Icones de carte",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "map_icons")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "map_icons",
+            )?.row_count ?? 0,
         },
         {
           id: "locality_types",
@@ -349,7 +392,9 @@ export function TechnicalAdminPage() {
           title: "Types de localites",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "locality_types")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "locality_types",
+            )?.row_count ?? 0,
         },
         {
           id: "landmark_types",
@@ -357,7 +402,9 @@ export function TechnicalAdminPage() {
           title: "Types de landmarks",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "landmark_types")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "landmark_types",
+            )?.row_count ?? 0,
         },
         {
           id: "force_types",
@@ -365,7 +412,9 @@ export function TechnicalAdminPage() {
           title: "Types de forces",
           groupKey: null,
           rowCount:
-            referenceStatuses.find((table) => table.definition.key === "force_types")?.row_count ?? 0,
+            referenceStatuses.find(
+              (table) => table.definition.key === "force_types",
+            )?.row_count ?? 0,
         },
       ],
     });
@@ -382,14 +431,18 @@ export function TechnicalAdminPage() {
   const activeReferenceSection = useMemo(
     () =>
       activeTab === "references" && activeSidebarRootId
-        ? referenceViewSections.find((section) => section.id === activeSidebarRootId) ?? null
+        ? (referenceViewSections.find(
+            (section) => section.id === activeSidebarRootId,
+          ) ?? null)
         : null,
     [activeSidebarRootId, activeTab, referenceViewSections],
   );
   const activeReference = useMemo(
     () =>
       activeReferenceView
-        ? referenceStatuses.find((table) => table.definition.key === activeReferenceView.tableKey) ?? null
+        ? (referenceStatuses.find(
+            (table) => table.definition.key === activeReferenceView.tableKey,
+          ) ?? null)
         : null,
     [activeReferenceView, referenceStatuses],
   );
@@ -471,7 +524,14 @@ export function TechnicalAdminPage() {
                 label: table.title,
                 count: table.field_count,
               }))
-            : [{ kind: "schema" as const, id: "__schema__", label: "Tables metier dynamiques", count: null }],
+            : [
+                {
+                  kind: "schema" as const,
+                  id: "__schema__",
+                  label: "Tables metier dynamiques",
+                  count: null,
+                },
+              ],
       },
       {
         id: "accounts",
@@ -484,7 +544,14 @@ export function TechnicalAdminPage() {
                 label: account.username,
                 count: null,
               }))
-            : [{ kind: "account" as const, id: "__accounts__", label: "Utilisateurs", count: null }],
+            : [
+                {
+                  kind: "account" as const,
+                  id: "__accounts__",
+                  label: "Utilisateurs",
+                  count: null,
+                },
+              ],
       },
     ],
     [referenceViewSections, schemaSummaries, staffAccounts],
@@ -515,9 +582,10 @@ export function TechnicalAdminPage() {
   const selectedReferenceStatus = useMemo(
     () =>
       createFieldDraft.reference_table_key
-        ? referenceStatuses.find(
-            (table) => table.definition.key === createFieldDraft.reference_table_key,
-          ) ?? null
+        ? (referenceStatuses.find(
+            (table) =>
+              table.definition.key === createFieldDraft.reference_table_key,
+          ) ?? null)
         : null,
     [createFieldDraft.reference_table_key, referenceStatuses],
   );
@@ -530,7 +598,8 @@ export function TechnicalAdminPage() {
     [createFieldDraft.label],
   );
   const activeStaffAccount = useMemo(
-    () => staffAccounts.find((account) => account.id === activeAccountId) ?? null,
+    () =>
+      staffAccounts.find((account) => account.id === activeAccountId) ?? null,
     [activeAccountId, staffAccounts],
   );
   const terrainCategoryLabelByKey = useMemo(
@@ -558,13 +627,22 @@ export function TechnicalAdminPage() {
     setGlobalError(null);
 
     try {
-      const nextStatuses = await fetchJson<ReferenceTableStatus[]>("/api/admin/tech/references");
+      const nextStatuses = await fetchJson<ReferenceTableStatus[]>(
+        "/api/admin/tech/references",
+      );
       setReferenceStatuses(nextStatuses);
       const nomenclatureGroups =
-        nextStatuses.find((table) => table.definition.key === "nomenclatures")?.group_counts ?? [];
-      setNomenclatureGroups(nomenclatureGroups.map((group) => group.group_key).sort());
+        nextStatuses.find((table) => table.definition.key === "nomenclatures")
+          ?.group_counts ?? [];
+      setNomenclatureGroups(
+        nomenclatureGroups.map((group) => group.group_key).sort(),
+      );
     } catch (error) {
-      setGlobalError(error instanceof Error ? error.message : "Chargement des referentiels impossible.");
+      setGlobalError(
+        error instanceof Error
+          ? error.message
+          : "Chargement des referentiels impossible.",
+      );
     } finally {
       setReferencesLoading(false);
     }
@@ -595,13 +673,21 @@ export function TechnicalAdminPage() {
           `/api/admin/tech/references/${tableKey}?${params.toString()}`,
         );
         const nextRows = response.rows.map((row) =>
-          withStyleValues(toEditableRow(response.definition, row), view, response.styles),
+          withStyleValues(
+            toEditableRow(response.definition, row),
+            view,
+            response.styles,
+          ),
         );
         setReferenceRows(nextRows);
         setReferenceFieldOptions(response.field_options ?? {});
         setSelectedReferenceRowId(null);
       } catch (error) {
-        setReferenceError(error instanceof Error ? error.message : "Chargement des lignes impossible.");
+        setReferenceError(
+          error instanceof Error
+            ? error.message
+            : "Chargement des lignes impossible.",
+        );
         setReferenceRows([]);
         setReferenceFieldOptions({});
         setSelectedReferenceRowId(null);
@@ -637,11 +723,19 @@ export function TechnicalAdminPage() {
     setSchemaError(null);
 
     try {
-      const nextSummaries = await fetchJson<DynamicCaseTableSummary[]>("/api/admin/tech/schema/tables");
+      const nextSummaries = await fetchJson<DynamicCaseTableSummary[]>(
+        "/api/admin/tech/schema/tables",
+      );
       setSchemaSummaries(nextSummaries);
-      setActiveSchemaKey((current) => current ?? nextSummaries[0]?.table_key ?? null);
+      setActiveSchemaKey(
+        (current) => current ?? nextSummaries[0]?.table_key ?? null,
+      );
     } catch (error) {
-      setSchemaError(error instanceof Error ? error.message : "Chargement du schema impossible.");
+      setSchemaError(
+        error instanceof Error
+          ? error.message
+          : "Chargement du schema impossible.",
+      );
     } finally {
       setSchemaLoading(false);
     }
@@ -661,7 +755,9 @@ export function TechnicalAdminPage() {
         is_active: definition.is_active,
       });
     } catch (error) {
-      setSchemaError(error instanceof Error ? error.message : "Lecture de table impossible.");
+      setSchemaError(
+        error instanceof Error ? error.message : "Lecture de table impossible.",
+      );
       setActiveSchemaDefinition(null);
     }
   }, []);
@@ -671,11 +767,17 @@ export function TechnicalAdminPage() {
     setAccountsError(null);
 
     try {
-      const nextAccounts = await fetchJson<StaffAccountSummary[]>("/api/admin/tech/staff-users");
+      const nextAccounts = await fetchJson<StaffAccountSummary[]>(
+        "/api/admin/tech/staff-users",
+      );
       setStaffAccounts(nextAccounts);
       setActiveAccountId((current) => current ?? nextAccounts[0]?.id ?? null);
     } catch (error) {
-      setAccountsError(error instanceof Error ? error.message : "Chargement des comptes impossible.");
+      setAccountsError(
+        error instanceof Error
+          ? error.message
+          : "Chargement des comptes impossible.",
+      );
       setStaffAccounts([]);
       setActiveAccountId(null);
     } finally {
@@ -731,13 +833,23 @@ export function TechnicalAdminPage() {
       activeReferenceView.groupKey,
       activeReferenceView,
     );
-  }, [activeReferenceView, loadReferenceRows, referenceSearch, session?.is_tech_admin]);
+  }, [
+    activeReferenceView,
+    loadReferenceRows,
+    referenceSearch,
+    session?.is_tech_admin,
+  ]);
 
   useEffect(() => {
     const firstViewId = referenceViewSections[0]?.views[0]?.id ?? null;
 
     setActiveReferenceViewId((current) => {
-      if (current && referenceViewSections.some((section) => section.views.some((view) => view.id === current))) {
+      if (
+        current &&
+        referenceViewSections.some((section) =>
+          section.views.some((view) => view.id === current),
+        )
+      ) {
         return current;
       }
 
@@ -775,7 +887,9 @@ export function TechnicalAdminPage() {
       }
 
       const parsed = JSON.parse(stored) as Record<string, boolean>;
-      setSidebarSectionOpenState((current) => (Object.keys(current).length > 0 ? current : parsed));
+      setSidebarSectionOpenState((current) =>
+        Object.keys(current).length > 0 ? current : parsed,
+      );
     } catch {
       // ignore malformed local storage payloads
     }
@@ -820,7 +934,9 @@ export function TechnicalAdminPage() {
   useEffect(() => {
     if (!createTableKeyEdited) {
       setCreateTableDraft((current) =>
-        current.table_key === suggestedTableKey ? current : { ...current, table_key: suggestedTableKey },
+        current.table_key === suggestedTableKey
+          ? current
+          : { ...current, table_key: suggestedTableKey },
       );
     }
   }, [createTableKeyEdited, suggestedTableKey]);
@@ -828,7 +944,9 @@ export function TechnicalAdminPage() {
   useEffect(() => {
     if (!createFieldKeyEdited) {
       setCreateFieldDraft((current) =>
-        current.field_key === suggestedFieldKey ? current : { ...current, field_key: suggestedFieldKey },
+        current.field_key === suggestedFieldKey
+          ? current
+          : { ...current, field_key: suggestedFieldKey },
       );
     }
   }, [createFieldKeyEdited, suggestedFieldKey]);
@@ -864,88 +982,104 @@ export function TechnicalAdminPage() {
     }
   }, []);
 
-  const handleReferenceRowValueChange = useCallback((localId: string, fieldName: string, value: string) => {
-    setReferenceRows((current) =>
-      current.map((row) =>
-        row.localId === localId
-          ? (() => {
-              const rawNextValues = {
-                ...row.values,
-                [fieldName]: value,
-              };
-              const nextValues = activeReference
-                ? applyReferenceAutoFill(activeReference.definition.key, row.values, rawNextValues)
-                : rawNextValues;
+  const handleReferenceRowValueChange = useCallback(
+    (localId: string, fieldName: string, value: string) => {
+      setReferenceRows((current) =>
+        current.map((row) =>
+          row.localId === localId
+            ? (() => {
+                const rawNextValues = {
+                  ...row.values,
+                  [fieldName]: value,
+                };
+                const nextValues = activeReference
+                  ? applyReferenceAutoFill(
+                      activeReference.definition.key,
+                      row.values,
+                      rawNextValues,
+                    )
+                  : rawNextValues;
 
-              if (fieldName === "pattern_type" && value === "none") {
-                nextValues.pattern_color = "";
-              }
+                if (fieldName === "pattern_type" && value === "none") {
+                  nextValues.pattern_color = "";
+                }
 
-              if (
-                fieldName === "pattern_type" &&
-                value !== "none" &&
-                nextValues.pattern_color.trim().length === 0
-              ) {
-                nextValues.pattern_color = DEFAULT_PATTERN_COLOR;
-              }
+                if (
+                  fieldName === "pattern_type" &&
+                  value !== "none" &&
+                  nextValues.pattern_color.trim().length === 0
+                ) {
+                  nextValues.pattern_color = DEFAULT_PATTERN_COLOR;
+                }
 
-              return {
-                ...row,
-                values: nextValues,
-                error: null,
-              };
-            })()
-          : row,
-      ),
-    );
-  }, [activeReference]);
+                return {
+                  ...row,
+                  values: nextValues,
+                  error: null,
+                };
+              })()
+            : row,
+        ),
+      );
+    },
+    [activeReference],
+  );
 
-  const handleMapIconUpload = useCallback(async (row: EditableRow, file: File | null) => {
-    if (!file) {
-      return;
-    }
-
-    setReferenceRows((current) =>
-      current.map((item) =>
-        item.localId === row.localId ? { ...item, uploading: true, error: null } : item,
-      ),
-    );
-
-    try {
-      const uploaded = await uploadMapIconFile(file);
+  const handleMapIconUpload = useCallback(
+    async (row: EditableRow, file: File | null) => {
+      if (!file) {
+        return;
+      }
 
       setReferenceRows((current) =>
         current.map((item) =>
           item.localId === row.localId
-            ? {
-                ...item,
-                uploading: false,
-                values: applyReferenceAutoFill("map_icons", item.values, {
-                  ...item.values,
-                  image_path: uploaded.image_path,
-                  image_original_name: uploaded.image_original_name,
-                  image_mime_type: uploaded.image_mime_type,
-                  image_size_bytes: String(uploaded.image_size_bytes),
-                  image_alt: item.values.image_alt || item.values.label || file.name,
-                }),
-              }
+            ? { ...item, uploading: true, error: null }
             : item,
         ),
       );
-    } catch (error) {
-      setReferenceRows((current) =>
-        current.map((item) =>
-          item.localId === row.localId
-            ? {
-                ...item,
-                uploading: false,
-                error: error instanceof Error ? error.message : "Upload impossible.",
-              }
-            : item,
-        ),
-      );
-    }
-  }, []);
+
+      try {
+        const uploaded = await uploadMapIconFile(file);
+
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? {
+                  ...item,
+                  uploading: false,
+                  values: applyReferenceAutoFill("map_icons", item.values, {
+                    ...item.values,
+                    image_path: uploaded.image_path,
+                    image_original_name: uploaded.image_original_name,
+                    image_mime_type: uploaded.image_mime_type,
+                    image_size_bytes: String(uploaded.image_size_bytes),
+                    image_alt:
+                      item.values.image_alt || item.values.label || file.name,
+                  }),
+                }
+              : item,
+          ),
+        );
+      } catch (error) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? {
+                  ...item,
+                  uploading: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Upload impossible.",
+                }
+              : item,
+          ),
+        );
+      }
+    },
+    [],
+  );
 
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
@@ -958,7 +1092,9 @@ export function TechnicalAdminPage() {
         localId,
         values: {
           ...createEmptyRowValues(activeReference.definition),
-          ...(activeReferenceView.groupKey ? { group_key: activeReferenceView.groupKey } : {}),
+          ...(activeReferenceView.groupKey
+            ? { group_key: activeReferenceView.groupKey }
+            : {}),
           ...(activeReferenceView.styleTargetType
             ? {
                 stroke: DEFAULT_STYLE_STROKE,
@@ -1030,7 +1166,9 @@ export function TechnicalAdminPage() {
 
       setReferenceRows((current) =>
         current.map((item) =>
-          item.localId === row.localId ? { ...item, saving: true, error: null } : item,
+          item.localId === row.localId
+            ? { ...item, saving: true, error: null }
+            : item,
         ),
       );
 
@@ -1055,8 +1193,14 @@ export function TechnicalAdminPage() {
             pattern_color: row.values.pattern_color ?? "",
           },
         };
-        const styleTargetId = getStyleTargetIdForRow(activeReferenceView ?? null, nextBaseRow.values);
-        const stylePayload = buildStylePayload(activeReferenceView ?? null, nextBaseRow.values);
+        const styleTargetId = getStyleTargetIdForRow(
+          activeReferenceView ?? null,
+          nextBaseRow.values,
+        );
+        const stylePayload = buildStylePayload(
+          activeReferenceView ?? null,
+          nextBaseRow.values,
+        );
 
         if (activeReferenceView?.styleTargetType && styleTargetId) {
           await fetchJson("/api/admin/tech/styles", {
@@ -1076,7 +1220,9 @@ export function TechnicalAdminPage() {
 
         const nextRow = nextBaseRow;
         setReferenceRows((current) =>
-          current.map((item) => (item.localId === row.localId ? nextRow : item)),
+          current.map((item) =>
+            item.localId === row.localId ? nextRow : item,
+          ),
         );
         if (activeReferenceView?.groupKey === "terrain_cat") {
           await loadTerrainCategoryOptions();
@@ -1088,18 +1234,17 @@ export function TechnicalAdminPage() {
               ? {
                   ...item,
                   saving: false,
-                  error: error instanceof Error ? error.message : "Enregistrement impossible.",
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Enregistrement impossible.",
                 }
               : item,
           ),
         );
       }
     },
-    [
-      activeReference,
-      activeReferenceView,
-      loadTerrainCategoryOptions,
-    ],
+    [activeReference, activeReferenceView, loadTerrainCategoryOptions],
   );
 
   const handleDeleteReferenceRow = useCallback(
@@ -1109,8 +1254,12 @@ export function TechnicalAdminPage() {
       }
 
       if (row.isNew || row.originalPrimaryKey.length === 0) {
-        setReferenceRows((current) => current.filter((item) => item.localId !== row.localId));
-        setSelectedReferenceRowId((current) => (current === row.localId ? null : current));
+        setReferenceRows((current) =>
+          current.filter((item) => item.localId !== row.localId),
+        );
+        setSelectedReferenceRowId((current) =>
+          current === row.localId ? null : current,
+        );
         return;
       }
 
@@ -1119,7 +1268,10 @@ export function TechnicalAdminPage() {
       }
 
       try {
-        const styleTargetId = getStyleTargetIdForRow(activeReferenceView ?? null, row.values);
+        const styleTargetId = getStyleTargetIdForRow(
+          activeReferenceView ?? null,
+          row.values,
+        );
         await fetchJson(
           `/api/admin/tech/references/${activeReference.definition.key}?pk=${encodeURIComponent(
             row.originalPrimaryKey,
@@ -1141,11 +1293,17 @@ export function TechnicalAdminPage() {
             }),
           });
         }
-        setReferenceRows((current) => current.filter((item) => item.localId !== row.localId));
-        setSelectedReferenceRowId((current) => (current === row.localId ? null : current));
+        setReferenceRows((current) =>
+          current.filter((item) => item.localId !== row.localId),
+        );
+        setSelectedReferenceRowId((current) =>
+          current === row.localId ? null : current,
+        );
         await Promise.all([
           loadReferenceStatuses(),
-          activeReferenceView?.groupKey === "terrain_cat" ? loadTerrainCategoryOptions() : Promise.resolve(),
+          activeReferenceView?.groupKey === "terrain_cat"
+            ? loadTerrainCategoryOptions()
+            : Promise.resolve(),
         ]);
       } catch (error) {
         setReferenceRows((current) =>
@@ -1153,7 +1311,10 @@ export function TechnicalAdminPage() {
             item.localId === row.localId
               ? {
                   ...item,
-                  error: error instanceof Error ? error.message : "Suppression impossible.",
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Suppression impossible.",
                 }
               : item,
           ),
@@ -1173,13 +1334,12 @@ export function TechnicalAdminPage() {
     setCreateTableError(null);
 
     try {
-      const result = await fetchJson<{ definition: DynamicCaseTableDefinition }>(
-        "/api/admin/tech/schema/tables",
-        {
-          method: "POST",
-          body: JSON.stringify(createTableDraft),
-        },
-      );
+      const result = await fetchJson<{
+        definition: DynamicCaseTableDefinition;
+      }>("/api/admin/tech/schema/tables", {
+        method: "POST",
+        body: JSON.stringify(createTableDraft),
+      });
 
       setCreateTableDraft({
         table_key: "",
@@ -1191,7 +1351,9 @@ export function TechnicalAdminPage() {
       await loadSchemaSummaries();
       setActiveSchemaKey(result.definition.table_key);
     } catch (error) {
-      setCreateTableError(error instanceof Error ? error.message : "Creation impossible.");
+      setCreateTableError(
+        error instanceof Error ? error.message : "Creation impossible.",
+      );
     } finally {
       setCreateTablePending(false);
     }
@@ -1228,7 +1390,9 @@ export function TechnicalAdminPage() {
         ),
       );
     } catch (error) {
-      setSchemaMetaError(error instanceof Error ? error.message : "Mise a jour impossible.");
+      setSchemaMetaError(
+        error instanceof Error ? error.message : "Mise a jour impossible.",
+      );
     } finally {
       setSchemaMetaPending(false);
     }
@@ -1243,7 +1407,9 @@ export function TechnicalAdminPage() {
     setCreateFieldError(null);
 
     try {
-      const result = await fetchJson<{ definition: DynamicCaseTableDefinition }>(
+      const result = await fetchJson<{
+        definition: DynamicCaseTableDefinition;
+      }>(
         `/api/admin/tech/schema/tables/${activeSchemaDefinition.table_key}/fields`,
         {
           method: "POST",
@@ -1274,7 +1440,9 @@ export function TechnicalAdminPage() {
         ),
       );
     } catch (error) {
-      setCreateFieldError(error instanceof Error ? error.message : "Ajout de champ impossible.");
+      setCreateFieldError(
+        error instanceof Error ? error.message : "Ajout de champ impossible.",
+      );
     } finally {
       setCreateFieldPending(false);
     }
@@ -1285,10 +1453,13 @@ export function TechnicalAdminPage() {
     setCreateAccountError(null);
 
     try {
-      const createdAccount = await fetchJson<StaffAccountSummary>("/api/admin/tech/staff-users", {
-        method: "POST",
-        body: JSON.stringify(createAccountDraft),
-      });
+      const createdAccount = await fetchJson<StaffAccountSummary>(
+        "/api/admin/tech/staff-users",
+        {
+          method: "POST",
+          body: JSON.stringify(createAccountDraft),
+        },
+      );
 
       setCreateAccountDraft({
         username: "",
@@ -1300,7 +1471,11 @@ export function TechnicalAdminPage() {
       setActiveAccountId(createdAccount.id);
       await hydrateSession();
     } catch (error) {
-      setCreateAccountError(error instanceof Error ? error.message : "Creation de compte impossible.");
+      setCreateAccountError(
+        error instanceof Error
+          ? error.message
+          : "Creation de compte impossible.",
+      );
     } finally {
       setCreateAccountPending(false);
     }
@@ -1327,12 +1502,16 @@ export function TechnicalAdminPage() {
       );
 
       setStaffAccounts((current) =>
-        current.map((account) => (account.id === updatedAccount.id ? updatedAccount : account)),
+        current.map((account) =>
+          account.id === updatedAccount.id ? updatedAccount : account,
+        ),
       );
       await hydrateSession();
       setEditingAccountId(null);
     } catch (error) {
-      setAccountUpdateError(error instanceof Error ? error.message : "Mise a jour impossible.");
+      setAccountUpdateError(
+        error instanceof Error ? error.message : "Mise a jour impossible.",
+      );
     } finally {
       setAccountUpdatePending(false);
     }
@@ -1346,7 +1525,8 @@ export function TechnicalAdminPage() {
   const activeSchemaFieldCount = activeSchemaDefinition?.fields.length ?? 0;
   const selectedReferenceTableKey = createFieldDraft.reference_table_key ?? "";
   const canCreateTable =
-    createTableDraft.title.trim().length > 0 && createTableDraft.table_key.trim().length > 0;
+    createTableDraft.title.trim().length > 0 &&
+    createTableDraft.table_key.trim().length > 0;
   const canCreateField =
     createFieldDraft.label.trim().length > 0 &&
     createFieldDraft.field_key.trim().length > 0 &&
@@ -1374,12 +1554,15 @@ export function TechnicalAdminPage() {
 
   if (
     !session ||
-    (session.is_tech_admin && (referencesLoading || schemaLoading || accountsLoading))
+    (session.is_tech_admin &&
+      (referencesLoading || schemaLoading || accountsLoading))
   ) {
     return (
       <AppShell>
         <SectionPanel className="p-6">
-          <p className="text-sm text-muted-foreground">Chargement de l&apos;admin technique...</p>
+          <p className="text-sm text-muted-foreground">
+            Chargement de l&apos;admin technique...
+          </p>
         </SectionPanel>
       </AppShell>
     );
@@ -1389,7 +1572,9 @@ export function TechnicalAdminPage() {
     return (
       <AppShell>
         <SectionPanel className="p-6">
-          <h1 className="font-chronicle text-3xl text-foreground">Administration</h1>
+          <h1 className="font-chronicle text-3xl text-foreground">
+            Administration
+          </h1>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
             Cette page est reservee au staff connecte.
           </p>
@@ -1415,7 +1600,9 @@ export function TechnicalAdminPage() {
           onAdminLogout={() => void handleLogout()}
         />
         <SectionPanel className="p-6">
-          <h1 className="font-chronicle text-3xl text-foreground">Administration</h1>
+          <h1 className="font-chronicle text-3xl text-foreground">
+            Administration
+          </h1>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
             Cette page est reservee aux administrateurs techniques.
           </p>
@@ -1436,8 +1623,12 @@ export function TechnicalAdminPage() {
         adminModeEnabled
         navigationItems={[
           { href: "/?admin=1", label: "Carte" },
-          ...(session.is_tech_admin ? [{ href: "/editeur", label: "Editeur" }] : []),
-          ...(session.is_tech_admin ? [{ href: "/admin/tech", label: "Administration", current: true }] : []),
+          ...(session.is_tech_admin
+            ? [{ href: "/editeur", label: "Editeur" }]
+            : []),
+          ...(session.is_tech_admin
+            ? [{ href: "/admin/tech", label: "Administration", current: true }]
+            : []),
         ]}
         showAdminAction={false}
         onAdminAction={() => {}}
@@ -1450,7 +1641,9 @@ export function TechnicalAdminPage() {
             Administration
           </h1>
 
-          {globalError ? <p className="mt-4 text-sm text-destructive">{globalError}</p> : null}
+          {globalError ? (
+            <p className="mt-4 text-sm text-destructive">{globalError}</p>
+          ) : null}
 
           <TechAdminSidebar
             sidebarSections={sidebarSections}
@@ -1462,7 +1655,9 @@ export function TechnicalAdminPage() {
             activeSidebarSectionIds={activeSidebarSectionIds}
             sidebarSectionOpenState={sidebarSectionOpenState}
             setSidebarSectionOpenState={setSidebarSectionOpenState}
-            referenceViewSectionsIds={referenceViewSections.map((section) => section.id)}
+            referenceViewSectionsIds={referenceViewSections.map(
+              (section) => section.id,
+            )}
             onSelectReferenceRoot={(sectionId) => {
               setActiveSidebarRootId(sectionId);
               setActiveTab("references");
@@ -1491,7 +1686,9 @@ export function TechnicalAdminPage() {
             onSelectAccountItem={(itemId) => {
               setActiveTab("accounts");
               setActiveSidebarRootId("accounts");
-              setActiveAccountId(itemId === "__accounts__" ? null : Number(itemId));
+              setActiveAccountId(
+                itemId === "__accounts__" ? null : Number(itemId),
+              );
             }}
           />
         </SectionPanel>
@@ -1524,7 +1721,9 @@ export function TechnicalAdminPage() {
             <>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <h2 className="text-2xl font-semibold text-foreground">
-                  {activeSchemaDefinition ? activeSchemaDefinition.title : "Champs personnalises"}
+                  {activeSchemaDefinition
+                    ? activeSchemaDefinition.title
+                    : "Champs personnalises"}
                 </h2>
                 <Button
                   type="button"
@@ -1562,7 +1761,9 @@ export function TechnicalAdminPage() {
                     />
                     <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-foreground">Nom interne</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Nom interne
+                        </p>
                         <Button
                           type="button"
                           size="sm"
@@ -1590,14 +1791,20 @@ export function TechnicalAdminPage() {
                         }}
                       />
                     </div>
-                    {createTableError ? <p className="text-sm text-destructive">{createTableError}</p> : null}
+                    {createTableError ? (
+                      <p className="text-sm text-destructive">
+                        {createTableError}
+                      </p>
+                    ) : null}
                     <div className="flex justify-end">
                       <Button
                         type="button"
                         disabled={createTablePending || !canCreateTable}
                         onClick={() => void handleCreateSchemaTable()}
                       >
-                        {createTablePending ? "Creation..." : "Creer la categorie"}
+                        {createTablePending
+                          ? "Creation..."
+                          : "Creer la categorie"}
                       </Button>
                     </div>
                   </div>
@@ -1606,306 +1813,360 @@ export function TechnicalAdminPage() {
 
               {activeSchemaDefinition ? (
                 <>
-                <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <h2 className="text-2xl font-semibold text-foreground">
-                    {activeSchemaDefinition.title}
-                  </h2>
-                  <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    {activeSchemaDefinition.is_active ? "Visible dans les cases" : "Masquee dans les cases"}
+                  <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <h2 className="text-2xl font-semibold text-foreground">
+                      {activeSchemaDefinition.title}
+                    </h2>
+                    <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      {activeSchemaDefinition.is_active
+                        ? "Visible dans les cases"
+                        : "Masquee dans les cases"}
+                    </div>
                   </div>
-                </div>
 
-                {schemaError ? <p className="mt-4 text-sm text-destructive">{schemaError}</p> : null}
+                  {schemaError ? (
+                    <p className="mt-4 text-sm text-destructive">
+                      {schemaError}
+                    </p>
+                  ) : null}
 
-                <div className="mt-6 space-y-4">
-                  <details
-                    open={showEditSchemaMeta}
-                    className="rounded-[20px] border border-border/70 bg-background/35 p-4"
-                  >
-                    <summary
-                      className="flex cursor-pointer list-none items-center justify-between gap-3"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setShowEditSchemaMeta((current) => !current);
-                      }}
+                  <div className="mt-6 space-y-4">
+                    <details
+                      open={showEditSchemaMeta}
+                      className="rounded-[20px] border border-border/70 bg-background/35 p-4"
                     >
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">Presentation</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {activeSchemaDefinition.title}
+                      <summary
+                        className="flex cursor-pointer list-none items-center justify-between gap-3"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setShowEditSchemaMeta((current) => !current);
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            Presentation
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {activeSchemaDefinition.title}
+                          </p>
+                        </div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          {showEditSchemaMeta ? "Ouvert" : "Ferme"}
                         </p>
-                      </div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        {showEditSchemaMeta ? "Ouvert" : "Ferme"}
-                      </p>
-                    </summary>
+                      </summary>
 
-                    <div className="mt-4 space-y-3">
-                      <input
-                        className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                        value={schemaMetaDraft.title ?? ""}
-                        onChange={(event) =>
-                          setSchemaMetaDraft((current) => ({
-                            ...current,
-                            title: event.target.value,
-                          }))
-                        }
-                      />
-                      <textarea
-                        className="min-h-24 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                        value={(schemaMetaDraft.description as string) ?? ""}
-                        onChange={(event) =>
-                          setSchemaMetaDraft((current) => ({
-                            ...current,
-                            description: event.target.value,
-                          }))
-                        }
-                      />
-                      <label className="flex items-center gap-3 text-sm text-foreground">
+                      <div className="mt-4 space-y-3">
                         <input
-                          type="checkbox"
-                          checked={Boolean(schemaMetaDraft.is_active)}
+                          className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                          value={schemaMetaDraft.title ?? ""}
                           onChange={(event) =>
                             setSchemaMetaDraft((current) => ({
                               ...current,
-                              is_active: event.target.checked,
+                              title: event.target.value,
                             }))
                           }
                         />
-                        Categorie visible dans le panneau des cases
-                      </label>
-                      {schemaMetaError ? <p className="text-sm text-destructive">{schemaMetaError}</p> : null}
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          disabled={schemaMetaPending}
-                          onClick={() => void handleSaveSchemaMeta()}
-                        >
-                          {schemaMetaPending ? "Enregistrement..." : "Enregistrer"}
-                        </Button>
-                      </div>
-                    </div>
-                  </details>
-
-                  <details
-                    open={showCreateFieldForm}
-                    className="rounded-[20px] border border-border/70 bg-background/35 p-4"
-                  >
-                    <summary
-                      className="flex cursor-pointer list-none items-center justify-between gap-3"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setShowCreateFieldForm((current) => !current);
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">Ajouter une information</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {activeSchemaFieldCount} information(s) existante(s)
-                        </p>
-                      </div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        {showCreateFieldForm ? "Ouvert" : "Ferme"}
-                      </p>
-                    </summary>
-
-                    <div className="mt-4 space-y-3">
-                      <input
-                        className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                        placeholder="ex : Niveau de fortification"
-                        value={createFieldDraft.label}
-                        onChange={(event) =>
-                          setCreateFieldDraft((current) => ({
-                            ...current,
-                            label: event.target.value,
-                          }))
-                        }
-                      />
-                      <select
-                        className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                        value={createFieldDraft.field_type}
-                        onChange={(event) =>
-                          setCreateFieldDraft((current) => ({
-                            ...current,
-                            field_type: event.target.value as DynamicCaseTableFieldType,
-                          }))
-                        }
-                      >
-                        {dynamicFieldTypeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium text-foreground">Nom interne du champ</p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setCreateFieldKeyEdited(false);
-                              setCreateFieldDraft((current) => ({
-                                ...current,
-                                field_key: suggestedFieldKey,
-                              }));
-                            }}
-                          >
-                            Regenerer
-                          </Button>
-                        </div>
-                        <input
-                          className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                          placeholder="ex : niveau_fortification"
-                          value={createFieldDraft.field_key}
-                          onChange={(event) => {
-                            setCreateFieldKeyEdited(true);
-                            setCreateFieldDraft((current) => ({
+                        <textarea
+                          className="min-h-24 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                          value={(schemaMetaDraft.description as string) ?? ""}
+                          onChange={(event) =>
+                            setSchemaMetaDraft((current) => ({
                               ...current,
-                              field_key: event.target.value,
-                            }));
-                          }}
+                              description: event.target.value,
+                            }))
+                          }
                         />
-                      </div>
-
-                      {createFieldDraft.field_type === "reference" ? (
-                        <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
-                          <p className="text-sm font-medium text-foreground">Liste de valeurs</p>
-                          <select
-                            className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                            value={createFieldDraft.reference_table_key ?? ""}
+                        <label className="flex items-center gap-3 text-sm text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(schemaMetaDraft.is_active)}
                             onChange={(event) =>
-                              setCreateFieldDraft((current) => ({
+                              setSchemaMetaDraft((current) => ({
                                 ...current,
-                                reference_table_key: event.target.value as ReferenceTableKey,
-                                reference_group_key:
-                                  event.target.value === "nomenclatures"
-                                    ? current.reference_group_key
-                                    : null,
+                                is_active: event.target.checked,
                               }))
                             }
+                          />
+                          Categorie visible dans le panneau des cases
+                        </label>
+                        {schemaMetaError ? (
+                          <p className="text-sm text-destructive">
+                            {schemaMetaError}
+                          </p>
+                        ) : null}
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            disabled={schemaMetaPending}
+                            onClick={() => void handleSaveSchemaMeta()}
                           >
-                            <option value="">Choisir une liste de valeurs</option>
-                            {referenceStatuses.map((table) => (
-                              <option key={table.definition.key} value={table.definition.key}>
-                                {table.definition.title}
-                              </option>
-                            ))}
-                          </select>
+                            {schemaMetaPending
+                              ? "Enregistrement..."
+                              : "Enregistrer"}
+                          </Button>
+                        </div>
+                      </div>
+                    </details>
 
-                          {createFieldDraft.reference_table_key === "nomenclatures" ? (
+                    <details
+                      open={showCreateFieldForm}
+                      className="rounded-[20px] border border-border/70 bg-background/35 p-4"
+                    >
+                      <summary
+                        className="flex cursor-pointer list-none items-center justify-between gap-3"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setShowCreateFieldForm((current) => !current);
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            Ajouter une information
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {activeSchemaFieldCount} information(s) existante(s)
+                          </p>
+                        </div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          {showCreateFieldForm ? "Ouvert" : "Ferme"}
+                        </p>
+                      </summary>
+
+                      <div className="mt-4 space-y-3">
+                        <input
+                          className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                          placeholder="ex : Niveau de fortification"
+                          value={createFieldDraft.label}
+                          onChange={(event) =>
+                            setCreateFieldDraft((current) => ({
+                              ...current,
+                              label: event.target.value,
+                            }))
+                          }
+                        />
+                        <select
+                          className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                          value={createFieldDraft.field_type}
+                          onChange={(event) =>
+                            setCreateFieldDraft((current) => ({
+                              ...current,
+                              field_type: event.target
+                                .value as DynamicCaseTableFieldType,
+                            }))
+                          }
+                        >
+                          {dynamicFieldTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-foreground">
+                              Nom interne du champ
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setCreateFieldKeyEdited(false);
+                                setCreateFieldDraft((current) => ({
+                                  ...current,
+                                  field_key: suggestedFieldKey,
+                                }));
+                              }}
+                            >
+                              Regenerer
+                            </Button>
+                          </div>
+                          <input
+                            className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                            placeholder="ex : niveau_fortification"
+                            value={createFieldDraft.field_key}
+                            onChange={(event) => {
+                              setCreateFieldKeyEdited(true);
+                              setCreateFieldDraft((current) => ({
+                                ...current,
+                                field_key: event.target.value,
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        {createFieldDraft.field_type === "reference" ? (
+                          <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                            <p className="text-sm font-medium text-foreground">
+                              Liste de valeurs
+                            </p>
                             <select
                               className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                              value={createFieldDraft.reference_group_key ?? ""}
+                              value={createFieldDraft.reference_table_key ?? ""}
                               onChange={(event) =>
                                 setCreateFieldDraft((current) => ({
                                   ...current,
-                                  reference_group_key: event.target.value,
+                                  reference_table_key: event.target
+                                    .value as ReferenceTableKey,
+                                  reference_group_key:
+                                    event.target.value === "nomenclatures"
+                                      ? current.reference_group_key
+                                      : null,
                                 }))
                               }
                             >
-                              <option value="">Choisir une famille de valeurs</option>
-                              {nomenclatureGroups.map((groupKey) => (
-                                <option key={groupKey} value={groupKey}>
-                                  {groupKey}
+                              <option value="">
+                                Choisir une liste de valeurs
+                              </option>
+                              {referenceStatuses.map((table) => (
+                                <option
+                                  key={table.definition.key}
+                                  value={table.definition.key}
+                                >
+                                  {table.definition.title}
                                 </option>
                               ))}
                             </select>
-                          ) : null}
-                        </div>
-                      ) : null}
 
-                      <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
-                        <p className="text-sm font-medium text-foreground">Resume</p>
-                        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                          <p>
-                            <span className="text-foreground">Libelle :</span>{" "}
-                            {createFieldDraft.label.trim() || "Non renseigne"}
-                          </p>
-                          <p>
-                            <span className="text-foreground">Type :</span>{" "}
-                            {getFieldTypeLabel(createFieldDraft.field_type)}
-                          </p>
-                          <p>
-                            <span className="text-foreground">Nom interne :</span>{" "}
-                            {createFieldDraft.field_key.trim() || "Non genere"}
-                          </p>
-                          {selectedReferenceStatus ? (
-                            <p>
-                              <span className="text-foreground">Liste choisie :</span>{" "}
-                              {selectedReferenceStatus.definition.title}
-                              {createFieldDraft.reference_group_key
-                                ? ` / ${createFieldDraft.reference_group_key}`
-                                : ""}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {createFieldError ? <p className="text-sm text-destructive">{createFieldError}</p> : null}
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          disabled={createFieldPending || !canCreateField}
-                          onClick={() => void handleCreateField()}
-                        >
-                          {createFieldPending ? "Ajout..." : "Ajouter l'information"}
-                        </Button>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-
-                <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      Informations ({activeSchemaFieldCount})
-                    </p>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {activeSchemaDefinition.fields.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Aucune information personnalisee pour cette categorie.
-                      </p>
-                    ) : (
-                      activeSchemaDefinition.fields.map((field) => (
-                        <details
-                          key={field.field_key}
-                          className="rounded-[16px] border border-border/70 bg-background/45 px-4 py-3"
-                        >
-                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-foreground">{field.label}</p>
-                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                              {getFieldTypeLabel(field.field_type)}
-                            </p>
-                          </summary>
-
-                          <div className="mt-4">
-                            <SummaryRow label="Nom interne" value={field.field_key} />
-                            <SummaryRow label="Type" value={getFieldTypeLabel(field.field_type)} />
-                            {field.reference_table_key ? (
-                              <SummaryRow
-                                label="Liste"
+                            {createFieldDraft.reference_table_key ===
+                            "nomenclatures" ? (
+                              <select
+                                className="mt-3 w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
                                 value={
-                                  field.reference_group_key
-                                    ? `${field.reference_table_key} / ${field.reference_group_key}`
-                                    : field.reference_table_key
+                                  createFieldDraft.reference_group_key ?? ""
                                 }
-                              />
+                                onChange={(event) =>
+                                  setCreateFieldDraft((current) => ({
+                                    ...current,
+                                    reference_group_key: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">
+                                  Choisir une famille de valeurs
+                                </option>
+                                {nomenclatureGroups.map((groupKey) => (
+                                  <option key={groupKey} value={groupKey}>
+                                    {groupKey}
+                                  </option>
+                                ))}
+                              </select>
                             ) : null}
                           </div>
-                        </details>
-                      ))
-                    )}
+                        ) : null}
+
+                        <div className="rounded-[16px] border border-border/60 bg-background/30 p-4">
+                          <p className="text-sm font-medium text-foreground">
+                            Resume
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                            <p>
+                              <span className="text-foreground">Libelle :</span>{" "}
+                              {createFieldDraft.label.trim() || "Non renseigne"}
+                            </p>
+                            <p>
+                              <span className="text-foreground">Type :</span>{" "}
+                              {getFieldTypeLabel(createFieldDraft.field_type)}
+                            </p>
+                            <p>
+                              <span className="text-foreground">
+                                Nom interne :
+                              </span>{" "}
+                              {createFieldDraft.field_key.trim() ||
+                                "Non genere"}
+                            </p>
+                            {selectedReferenceStatus ? (
+                              <p>
+                                <span className="text-foreground">
+                                  Liste choisie :
+                                </span>{" "}
+                                {selectedReferenceStatus.definition.title}
+                                {createFieldDraft.reference_group_key
+                                  ? ` / ${createFieldDraft.reference_group_key}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {createFieldError ? (
+                          <p className="text-sm text-destructive">
+                            {createFieldError}
+                          </p>
+                        ) : null}
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            disabled={createFieldPending || !canCreateField}
+                            onClick={() => void handleCreateField()}
+                          >
+                            {createFieldPending
+                              ? "Ajout..."
+                              : "Ajouter l'information"}
+                          </Button>
+                        </div>
+                      </div>
+                    </details>
                   </div>
-                </section>
-              </>
+
+                  <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-foreground">
+                        Informations ({activeSchemaFieldCount})
+                      </p>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {activeSchemaDefinition.fields.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Aucune information personnalisee pour cette categorie.
+                        </p>
+                      ) : (
+                        activeSchemaDefinition.fields.map((field) => (
+                          <details
+                            key={field.field_key}
+                            className="rounded-[16px] border border-border/70 bg-background/45 px-4 py-3"
+                          >
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-foreground">
+                                {field.label}
+                              </p>
+                              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                                {getFieldTypeLabel(field.field_type)}
+                              </p>
+                            </summary>
+
+                            <div className="mt-4">
+                              <SummaryRow
+                                label="Nom interne"
+                                value={field.field_key}
+                              />
+                              <SummaryRow
+                                label="Type"
+                                value={getFieldTypeLabel(field.field_type)}
+                              />
+                              {field.reference_table_key ? (
+                                <SummaryRow
+                                  label="Liste"
+                                  value={
+                                    field.reference_group_key
+                                      ? `${field.reference_table_key} / ${field.reference_group_key}`
+                                      : field.reference_table_key
+                                  }
+                                />
+                              ) : null}
+                            </div>
+                          </details>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                </>
               ) : (
                 <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
                   <p className="text-sm text-muted-foreground">
-                    Selectionne une categorie de champs personnalises dans le panneau lateral.
+                    Selectionne une categorie de champs personnalises dans le
+                    panneau lateral.
                   </p>
                   {schemaSummaries.length > 0 ? (
                     <div className="mt-4 space-y-3">
@@ -1917,7 +2178,9 @@ export function TechnicalAdminPage() {
                           onClick={() => setActiveSchemaKey(table.table_key)}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-foreground">{table.title}</span>
+                            <span className="text-sm font-semibold text-foreground">
+                              {table.title}
+                            </span>
                             <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                               {table.field_count}
                             </span>
@@ -1932,11 +2195,15 @@ export function TechnicalAdminPage() {
           ) : (
             <>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <h2 className="text-2xl font-semibold text-foreground">Comptes staff</h2>
+                <h2 className="text-2xl font-semibold text-foreground">
+                  Comptes staff
+                </h2>
                 <Button
                   type="button"
                   variant={showCreateAccountForm ? "secondary" : "outline"}
-                  onClick={() => setShowCreateAccountForm((current) => !current)}
+                  onClick={() =>
+                    setShowCreateAccountForm((current) => !current)
+                  }
                 >
                   {showCreateAccountForm ? "Fermer" : "Creer un compte"}
                 </Button>
@@ -1981,87 +2248,115 @@ export function TechnicalAdminPage() {
                       <option value="staff">Staff</option>
                       <option value="tech_admin">Admin technique</option>
                     </select>
-                    {createAccountError ? <p className="text-sm text-destructive">{createAccountError}</p> : null}
+                    {createAccountError ? (
+                      <p className="text-sm text-destructive">
+                        {createAccountError}
+                      </p>
+                    ) : null}
                     <div className="flex justify-end">
                       <Button
                         type="button"
                         disabled={createAccountPending || !canCreateAccount}
                         onClick={() => void handleCreateAccount()}
                       >
-                        {createAccountPending ? "Creation..." : "Creer le compte"}
+                        {createAccountPending
+                          ? "Creation..."
+                          : "Creer le compte"}
                       </Button>
                     </div>
                   </div>
                 </section>
               ) : null}
 
-              {accountsError ? <p className="mt-4 text-sm text-destructive">{accountsError}</p> : null}
+              {accountsError ? (
+                <p className="mt-4 text-sm text-destructive">{accountsError}</p>
+              ) : null}
 
               {activeStaffAccount ? (
                 <>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <h2 className="text-2xl font-semibold text-foreground">
-                  {activeStaffAccount.username}
-                </h2>
-                <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  {activeStaffAccount.is_active ? "Compte actif" : "Compte desactive"}
-                </div>
-              </div>
-
-              <details
-                open={editingAccountId === activeStaffAccount.id}
-                className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4"
-              >
-                <summary
-                  className="flex cursor-pointer list-none items-center justify-between gap-3"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setEditingAccountId((current) =>
-                      current === activeStaffAccount.id ? null : activeStaffAccount.id,
-                    );
-                  }}
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Acces et statut</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {getRoleLabel(activeStaffAccount.role)}
-                      {session.username === activeStaffAccount.username ? " • compte courant" : ""}
-                    </p>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <h2 className="text-2xl font-semibold text-foreground">
+                      {activeStaffAccount.username}
+                    </h2>
+                    <div className="rounded-full border border-border/70 px-3 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      {activeStaffAccount.is_active
+                        ? "Compte actif"
+                        : "Compte desactive"}
+                    </div>
                   </div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    {editingAccountId === activeStaffAccount.id ? "Ouvert" : "Ferme"}
-                  </p>
-                </summary>
 
-                <div className="mt-4 space-y-3">
-                  <select
-                    className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
-                    value={accountUpdateRole}
-                    onChange={(event) => setAccountUpdateRole(event.target.value as AdminRole)}
+                  <details
+                    open={editingAccountId === activeStaffAccount.id}
+                    className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4"
                   >
-                    <option value="staff">Staff</option>
-                    <option value="tech_admin">Admin technique</option>
-                  </select>
-                  <label className="flex items-center gap-3 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={accountUpdateIsActive}
-                      onChange={(event) => setAccountUpdateIsActive(event.target.checked)}
-                    />
-                    Compte actif
-                  </label>
-                  {accountUpdateError ? <p className="text-sm text-destructive">{accountUpdateError}</p> : null}
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      disabled={accountUpdatePending}
-                      onClick={() => void handleUpdateAccount()}
+                    <summary
+                      className="flex cursor-pointer list-none items-center justify-between gap-3"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setEditingAccountId((current) =>
+                          current === activeStaffAccount.id
+                            ? null
+                            : activeStaffAccount.id,
+                        );
+                      }}
                     >
-                      {accountUpdatePending ? "Enregistrement..." : "Enregistrer"}
-                    </Button>
-                  </div>
-                </div>
-              </details>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Acces et statut
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {getRoleLabel(activeStaffAccount.role)}
+                          {session.username === activeStaffAccount.username
+                            ? " • compte courant"
+                            : ""}
+                        </p>
+                      </div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                        {editingAccountId === activeStaffAccount.id
+                          ? "Ouvert"
+                          : "Ferme"}
+                      </p>
+                    </summary>
+
+                    <div className="mt-4 space-y-3">
+                      <select
+                        className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30"
+                        value={accountUpdateRole}
+                        onChange={(event) =>
+                          setAccountUpdateRole(event.target.value as AdminRole)
+                        }
+                      >
+                        <option value="staff">Staff</option>
+                        <option value="tech_admin">Admin technique</option>
+                      </select>
+                      <label className="flex items-center gap-3 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={accountUpdateIsActive}
+                          onChange={(event) =>
+                            setAccountUpdateIsActive(event.target.checked)
+                          }
+                        />
+                        Compte actif
+                      </label>
+                      {accountUpdateError ? (
+                        <p className="text-sm text-destructive">
+                          {accountUpdateError}
+                        </p>
+                      ) : null}
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          disabled={accountUpdatePending}
+                          onClick={() => void handleUpdateAccount()}
+                        >
+                          {accountUpdatePending
+                            ? "Enregistrement..."
+                            : "Enregistrer"}
+                        </Button>
+                      </div>
+                    </div>
+                  </details>
                 </>
               ) : (
                 <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
@@ -2078,7 +2373,9 @@ export function TechnicalAdminPage() {
                           onClick={() => setActiveAccountId(account.id)}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-foreground">{account.username}</span>
+                            <span className="text-sm font-semibold text-foreground">
+                              {account.username}
+                            </span>
                             <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                               {account.is_active ? "actif" : "inactif"}
                             </span>

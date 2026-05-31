@@ -69,12 +69,15 @@ Le champ optionnel `force_slot_override: true` autorise le forcage admin.
 `slot_override_reason` peut etre fourni avec le forcage, mais il reste informatif en V1.
 
 ### `GET /api/admin/editor/localities/[id]`
+
 ### `PATCH /api/admin/editor/localities/[id]`
+
 ### `DELETE /api/admin/editor/localities/[id]`
 
 `PATCH` accepte un objet partiel.
 
 Contraintes :
+
 - l'identifiant ne peut pas etre modifie ;
 - `PATCH {}` est invalide ;
 - seuls les champs fournis sont modifies ;
@@ -125,9 +128,13 @@ Retrait d'icone :
 ## Landmarks
 
 ### `GET /api/admin/editor/landmarks`
+
 ### `POST /api/admin/editor/landmarks`
+
 ### `GET /api/admin/editor/landmarks/[id]`
+
 ### `PATCH /api/admin/editor/landmarks/[id]`
+
 ### `DELETE /api/admin/editor/landmarks/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
@@ -138,9 +145,13 @@ Les landmarks dont le type consomme des emplacements suivent la meme validation 
 ## Forces
 
 ### `GET /api/admin/editor/forces`
+
 ### `POST /api/admin/editor/forces`
+
 ### `GET /api/admin/editor/forces/[id]`
+
 ### `PATCH /api/admin/editor/forces/[id]`
+
 ### `DELETE /api/admin/editor/forces/[id]`
 
 Les champs suivent le modele des localites sans `depends_on_locality_id`.
@@ -169,7 +180,10 @@ Payload minimal :
 {
   "name": "Route de la Foret Noire",
   "route_type": "route_terrestre",
-  "points": [[1200, 800], [1400, 920]],
+  "points": [
+    [1200, 800],
+    [1400, 920]
+  ],
   "geometry_mode": "curved",
   "stroke_style": "solid",
   "stroke_width": 3,
@@ -182,12 +196,15 @@ Payload minimal :
 ```
 
 ### `GET /api/admin/editor/routes/[id]`
+
 ### `PATCH /api/admin/editor/routes/[id]`
+
 ### `DELETE /api/admin/editor/routes/[id]`
 
 `PATCH` accepte un objet partiel.
 
 Contraintes :
+
 - l'identifiant ne peut pas etre modifie ;
 - `PATCH {}` est invalide ;
 - `points`, s'ils sont fournis, doivent contenir au moins deux couples `[x, y]` finis ;
@@ -215,6 +232,7 @@ Les icones de carte acceptent :
 Le SVG reste autorise, mais il est valide defensivement cote serveur avant sauvegarde.
 
 Les SVG sont servis via une route applicative avec headers defensifs :
+
 - `Content-Type: image/svg+xml; charset=utf-8`
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: no-referrer`

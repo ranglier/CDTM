@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Connexion staff impossible.";
+    const message =
+      error instanceof Error ? error.message : "Connexion staff impossible.";
 
     return NextResponse.json(
       {

@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Upload impossible.";
+    const message =
+      error instanceof Error ? error.message : "Upload impossible.";
     const status =
       message.includes("invalide") ||
       message.includes("autorise") ||

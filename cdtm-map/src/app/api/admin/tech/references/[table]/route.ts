@@ -68,7 +68,10 @@ export async function GET(
   try {
     const params = await context.params;
     const tableKey = parseReferenceTableKey(params.table);
-    const limitValue = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "100", 10);
+    const limitValue = Number.parseInt(
+      request.nextUrl.searchParams.get("limit") ?? "100",
+      10,
+    );
     const rows = await listReferenceTableRows(tableKey, {
       search: request.nextUrl.searchParams.get("search") ?? "",
       limit: Number.isNaN(limitValue) ? 100 : limitValue,
@@ -82,7 +85,10 @@ export async function GET(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture du referentiel impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Lecture du referentiel impossible.";
     const status = message.includes("inconnue") ? 404 : 500;
 
     return NextResponse.json(
@@ -133,7 +139,9 @@ export async function POST(
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Enregistrement du referentiel impossible.";
+      error instanceof Error
+        ? error.message
+        : "Enregistrement du referentiel impossible.";
     const status =
       message.includes("invalide") ||
       message.includes("obligatoire") ||
@@ -203,7 +211,8 @@ export async function DELETE(
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Suppression impossible.";
+    const message =
+      error instanceof Error ? error.message : "Suppression impossible.";
     const status = message.includes("inconnue") ? 404 : 500;
 
     return NextResponse.json(

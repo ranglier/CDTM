@@ -10,15 +10,25 @@ export function ImagePreview({ imageUrl, imageAlt }: ImagePreviewProps) {
   const trimmedUrl = imageUrl.trim();
 
   if (!trimmedUrl) {
-    return <p className="text-sm text-muted-foreground">Aucune image renseignee.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">Aucune image renseignee.</p>
+    );
   }
 
   if (!isPreviewImageUrl(trimmedUrl)) {
-    return <p className="text-sm text-muted-foreground">Image non disponible pour l’instant.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Image non disponible pour l’instant.
+      </p>
+    );
   }
 
   if (hasError) {
-    return <p className="text-sm text-muted-foreground">Impossible de charger l’image pour l’instant.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Impossible de charger l’image pour l’instant.
+      </p>
+    );
   }
 
   return (

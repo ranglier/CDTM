@@ -12,38 +12,21 @@
         "minLength": 1
       },
       "region": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": ["string", "null"]
       },
       "sous_region": {
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": ["string", "null"]
       },
       "cote": {
-        "type": [
-          "boolean",
-          "null"
-        ]
+        "type": ["boolean", "null"]
       },
       "lac": {
-        "type": [
-          "boolean",
-          "null"
-        ]
+        "type": ["boolean", "null"]
       },
       "fluvial": {
-        "type": [
-          "boolean",
-          "null"
-        ]
+        "type": ["boolean", "null"]
       }
     },
-    "required": [
-      "id_case"
-    ]
+    "required": ["id_case"]
   }
 }

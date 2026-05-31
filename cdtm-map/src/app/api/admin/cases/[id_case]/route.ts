@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentStaffUser } from "@/server/auth";
-import { AdminCaseNotFoundError, getAdminCaseRecord, saveAdminCaseRecord } from "@/server/admin-repository";
+import {
+  AdminCaseNotFoundError,
+  getAdminCaseRecord,
+  saveAdminCaseRecord,
+} from "@/server/admin-repository";
 import { parseAdminCaseDraft } from "@/server/admin-validation";
 import { isDatabaseConfigured } from "@/server/db";
 
@@ -55,7 +59,8 @@ export async function GET(
       );
     }
 
-    const message = error instanceof Error ? error.message : "Lecture admin impossible.";
+    const message =
+      error instanceof Error ? error.message : "Lecture admin impossible.";
 
     return NextResponse.json(
       {
@@ -88,7 +93,11 @@ export async function PUT(
   try {
     const params = await context.params;
     const draft = parseAdminCaseDraft(await request.json());
-    const record = await saveAdminCaseRecord(params.id_case, draft, user.userId);
+    const record = await saveAdminCaseRecord(
+      params.id_case,
+      draft,
+      user.userId,
+    );
 
     return NextResponse.json(record, {
       status: 200,
@@ -106,7 +115,10 @@ export async function PUT(
       );
     }
 
-    const message = error instanceof Error ? error.message : "Enregistrement admin impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Enregistrement admin impossible.";
     const status =
       message.includes("invalide") ||
       message.includes("requiert") ||

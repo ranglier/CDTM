@@ -115,19 +115,32 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
   const patternTypeRaw = normalizeNullableText(input.pattern_type);
   const patternColorRaw = normalizeNullableText(input.pattern_color);
 
-  if (input.fill !== undefined && input.fill !== null && input.fill !== "" && fillRaw === null) {
+  if (
+    input.fill !== undefined &&
+    input.fill !== null &&
+    input.fill !== "" &&
+    fillRaw === null
+  ) {
     throw new Error("Couleur de fond invalide.");
   }
 
-  if (input.stroke !== undefined && input.stroke !== null && input.stroke !== "" && strokeRaw === null) {
+  if (
+    input.stroke !== undefined &&
+    input.stroke !== null &&
+    input.stroke !== "" &&
+    strokeRaw === null
+  ) {
     throw new Error("Couleur de contour invalide.");
   }
 
   const fill = fillRaw ? normalizeHexColor(fillRaw) : null;
   const stroke = strokeRaw ? normalizeHexColor(strokeRaw) : null;
   const patternType =
-    patternTypeRaw && patternTypeRaw !== "none" ? normalizePatternType(patternTypeRaw) : null;
-  const patternColor = patternType && patternColorRaw ? normalizeHexColor(patternColorRaw) : null;
+    patternTypeRaw && patternTypeRaw !== "none"
+      ? normalizePatternType(patternTypeRaw)
+      : null;
+  const patternColor =
+    patternType && patternColorRaw ? normalizeHexColor(patternColorRaw) : null;
 
   if (fillRaw && !fill) {
     throw new Error("Couleur de fond invalide.");
@@ -163,14 +176,22 @@ function sanitizeMapStyleRow(row: {
   pattern_type: string | null;
   pattern_color: string | null;
 }): MapStyleRecord | null {
-  if (!row.cible_type || !row.cible_id || !isMapStyleTargetType(row.cible_type)) {
+  if (
+    !row.cible_type ||
+    !row.cible_id ||
+    !isMapStyleTargetType(row.cible_type)
+  ) {
     return null;
   }
 
   const fill = row.fill ? normalizeHexColor(row.fill) : null;
   const stroke = row.stroke ? normalizeHexColor(row.stroke) : null;
-  const patternType = row.pattern_type ? normalizePatternType(row.pattern_type) : null;
-  const patternColor = row.pattern_color ? normalizeHexColor(row.pattern_color) : null;
+  const patternType = row.pattern_type
+    ? normalizePatternType(row.pattern_type)
+    : null;
+  const patternColor = row.pattern_color
+    ? normalizeHexColor(row.pattern_color)
+    : null;
 
   if (!fill && !stroke && !patternType && !patternColor) {
     return null;
@@ -186,7 +207,10 @@ function sanitizeMapStyleRow(row: {
   };
 }
 
-function buildStyleId(targetType: MapStyleTargetType, targetId: string): string {
+function buildStyleId(
+  targetType: MapStyleTargetType,
+  targetId: string,
+): string {
   return `${targetType}:${targetId}`;
 }
 
@@ -205,7 +229,10 @@ function getReferenceStyleTargetType(
   if (definition.key === "nomenclatures") {
     const normalizedGroupKey = normalizeText(groupKey);
 
-    if (normalizedGroupKey === "terrain_type" || normalizedGroupKey === "relief") {
+    if (
+      normalizedGroupKey === "terrain_type" ||
+      normalizedGroupKey === "relief"
+    ) {
       return normalizedGroupKey;
     }
   }
@@ -218,7 +245,9 @@ async function listStylesForTargets(
   targetType: MapStyleTargetType,
   targetIds: string[],
 ): Promise<Record<string, ReferenceStyleValue>> {
-  const uniqueTargetIds = Array.from(new Set(targetIds.filter((value) => value.trim().length > 0)));
+  const uniqueTargetIds = Array.from(
+    new Set(targetIds.filter((value) => value.trim().length > 0)),
+  );
 
   if (uniqueTargetIds.length === 0) {
     return {};
@@ -354,7 +383,10 @@ function normalizeImagePath(value: unknown): string | null {
   throw new Error("Chemin d'image invalide.");
 }
 
-function normalizeFieldValue(field: TechFieldDefinition, value: unknown): ReferenceTableRowValue {
+function normalizeFieldValue(
+  field: TechFieldDefinition,
+  value: unknown,
+): ReferenceTableRowValue {
   if (field.name === "image_path") {
     return normalizeImagePath(value);
   }
@@ -382,7 +414,11 @@ function toSerializableValue(value: unknown): ReferenceTableRowValue {
     return null;
   }
 
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return value;
   }
 
@@ -393,9 +429,15 @@ function toSerializableValue(value: unknown): ReferenceTableRowValue {
   return String(value);
 }
 
-function mapReferenceRow(definition: ReferenceTableDefinition, row: QueryResultRow): ReferenceTableRow {
+function mapReferenceRow(
+  definition: ReferenceTableDefinition,
+  row: QueryResultRow,
+): ReferenceTableRow {
   return Object.fromEntries(
-    definition.fields.map((field) => [field.name, toSerializableValue(row[field.name])]),
+    definition.fields.map((field) => [
+      field.name,
+      toSerializableValue(row[field.name]),
+    ]),
   );
 }
 
@@ -408,10 +450,14 @@ function ensurePlainObject(value: unknown): Record<string, unknown> {
 }
 
 function getSearchColumns(definition: ReferenceTableDefinition): string[] {
-  return definition.fields.filter((field) => field.searchable).map((field) => field.name);
+  return definition.fields
+    .filter((field) => field.searchable)
+    .map((field) => field.name);
 }
 
-function getEditableFields(definition: ReferenceTableDefinition): TechFieldDefinition[] {
+function getEditableFields(
+  definition: ReferenceTableDefinition,
+): TechFieldDefinition[] {
   return definition.fields.filter((field) => !field.readOnly);
 }
 
@@ -425,7 +471,10 @@ function normalizeReferenceRowInput(
   for (const field of getEditableFields(definition)) {
     const normalizedValue = normalizeFieldValue(field, payload[field.name]);
 
-    if (field.required && (normalizedValue === null || normalizedValue === "")) {
+    if (
+      field.required &&
+      (normalizedValue === null || normalizedValue === "")
+    ) {
       throw new Error(`Le champ ${field.name} est obligatoire.`);
     }
 
@@ -463,11 +512,16 @@ async function queryReferenceTableCount(
 
   if (search && searchColumns.length > 0) {
     const likeValue = `%${search}%`;
-    const searchValueIndexes = searchColumns.map((_, index) => `$${values.length + index + 1}`);
+    const searchValueIndexes = searchColumns.map(
+      (_, index) => `$${values.length + index + 1}`,
+    );
     values.push(...searchColumns.map(() => likeValue));
     whereClauses.push(
       `(${searchColumns
-        .map((columnName, index) => `COALESCE(${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
+        .map(
+          (columnName, index) =>
+            `COALESCE(${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`,
+        )
         .join(" OR ")})`,
     );
   }
@@ -490,7 +544,9 @@ function buildReferenceTableQuery(
   limit: number,
   groupKey: string | null = null,
 ): { sql: string; values: Array<string | number> } {
-  const columns = definition.fields.map((field) => `ref.${field.name}`).join(", ");
+  const columns = definition.fields
+    .map((field) => `ref.${field.name}`)
+    .join(", ");
   const searchColumns = getSearchColumns(definition);
   const normalizedGroupKey =
     definition.key === "nomenclatures" ? normalizeNullableText(groupKey) : null;
@@ -541,11 +597,16 @@ function buildReferenceTableQuery(
 
   if (search && searchColumns.length > 0) {
     const likeValue = `%${search}%`;
-    const searchValueIndexes = searchColumns.map((_, index) => `$${values.length + index + 1}`);
+    const searchValueIndexes = searchColumns.map(
+      (_, index) => `$${values.length + index + 1}`,
+    );
     values.push(...searchColumns.map(() => likeValue));
     whereClauses.push(
       `(${searchColumns
-        .map((columnName, index) => `COALESCE(ref.${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`)
+        .map(
+          (columnName, index) =>
+            `COALESCE(ref.${columnName}::text, '') ILIKE ${searchValueIndexes[index]}`,
+        )
         .join(" OR ")})`,
     );
   }
@@ -563,7 +624,9 @@ function buildReferenceTableQuery(
   };
 }
 
-function assertReferenceTableDefinition(tableKey: string): ReferenceTableDefinition {
+function assertReferenceTableDefinition(
+  tableKey: string,
+): ReferenceTableDefinition {
   const definition = getReferenceTableDefinition(tableKey);
 
   if (!definition) {
@@ -590,7 +653,11 @@ function validateDynamicFieldKey(fieldKey: string): string {
     throw new Error("Le nom de champ doit etre en snake_case simple.");
   }
 
-  if (["id_case", "updated_by_user_id", "created_at", "updated_at"].includes(normalized)) {
+  if (
+    ["id_case", "updated_by_user_id", "created_at", "updated_at"].includes(
+      normalized,
+    )
+  ) {
     throw new Error("Ce nom de champ est reserve.");
   }
 
@@ -607,7 +674,9 @@ function buildDynamicPhysicalName(tableKey: string): string {
   return physicalName;
 }
 
-function getDynamicSqlType(fieldType: DynamicCaseTableFieldDefinition["field_type"]): string {
+function getDynamicSqlType(
+  fieldType: DynamicCaseTableFieldDefinition["field_type"],
+): string {
   switch (fieldType) {
     case "boolean":
       return "BOOLEAN";
@@ -629,7 +698,11 @@ function toDynamicFieldValue(value: unknown): AdminDynamicFieldValue {
     return null;
   }
 
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return value;
   }
 
@@ -719,7 +792,10 @@ async function listDynamicCaseTableDefinitionsInternal(
   const definitions: DynamicCaseTableDefinition[] = [];
 
   for (const table of tablesResult.rows) {
-    const definition = await selectDynamicCaseTableDefinition(client, table.table_key);
+    const definition = await selectDynamicCaseTableDefinition(
+      client,
+      table.table_key,
+    );
 
     if (definition) {
       definitions.push(definition);
@@ -761,7 +837,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "factions": {
-      const result = await client.query<{ id_faction: string; nom: string | null }>(
+      const result = await client.query<{
+        id_faction: string;
+        nom: string | null;
+      }>(
         `
           SELECT id_faction, nom
           FROM reference_factions
@@ -775,7 +854,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "controleurs": {
-      const result = await client.query<{ id_controleur: string; nom: string | null }>(
+      const result = await client.query<{
+        id_controleur: string;
+        nom: string | null;
+      }>(
         `
           SELECT id_controleur, nom
           FROM reference_controleurs
@@ -789,7 +871,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "styles": {
-      const result = await client.query<{ id_style: string; cible_id: string | null }>(
+      const result = await client.query<{
+        id_style: string;
+        cible_id: string | null;
+      }>(
         `
           SELECT id_style, cible_id
           FROM reference_styles
@@ -803,7 +888,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "map_icons": {
-      const result = await client.query<{ icon_key: string; label: string | null }>(
+      const result = await client.query<{
+        icon_key: string;
+        label: string | null;
+      }>(
         `
           SELECT icon_key, label
           FROM reference_map_icons
@@ -826,7 +914,10 @@ async function listReferenceOptionsInternal(
           : tableKey === "landmark_types"
             ? "reference_landmark_types"
             : "reference_force_types";
-      const result = await client.query<{ type_key: string; label: string | null }>(
+      const result = await client.query<{
+        type_key: string;
+        label: string | null;
+      }>(
         `
           SELECT type_key, label
           FROM ${tableName}
@@ -841,7 +932,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "races": {
-      const result = await client.query<{ race_key: string; label: string | null }>(
+      const result = await client.query<{
+        race_key: string;
+        label: string | null;
+      }>(
         `
           SELECT race_key, label
           FROM reference_races
@@ -856,7 +950,10 @@ async function listReferenceOptionsInternal(
       }));
     }
     case "peuples": {
-      const result = await client.query<{ peuple_key: string; label: string | null }>(
+      const result = await client.query<{
+        peuple_key: string;
+        label: string | null;
+      }>(
         `
           SELECT peuple_key, label
           FROM reference_peuples
@@ -882,20 +979,26 @@ async function getReferenceFieldOptions(
   const entries = await Promise.all(
     definition.fields
       .filter((field) => field.reference_table_key)
-      .map(async (field) => [
-        field.name,
-        await listReferenceOptionsInternal(
-          client,
-          field.reference_table_key as ReferenceTableKey,
-          field.reference_group_key ?? null,
-        ),
-      ] as const),
+      .map(
+        async (field) =>
+          [
+            field.name,
+            await listReferenceOptionsInternal(
+              client,
+              field.reference_table_key as ReferenceTableKey,
+              field.reference_group_key ?? null,
+            ),
+          ] as const,
+      ),
   );
 
   return Object.fromEntries(entries);
 }
 
-function isAllowedOption(options: ReferenceOption[], value: string | null): boolean {
+function isAllowedOption(
+  options: ReferenceOption[],
+  value: string | null,
+): boolean {
   if (!value) {
     return true;
   }
@@ -924,40 +1027,39 @@ export async function getStaticAdminReferenceData(
       factionOptions,
       controllerOptions,
       controlTypeOptions,
-    ] =
-      await Promise.all([
-        listReferenceOptionsInternal(client, "nomenclatures", "terrain_cat"),
-        client.query<{
-          entry_key: string;
-          label: string | null;
-          parent_entry_key: string | null;
-        }>(
-          `
+    ] = await Promise.all([
+      listReferenceOptionsInternal(client, "nomenclatures", "terrain_cat"),
+      client.query<{
+        entry_key: string;
+        label: string | null;
+        parent_entry_key: string | null;
+      }>(
+        `
             SELECT entry_key, label, parent_entry_key
             FROM reference_nomenclature_values
             WHERE group_key = 'terrain_type'
             ORDER BY LOWER(COALESCE(label, entry_key)) ASC, entry_key ASC
           `,
-        ),
-        listReferenceOptionsInternal(client, "nomenclatures", "relief"),
-        client.query<{
-          slug: string;
-          label: string | null;
-          valeur: number;
-          description: string | null;
-        }>(
-          `
+      ),
+      listReferenceOptionsInternal(client, "nomenclatures", "relief"),
+      client.query<{
+        slug: string;
+        label: string | null;
+        valeur: number;
+        description: string | null;
+      }>(
+        `
             SELECT slug, label, valeur, description
             FROM bonus_contextuel
             WHERE active = TRUE
             ORDER BY LOWER(COALESCE(label, slug)) ASC, slug ASC
           `,
-        ),
-        listReferenceOptionsInternal(client, "peuples"),
-        listReferenceOptionsInternal(client, "factions"),
-        listReferenceOptionsInternal(client, "controleurs"),
-        listReferenceOptionsInternal(client, "nomenclatures", "controle_type"),
-      ]);
+      ),
+      listReferenceOptionsInternal(client, "peuples"),
+      listReferenceOptionsInternal(client, "factions"),
+      listReferenceOptionsInternal(client, "controleurs"),
+      listReferenceOptionsInternal(client, "nomenclatures", "controle_type"),
+    ]);
 
     const terrainTypesByCategory: Record<string, ReferenceOption[]> = {};
 
@@ -996,7 +1098,9 @@ export async function getStaticAdminReferenceData(
   }
 }
 
-export async function listReferenceTableStatuses(): Promise<ReferenceTableStatus[]> {
+export async function listReferenceTableStatuses(): Promise<
+  ReferenceTableStatus[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -1019,7 +1123,10 @@ export async function listReferenceTableStatuses(): Promise<ReferenceTableStatus
       };
 
       if (definition.key === "nomenclatures") {
-        const groupsResult = await client.query<{ group_key: string; row_count: string }>(
+        const groupsResult = await client.query<{
+          group_key: string;
+          row_count: string;
+        }>(
           `
             SELECT group_key, COUNT(*)::text AS row_count
             FROM reference_nomenclature_values
@@ -1056,12 +1163,25 @@ export async function listReferenceTableRows(
   const definition = assertReferenceTableDefinition(tableKey);
   const search = options?.search?.trim() ?? "";
   const limit = normalizeLimit(options?.limit);
-  const groupKey = definition.key === "nomenclatures" ? normalizeNullableText(options?.groupKey) : null;
+  const groupKey =
+    definition.key === "nomenclatures"
+      ? normalizeNullableText(options?.groupKey)
+      : null;
   const client = await getPool().connect();
 
   try {
-    const totalCount = await queryReferenceTableCount(client, definition, search, groupKey);
-    const { sql, values } = buildReferenceTableQuery(definition, search, limit, groupKey);
+    const totalCount = await queryReferenceTableCount(
+      client,
+      definition,
+      search,
+      groupKey,
+    );
+    const { sql, values } = buildReferenceTableQuery(
+      definition,
+      search,
+      limit,
+      groupKey,
+    );
     const result = await client.query(sql, values);
     const styleTargetType = getReferenceStyleTargetType(definition, groupKey);
     const styleTargetIdField =
@@ -1116,7 +1236,12 @@ export async function saveMapStyle(
   const client = await getPool().connect();
 
   try {
-    if (!normalized.fill && !normalized.stroke && !normalized.patternType && !normalized.patternColor) {
+    if (
+      !normalized.fill &&
+      !normalized.stroke &&
+      !normalized.patternType &&
+      !normalized.patternColor
+    ) {
       await client.query(
         `
           DELETE FROM reference_styles
@@ -1129,7 +1254,10 @@ export async function saveMapStyle(
       return null;
     }
 
-    const stableStyleId = buildStyleId(normalized.targetType, normalized.targetId);
+    const stableStyleId = buildStyleId(
+      normalized.targetType,
+      normalized.targetId,
+    );
 
     await client.query(
       `
@@ -1256,7 +1384,9 @@ export async function saveReferenceTableRow(
     const editableFields = getEditableFields(definition);
     const columnNames = editableFields.map((field) => field.name);
     const insertColumns = [...columnNames, "updated_by_user_id"];
-    const insertValues = columnNames.map((columnName) => normalizedRow[columnName]);
+    const insertValues = columnNames.map(
+      (columnName) => normalizedRow[columnName],
+    );
     const placeholders = insertColumns.map((_, index) => `$${index + 1}`);
     const assignments = [
       ...columnNames
@@ -1302,7 +1432,9 @@ export async function saveReferenceTableRow(
       "code" in error &&
       (error as { code?: string }).code === "23505"
     ) {
-      throw new Error("La cle primaire ou une valeur unique est deja utilisee.");
+      throw new Error(
+        "La cle primaire ou une valeur unique est deja utilisee.",
+      );
     }
 
     throw error;
@@ -1337,7 +1469,9 @@ export async function deleteReferenceTableRow(
   }
 }
 
-export async function listDynamicCaseTableSummaries(): Promise<DynamicCaseTableSummary[]> {
+export async function listDynamicCaseTableSummaries(): Promise<
+  DynamicCaseTableSummary[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -1461,7 +1595,10 @@ export async function createDynamicCaseTable(
 
     return {
       definition,
-      provisioned_case_rows: Number.parseInt(insertedRows.rows[0]?.count ?? "0", 10),
+      provisioned_case_rows: Number.parseInt(
+        insertedRows.rows[0]?.count ?? "0",
+        10,
+      ),
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1502,7 +1639,9 @@ export async function updateDynamicCaseTable(
     }
 
     const nextTitle =
-      typeof input.title === "string" ? normalizeText(input.title) || current.title : current.title;
+      typeof input.title === "string"
+        ? normalizeText(input.title) || current.title
+        : current.title;
     const nextDescription =
       typeof input.description === "string"
         ? normalizeNullableText(input.description)
@@ -1510,7 +1649,9 @@ export async function updateDynamicCaseTable(
           ? null
           : current.description;
     const nextActive =
-      typeof input.is_active === "boolean" ? input.is_active : current.is_active;
+      typeof input.is_active === "boolean"
+        ? input.is_active
+        : current.is_active;
 
     await client.query(
       `
@@ -1602,8 +1743,12 @@ export async function addDynamicCaseTableField(
         fieldKey,
         label,
         input.field_type,
-        input.field_type === "reference" ? input.reference_table_key ?? null : null,
-        input.field_type === "reference" ? normalizeNullableText(input.reference_group_key) : null,
+        input.field_type === "reference"
+          ? (input.reference_table_key ?? null)
+          : null,
+        input.field_type === "reference"
+          ? normalizeNullableText(input.reference_group_key)
+          : null,
       ],
     );
 
@@ -1616,7 +1761,10 @@ export async function addDynamicCaseTableField(
       [tableKey, userId],
     );
 
-    const nextDefinition = await selectDynamicCaseTableDefinition(client, tableKey);
+    const nextDefinition = await selectDynamicCaseTableDefinition(
+      client,
+      tableKey,
+    );
 
     if (!nextDefinition) {
       throw new Error("Ajout de champ impossible.");
@@ -1626,7 +1774,9 @@ export async function addDynamicCaseTableField(
 
     return {
       definition: nextDefinition,
-      added_field: nextDefinition.fields.find((field) => field.field_key === fieldKey)!,
+      added_field: nextDefinition.fields.find(
+        (field) => field.field_key === fieldKey,
+      )!,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1655,7 +1805,9 @@ export async function addDynamicCaseTableField(
   }
 }
 
-export async function listDynamicCaseTableDefinitions(): Promise<DynamicCaseTableDefinition[]> {
+export async function listDynamicCaseTableDefinitions(): Promise<
+  DynamicCaseTableDefinition[]
+> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -1675,9 +1827,9 @@ export async function getDynamicCaseSectionsForCase(
   client: PoolClient,
   idCase: string,
 ): Promise<AdminDynamicSectionRecord[]> {
-  const definitions = (await listDynamicCaseTableDefinitionsInternal(client)).filter(
-    (definition) => definition.is_active,
-  );
+  const definitions = (
+    await listDynamicCaseTableDefinitionsInternal(client)
+  ).filter((definition) => definition.is_active);
   const sections: AdminDynamicSectionRecord[] = [];
 
   for (const definition of definitions) {
@@ -1763,9 +1915,9 @@ export async function saveDynamicSectionsForCase(
   dynamicDraft: AdminCaseDraft["dynamic"],
   userId: number,
 ): Promise<void> {
-  const definitions = (await listDynamicCaseTableDefinitionsInternal(client)).filter(
-    (definition) => definition.is_active,
-  );
+  const definitions = (
+    await listDynamicCaseTableDefinitionsInternal(client)
+  ).filter((definition) => definition.is_active);
 
   for (const definition of definitions) {
     const sectionDraft = dynamicDraft[definition.table_key];
@@ -1778,7 +1930,10 @@ export async function saveDynamicSectionsForCase(
     const columnNames: string[] = [];
 
     for (const field of definition.fields) {
-      const normalizedValue = normalizeDynamicDraftValue(field, sectionDraft[field.field_key]);
+      const normalizedValue = normalizeDynamicDraftValue(
+        field,
+        sectionDraft[field.field_key],
+      );
 
       if (
         field.field_type === "reference" &&
@@ -1803,7 +1958,9 @@ export async function saveDynamicSectionsForCase(
     const insertColumns = ["id_case", ...columnNames, "updated_by_user_id"];
     const placeholders = insertColumns.map((_, index) => `$${index + 1}`);
     const assignments = [
-      ...columnNames.map((columnName) => `${columnName} = EXCLUDED.${columnName}`),
+      ...columnNames.map(
+        (columnName) => `${columnName} = EXCLUDED.${columnName}`,
+      ),
       "updated_by_user_id = EXCLUDED.updated_by_user_id",
       "updated_at = NOW()",
     ];
@@ -1827,7 +1984,9 @@ export async function validateStaticAdminDraftSelections(
   const referenceData = await getStaticAdminReferenceData(client);
   const terrainCategory = normalizeNullableText(draft.terrain.terrain_cat);
   const terrainType = normalizeNullableText(draft.terrain.terrain_type);
-  const terrainSecondaire = normalizeNullableText(draft.terrain.terrain_secondaire);
+  const terrainSecondaire = normalizeNullableText(
+    draft.terrain.terrain_secondaire,
+  );
   const relief = normalizeNullableText(draft.terrain.relief);
   const peuple = normalizeNullableText(draft.control.peuple);
   const faction = normalizeNullableText(draft.control.faction);
@@ -1844,14 +2003,20 @@ export async function validateStaticAdminDraftSelections(
 
   if (
     terrainType &&
-    !isAllowedOption(referenceData.terrain_types_by_category[terrainCategory ?? ""] ?? [], terrainType)
+    !isAllowedOption(
+      referenceData.terrain_types_by_category[terrainCategory ?? ""] ?? [],
+      terrainType,
+    )
   ) {
     throw new Error("La valeur du champ terrain_type est invalide.");
   }
 
   if (
     terrainSecondaire &&
-    !isAllowedOption(Object.values(referenceData.terrain_types_by_category).flat(), terrainSecondaire)
+    !isAllowedOption(
+      Object.values(referenceData.terrain_types_by_category).flat(),
+      terrainSecondaire,
+    )
   ) {
     throw new Error("La valeur du champ terrain_secondaire est invalide.");
   }
@@ -1898,19 +2063,27 @@ export async function validateStaticBulkPatchSelections(
   const referenceData = await getStaticAdminReferenceData(client);
 
   if (patch.terrain?.terrain_cat !== undefined) {
-    if (!isAllowedOption(referenceData.terrain_categories, patch.terrain.terrain_cat ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.terrain_categories,
+        patch.terrain.terrain_cat ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ terrain_cat est invalide.");
     }
   }
 
   if (patch.terrain?.terrain_type !== undefined) {
     if (!patch.terrain.terrain_cat) {
-      throw new Error("terrain_cat et terrain_type doivent etre modifies ensemble en edition de masse.");
+      throw new Error(
+        "terrain_cat et terrain_type doivent etre modifies ensemble en edition de masse.",
+      );
     }
 
     if (
       !isAllowedOption(
-        referenceData.terrain_types_by_category[patch.terrain.terrain_cat] ?? [],
+        referenceData.terrain_types_by_category[patch.terrain.terrain_cat] ??
+          [],
         patch.terrain.terrain_type ?? null,
       )
     ) {
@@ -1930,31 +2103,56 @@ export async function validateStaticBulkPatchSelections(
   }
 
   if (patch.terrain?.relief !== undefined) {
-    if (!isAllowedOption(referenceData.relief_options, patch.terrain.relief ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.relief_options,
+        patch.terrain.relief ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ relief est invalide.");
     }
   }
 
   if (patch.control?.peuple !== undefined) {
-    if (!isAllowedOption(referenceData.peuple_options, patch.control.peuple ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.peuple_options,
+        patch.control.peuple ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ peuple est invalide.");
     }
   }
 
   if (patch.control?.faction !== undefined) {
-    if (!isAllowedOption(referenceData.faction_options, patch.control.faction ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.faction_options,
+        patch.control.faction ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ faction est invalide.");
     }
   }
 
   if (patch.control?.controleur !== undefined) {
-    if (!isAllowedOption(referenceData.controller_options, patch.control.controleur ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.controller_options,
+        patch.control.controleur ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ controleur est invalide.");
     }
   }
 
   if (patch.control?.controle_type !== undefined) {
-    if (!isAllowedOption(referenceData.control_type_options, patch.control.controle_type ?? null)) {
+    if (
+      !isAllowedOption(
+        referenceData.control_type_options,
+        patch.control.controle_type ?? null,
+      )
+    ) {
       throw new Error("La valeur du champ controle_type est invalide.");
     }
   }

@@ -58,7 +58,8 @@ export async function GET() {
           configured: true,
           ready: false,
         },
-        error: error instanceof Error ? error.message : "Unknown healthcheck error",
+        error:
+          error instanceof Error ? error.message : "Unknown healthcheck error",
       },
       {
         status: 503,

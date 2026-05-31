@@ -77,7 +77,9 @@ export function createEditorRouteVerticesVectorLayer(
         return undefined;
       }
 
-      return candidateFeature.get("selected") ? selectedVertexStyle : defaultVertexStyle;
+      return candidateFeature.get("selected")
+        ? selectedVertexStyle
+        : defaultVertexStyle;
     },
   });
 }
@@ -100,7 +102,9 @@ export function replaceEditorRouteVertexFeatures(
   );
 }
 
-export function clearEditorRouteVertexFeatures(source: VectorSource | null): void {
+export function clearEditorRouteVertexFeatures(
+  source: VectorSource | null,
+): void {
   source?.clear(true);
 }
 

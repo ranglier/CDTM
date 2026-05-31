@@ -68,5 +68,6 @@ Le deploiement standard ne requiert pas de secrets `ADMIN_*`.
 - `docs/ADMIN.md` : fonctionnement et limites de l'admin V1
 - `docs/FORGEJO_CI.md` : CI/CD et deploiement
 - `docs/AUDIT_ROADMAP.md` : etat d'audit, risques et priorites d'evolution
+- `docs/MAP_TILING.md` : cadrage du chantier de tuilage du fond de carte
 
 Les autres fichiers de `docs/` restent des notes de travail secondaires.

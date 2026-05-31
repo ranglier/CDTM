@@ -63,9 +63,14 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Enregistrement du style impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Enregistrement du style impossible.";
     const status =
-      message.includes("invalide") || message.includes("obligatoire") ? 400 : 500;
+      message.includes("invalide") || message.includes("obligatoire")
+        ? 400
+        : 500;
 
     return NextResponse.json(
       {

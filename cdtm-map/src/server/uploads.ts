@@ -53,9 +53,14 @@ function assertExpectedExtension(filename: string, mimeType: string): void {
 }
 
 function assertPngSignature(buffer: Buffer): void {
-  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const pngSignature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
 
-  if (buffer.byteLength < pngSignature.byteLength || !buffer.subarray(0, 8).equals(pngSignature)) {
+  if (
+    buffer.byteLength < pngSignature.byteLength ||
+    !buffer.subarray(0, 8).equals(pngSignature)
+  ) {
     throw new Error("Signature PNG invalide.");
   }
 }
@@ -100,7 +105,10 @@ function validateSvgContent(content: string): string {
     [/\shref\s*=\s*["']\s*https?:/i, "SVG refuse pour raison de securite."],
     [/xlink:href\s*=\s*["']\s*data:/i, "SVG refuse pour raison de securite."],
     [/\shref\s*=\s*["']\s*data:/i, "SVG refuse pour raison de securite."],
-    [/<style[\s>][\s\S]*(@import|url\s*\()/i, "SVG refuse pour raison de securite."],
+    [
+      /<style[\s>][\s\S]*(@import|url\s*\()/i,
+      "SVG refuse pour raison de securite.",
+    ],
   ];
 
   for (const [pattern, message] of blockedPatterns) {
@@ -126,7 +134,9 @@ export async function ensureMapIconUploadsDir(): Promise<string> {
   return directory;
 }
 
-export async function saveMapIconUpload(file: File): Promise<MapIconUploadResult> {
+export async function saveMapIconUpload(
+  file: File,
+): Promise<MapIconUploadResult> {
   const mimeType = assertAllowedMimeType(file.type);
   assertExpectedExtension(file.name, mimeType);
 
@@ -138,7 +148,10 @@ export async function saveMapIconUpload(file: File): Promise<MapIconUploadResult
   let buffer = sourceBuffer;
 
   if (mimeType === "image/svg+xml") {
-    buffer = Buffer.from(validateSvgContent(sourceBuffer.toString("utf8")), "utf8");
+    buffer = Buffer.from(
+      validateSvgContent(sourceBuffer.toString("utf8")),
+      "utf8",
+    );
   } else if (mimeType === "image/png") {
     assertPngSignature(sourceBuffer);
   } else if (mimeType === "image/webp") {

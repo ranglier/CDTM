@@ -21,7 +21,10 @@ async function ensureSchemaMigrationsTable(client: PoolClient): Promise<void> {
   `);
 }
 
-async function tableExists(client: PoolClient, tableName: string): Promise<boolean> {
+async function tableExists(
+  client: PoolClient,
+  tableName: string,
+): Promise<boolean> {
   const result = await client.query<{ exists: boolean }>(
     `
       SELECT to_regclass($1) IS NOT NULL AS exists
@@ -32,7 +35,11 @@ async function tableExists(client: PoolClient, tableName: string): Promise<boole
   return result.rows[0]?.exists === true;
 }
 
-async function columnExists(client: PoolClient, tableName: string, columnName: string): Promise<boolean> {
+async function columnExists(
+  client: PoolClient,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> {
   const result = await client.query<{ exists: boolean }>(
     `
       SELECT EXISTS (
@@ -56,7 +63,9 @@ function legacyStatusSql(columnName: string): string {
   END`;
 }
 
-async function migrateLegacyReferenceMapPointTypes(client: PoolClient): Promise<void> {
+async function migrateLegacyReferenceMapPointTypes(
+  client: PoolClient,
+): Promise<void> {
   if (!(await tableExists(client, "reference_map_point_types"))) {
     return;
   }
@@ -1063,8 +1072,12 @@ const databaseMigrations: DatabaseMigration[] = [
         END
         $$;
       `);
-      await client.query(`ALTER TABLE case_public_current DROP COLUMN IF EXISTS lac_majeur`);
-      await client.query(`ALTER TABLE case_public_current DROP COLUMN IF EXISTS cours_eau_majeur`);
+      await client.query(
+        `ALTER TABLE case_public_current DROP COLUMN IF EXISTS lac_majeur`,
+      );
+      await client.query(
+        `ALTER TABLE case_public_current DROP COLUMN IF EXISTS cours_eau_majeur`,
+      );
 
       await client.query(`
         ALTER TABLE case_terrain_current
@@ -1245,9 +1258,15 @@ const databaseMigrations: DatabaseMigration[] = [
         END
         $$;
       `);
-      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS bonus_speciaux`);
-      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_base`);
-      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_max`);
+      await client.query(
+        `ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS bonus_speciaux`,
+      );
+      await client.query(
+        `ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_base`,
+      );
+      await client.query(
+        `ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_max`,
+      );
 
       await client.query(`
         ALTER TABLE reference_locality_types
@@ -1273,7 +1292,9 @@ const databaseMigrations: DatabaseMigration[] = [
         ALTER TABLE reference_locality_types
         ADD COLUMN IF NOT EXISTS upgrades_from_type_id TEXT REFERENCES reference_locality_types(type_key) ON DELETE SET NULL
       `);
-      await client.query(`ALTER TABLE reference_locality_types DROP COLUMN IF EXISTS slot_weight`);
+      await client.query(
+        `ALTER TABLE reference_locality_types DROP COLUMN IF EXISTS slot_weight`,
+      );
 
       await client.query(`
         ALTER TABLE reference_landmark_types
@@ -1391,7 +1412,9 @@ export async function runDatabaseMigrations(pool: Pool): Promise<void> {
       `,
     );
 
-    const appliedVersions = new Set(appliedResult.rows.map((row) => row.version));
+    const appliedVersions = new Set(
+      appliedResult.rows.map((row) => row.version),
+    );
 
     for (const migration of databaseMigrations) {
       if (appliedVersions.has(migration.version)) {

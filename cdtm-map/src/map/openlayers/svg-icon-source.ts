@@ -58,8 +58,8 @@ function resolveSvgBoundsViewBox(svg: SVGSVGElement): string | null {
     ) {
       return `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`;
     }
-  } catch {}
-  finally {
+  } catch {
+  } finally {
     container.remove();
   }
 
@@ -76,10 +76,7 @@ function ensureSvgViewBox(svg: SVGSVGElement): void {
   const width = parseSvgLength(svg.getAttribute("width"));
   const height = parseSvgLength(svg.getAttribute("height"));
   const numericViewBox =
-    width !== null &&
-    height !== null &&
-    width > 4 &&
-    height > 4
+    width !== null && height !== null && width > 4 && height > 4
       ? `0 0 ${width} ${height}`
       : null;
   const boundsViewBox = resolveSvgBoundsViewBox(svg);
@@ -119,21 +116,25 @@ function normalizeSvgTextToDataUrl(svgText: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
 }
 
-export async function getNormalizedSvgIconSource(imagePath: string): Promise<string> {
+export async function getNormalizedSvgIconSource(
+  imagePath: string,
+): Promise<string> {
   const cached = svgIconSourceCache.get(imagePath);
 
   if (cached) {
     return cached;
   }
 
-  const promise = fetch(imagePath, { cache: "force-cache" }).then(async (response) => {
-    if (!response.ok) {
-      throw new Error(`Icone introuvable: ${imagePath}`);
-    }
+  const promise = fetch(imagePath, { cache: "force-cache" }).then(
+    async (response) => {
+      if (!response.ok) {
+        throw new Error(`Icone introuvable: ${imagePath}`);
+      }
 
-    const svgText = await response.text();
-    return normalizeSvgTextToDataUrl(svgText);
-  });
+      const svgText = await response.text();
+      return normalizeSvgTextToDataUrl(svgText);
+    },
+  );
 
   svgIconSourceCache.set(imagePath, promise);
   return promise;

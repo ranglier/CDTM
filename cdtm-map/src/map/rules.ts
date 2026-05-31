@@ -1,40 +1,131 @@
 export const LITTORAL_WATER_LOGICAL_GROUP = "littoral_et_eaux_majeures";
 
 export const TERRAIN_DEFINITIONS = [
-  { slug: "prairie", category: "plaine", label: "Prairie", emplacements_base: 5 },
-  { slug: "plaine_aride", category: "plaine", label: "Plaine aride", emplacements_base: 5 },
+  {
+    slug: "prairie",
+    category: "plaine",
+    label: "Prairie",
+    emplacements_base: 5,
+  },
+  {
+    slug: "plaine_aride",
+    category: "plaine",
+    label: "Plaine aride",
+    emplacements_base: 5,
+  },
   { slug: "bocage", category: "plaine", label: "Bocage", emplacements_base: 4 },
-  { slug: "toundra", category: "plaine", label: "Toundra", emplacements_base: 3 },
+  {
+    slug: "toundra",
+    category: "plaine",
+    label: "Toundra",
+    emplacements_base: 3,
+  },
   { slug: "foret", category: "foret", label: "Foret", emplacements_base: 3 },
   { slug: "taiga", category: "foret", label: "Taiga", emplacements_base: 3 },
-  { slug: "foret_luxuriante", category: "foret", label: "Foret luxuriante", emplacements_base: 2 },
-  { slug: "montagne", category: "montagne", label: "Montagne", emplacements_base: 2 },
-  { slug: "montagne_riche", category: "montagne", label: "Montagne riche", emplacements_base: 2 },
+  {
+    slug: "foret_luxuriante",
+    category: "foret",
+    label: "Foret luxuriante",
+    emplacements_base: 2,
+  },
+  {
+    slug: "montagne",
+    category: "montagne",
+    label: "Montagne",
+    emplacements_base: 2,
+  },
+  {
+    slug: "montagne_riche",
+    category: "montagne",
+    label: "Montagne riche",
+    emplacements_base: 2,
+  },
   { slug: "marais", category: "marais", label: "Marais", emplacements_base: 2 },
   { slug: "desert", category: "desert", label: "Desert", emplacements_base: 1 },
-  { slug: "terres_gelees", category: "desert", label: "Terres gelees", emplacements_base: 1 },
-  { slug: "terre_desolee", category: "desert", label: "Terre desolee", emplacements_base: 1 },
+  {
+    slug: "terres_gelees",
+    category: "desert",
+    label: "Terres gelees",
+    emplacements_base: 1,
+  },
+  {
+    slug: "terre_desolee",
+    category: "desert",
+    label: "Terre desolee",
+    emplacements_base: 1,
+  },
 ] as const;
 
 export type TerrainDefinition = (typeof TERRAIN_DEFINITIONS)[number];
 export type TerrainSlug = TerrainDefinition["slug"];
 export type TerrainCategorySlug = TerrainDefinition["category"];
 
-export const TERRAIN_DEFINITIONS_BY_SLUG: Record<string, TerrainDefinition> = Object.fromEntries(
-  TERRAIN_DEFINITIONS.map((terrain) => [terrain.slug, terrain]),
-) as Record<string, TerrainDefinition>;
+export const TERRAIN_DEFINITIONS_BY_SLUG: Record<string, TerrainDefinition> =
+  Object.fromEntries(
+    TERRAIN_DEFINITIONS.map((terrain) => [terrain.slug, terrain]),
+  ) as Record<string, TerrainDefinition>;
 
 export const PEUPLE_MODIFICATEURS_V1 = [
-  { peuple_slug: "orques", type_declencheur: "terrain", declencheur: "terre_desolee", valeur: 4 },
-  { peuple_slug: "orques", type_declencheur: "terrain", declencheur: "montagne", valeur: 2 },
-  { peuple_slug: "nains", type_declencheur: "terrain", declencheur: "montagne", valeur: 3 },
-  { peuple_slug: "nains", type_declencheur: "attribut", declencheur: "colline", valeur: 1 },
-  { peuple_slug: "hobbits", type_declencheur: "attribut", declencheur: "colline", valeur: 2 },
-  { peuple_slug: "hobbits", type_declencheur: "terrain", declencheur: "marais", valeur: 1 },
-  { peuple_slug: "nandor", type_declencheur: "terrain", declencheur: "foret", valeur: 2 },
-  { peuple_slug: "noldor", type_declencheur: "terrain", declencheur: "montagne", valeur: 1 },
-  { peuple_slug: "noldor", type_declencheur: "attribut", declencheur: "colline", valeur: 1 },
-  { peuple_slug: "noldor", type_declencheur: "terrain", declencheur: "foret", valeur: 1 },
+  {
+    peuple_slug: "orques",
+    type_declencheur: "terrain",
+    declencheur: "terre_desolee",
+    valeur: 4,
+  },
+  {
+    peuple_slug: "orques",
+    type_declencheur: "terrain",
+    declencheur: "montagne",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "nains",
+    type_declencheur: "terrain",
+    declencheur: "montagne",
+    valeur: 3,
+  },
+  {
+    peuple_slug: "nains",
+    type_declencheur: "attribut",
+    declencheur: "colline",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "hobbits",
+    type_declencheur: "attribut",
+    declencheur: "colline",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "hobbits",
+    type_declencheur: "terrain",
+    declencheur: "marais",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "nandor",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "noldor",
+    type_declencheur: "terrain",
+    declencheur: "montagne",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "noldor",
+    type_declencheur: "attribut",
+    declencheur: "colline",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "noldor",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 1,
+  },
   {
     peuple_slug: "sindar",
     type_declencheur: "groupe_logique",
@@ -42,14 +133,54 @@ export const PEUPLE_MODIFICATEURS_V1 = [
     valeur: 1,
     groupe_logique: LITTORAL_WATER_LOGICAL_GROUP,
   },
-  { peuple_slug: "sindar", type_declencheur: "terrain", declencheur: "foret", valeur: 1 },
-  { peuple_slug: "avari", type_declencheur: "terrain", declencheur: "foret", valeur: 2 },
-  { peuple_slug: "lossoths", type_declencheur: "terrain", declencheur: "terres_gelees", valeur: 2 },
-  { peuple_slug: "enedwaithrim", type_declencheur: "attribut", declencheur: "colline", valeur: 1 },
-  { peuple_slug: "enedwaithrim", type_declencheur: "terrain", declencheur: "foret", valeur: 1 },
-  { peuple_slug: "druedain", type_declencheur: "terrain", declencheur: "foret", valeur: 2 },
-  { peuple_slug: "haradrim", type_declencheur: "terrain", declencheur: "desert", valeur: 2 },
-  { peuple_slug: "heritiers_numenor", type_declencheur: "attribut", declencheur: "colline", valeur: 1 },
+  {
+    peuple_slug: "sindar",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "avari",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "lossoths",
+    type_declencheur: "terrain",
+    declencheur: "terres_gelees",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "enedwaithrim",
+    type_declencheur: "attribut",
+    declencheur: "colline",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "enedwaithrim",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 1,
+  },
+  {
+    peuple_slug: "druedain",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "haradrim",
+    type_declencheur: "terrain",
+    declencheur: "desert",
+    valeur: 2,
+  },
+  {
+    peuple_slug: "heritiers_numenor",
+    type_declencheur: "attribut",
+    declencheur: "colline",
+    valeur: 1,
+  },
   {
     peuple_slug: "heritiers_numenor",
     type_declencheur: "groupe_logique",
@@ -64,7 +195,12 @@ export const PEUPLE_MODIFICATEURS_V1 = [
     valeur: 1,
     groupe_logique: LITTORAL_WATER_LOGICAL_GROUP,
   },
-  { peuple_slug: "hommes_vertbois", type_declencheur: "terrain", declencheur: "foret", valeur: 1 },
+  {
+    peuple_slug: "hommes_vertbois",
+    type_declencheur: "terrain",
+    declencheur: "foret",
+    valeur: 1,
+  },
 ] as const satisfies readonly PeupleModifier[];
 
 export type RuleTriggerType = "terrain" | "attribut" | "groupe_logique";
@@ -135,7 +271,9 @@ export type SlotCalculationAvailable = {
   modifiers: AppliedModifierLine[];
 };
 
-export type SlotCalculationResult = SlotCalculationUnavailable | SlotCalculationAvailable;
+export type SlotCalculationResult =
+  | SlotCalculationUnavailable
+  | SlotCalculationAvailable;
 
 export type CalculateSlotsInput = {
   terrain_type?: string | null;
@@ -170,41 +308,72 @@ export function validateLocalityUpgradeLink(
   }
 
   if (input.current_id && dependencyId === input.current_id) {
-    return { valid: false, reason: "Une localite ne peut pas dependre d'elle-meme." };
+    return {
+      valid: false,
+      reason: "Une localite ne peut pas dependre d'elle-meme.",
+    };
   }
 
   if (!input.expected_previous_type_key) {
-    return { valid: false, reason: "Ce type de localite ne declare pas d'amelioration." };
+    return {
+      valid: false,
+      reason: "Ce type de localite ne declare pas d'amelioration.",
+    };
   }
 
   if (input.dependency_status === "archived") {
-    return { valid: false, reason: "La localite amelioree ne peut pas etre archivee." };
+    return {
+      valid: false,
+      reason: "La localite amelioree ne peut pas etre archivee.",
+    };
   }
 
   if (input.dependency_type_key !== input.expected_previous_type_key) {
-    return { valid: false, reason: "La localite amelioree n'a pas le type attendu." };
+    return {
+      valid: false,
+      reason: "La localite amelioree n'a pas le type attendu.",
+    };
   }
 
-  if (!input.current_case_id || !input.dependency_case_id || input.current_case_id !== input.dependency_case_id) {
-    return { valid: false, reason: "Une amelioration doit rester sur la meme case." };
+  if (
+    !input.current_case_id ||
+    !input.dependency_case_id ||
+    input.current_case_id !== input.dependency_case_id
+  ) {
+    return {
+      valid: false,
+      reason: "Une amelioration doit rester sur la meme case.",
+    };
   }
 
   return { valid: true };
 }
 
-export function isLogicalGroupActive(group: string, attributes: CaseRuleAttributes): boolean {
+export function isLogicalGroupActive(
+  group: string,
+  attributes: CaseRuleAttributes,
+): boolean {
   if (group === LITTORAL_WATER_LOGICAL_GROUP) {
-    return attributes.cote === true || attributes.lac === true || attributes.fluvial === true;
+    return (
+      attributes.cote === true ||
+      attributes.lac === true ||
+      attributes.fluvial === true
+    );
   }
 
   return false;
 }
 
-function isAttributeActive(attribute: string, attributes: CaseRuleAttributes): boolean {
+function isAttributeActive(
+  attribute: string,
+  attributes: CaseRuleAttributes,
+): boolean {
   return attributes[attribute as keyof CaseRuleAttributes] === true;
 }
 
-export function calculateCaseSlots(input: CalculateSlotsInput): SlotCalculationResult {
+export function calculateCaseSlots(
+  input: CalculateSlotsInput,
+): SlotCalculationResult {
   const terrainSlug = input.terrain_type?.trim() ?? "";
 
   if (!terrainSlug) {
@@ -258,9 +427,11 @@ export function calculateCaseSlots(input: CalculateSlotsInput): SlotCalculationR
     }
 
     let applies = false;
-    const logicalGroup = modifier.groupe_logique ?? (
-      modifier.type_declencheur === "groupe_logique" ? modifier.declencheur : null
-    );
+    const logicalGroup =
+      modifier.groupe_logique ??
+      (modifier.type_declencheur === "groupe_logique"
+        ? modifier.declencheur
+        : null);
 
     if (logicalGroup) {
       applies = isLogicalGroupActive(logicalGroup, attributes);
@@ -292,18 +463,25 @@ export function calculateCaseSlots(input: CalculateSlotsInput): SlotCalculationR
     });
   }
 
-  const contextualBonusTotal = (input.bonus_contextuels ?? []).reduce((total, bonus) => {
-    modifiers.push({
-      source: "bonus_contextuel",
-      label: bonus.label ?? bonus.slug,
-      valeur: bonus.valeur,
-      declencheur: bonus.slug,
-    });
+  const contextualBonusTotal = (input.bonus_contextuels ?? []).reduce(
+    (total, bonus) => {
+      modifiers.push({
+        source: "bonus_contextuel",
+        label: bonus.label ?? bonus.slug,
+        valeur: bonus.valeur,
+        declencheur: bonus.slug,
+      });
 
-    return total + bonus.valeur;
-  }, 0);
+      return total + bonus.valeur;
+    },
+    0,
+  );
 
-  const rawSlots = terrain.emplacements_base + malusColline + peupleModifierTotal + contextualBonusTotal;
+  const rawSlots =
+    terrain.emplacements_base +
+    malusColline +
+    peupleModifierTotal +
+    contextualBonusTotal;
   const maxSlots = clampSlots(rawSlots);
   const usedSlots = Math.max(0, Math.trunc(input.emplacements_utilises ?? 0));
 
@@ -326,7 +504,13 @@ export function validateSlotConsumption(
   calculation: SlotCalculationResult,
   nextConsumers: readonly SlotConsumer[],
   options: { force?: boolean | null } = {},
-): { valid: boolean; forced: boolean; depassement: boolean; emplacements_utilises: number | null; reason?: string } {
+): {
+  valid: boolean;
+  forced: boolean;
+  depassement: boolean;
+  emplacements_utilises: number | null;
+  reason?: string;
+} {
   if (!calculation.available) {
     return {
       valid: options.force === true,

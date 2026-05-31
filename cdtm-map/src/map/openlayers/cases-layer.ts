@@ -5,6 +5,11 @@ import type Projection from "ol/proj/Projection";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
 
+import {
+  MAP_CASES_RENDER_BUFFER,
+  MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+  MAP_VECTOR_UPDATE_WHILE_INTERACTING,
+} from "@/map/config";
 import { getCaseStyle } from "@/map/styles";
 import {
   createEmptyPublicMapStyles,
@@ -31,6 +36,9 @@ type CaseLayerStyleContext = {
 type CreateCasesVectorLayerOptions = {
   visible?: boolean;
   opacity?: number;
+  renderBuffer?: number;
+  updateWhileAnimating?: boolean;
+  updateWhileInteracting?: boolean;
 };
 
 const geoJsonFormat = new GeoJSON();
@@ -78,12 +86,21 @@ export function createCasesVectorLayer(
   context: CaseLayerStyleContext,
   options: CreateCasesVectorLayerOptions = {},
 ): VectorLayer {
-  const { visible = true, opacity } = options;
+  const {
+    visible = true,
+    opacity,
+    renderBuffer = MAP_CASES_RENDER_BUFFER,
+    updateWhileAnimating = MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+    updateWhileInteracting = MAP_VECTOR_UPDATE_WHILE_INTERACTING,
+  } = options;
 
   return new VectorLayer({
     source,
     visible,
     opacity,
+    renderBuffer,
+    updateWhileAnimating,
+    updateWhileInteracting,
     style: (candidateFeature) => {
       if (!(candidateFeature instanceof Feature)) {
         return undefined;

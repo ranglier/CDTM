@@ -61,7 +61,10 @@ export type MapStyleRecord = {
   pattern_color: string | null;
 };
 
-export type PublicMapStyles = Record<MapStyleTargetType, Record<string, MapStyleRecord>>;
+export type PublicMapStyles = Record<
+  MapStyleTargetType,
+  Record<string, MapStyleRecord>
+>;
 
 export function createEmptyPublicMapStyles(): PublicMapStyles {
   return {
@@ -129,7 +132,9 @@ function isNullableString(value: unknown): value is string | null | undefined {
   return value === undefined || value === null || typeof value === "string";
 }
 
-function isNullableBoolean(value: unknown): value is boolean | null | undefined {
+function isNullableBoolean(
+  value: unknown,
+): value is boolean | null | undefined {
   return value === undefined || value === null || typeof value === "boolean";
 }
 
@@ -181,7 +186,11 @@ function isStableCaseProperties(value: unknown): value is StableCaseProperties {
 export function isStableCaseFeatureCollection(
   value: unknown,
 ): value is StableCaseFeatureCollection {
-  if (!isPlainObject(value) || value.type !== "FeatureCollection" || !Array.isArray(value.features)) {
+  if (
+    !isPlainObject(value) ||
+    value.type !== "FeatureCollection" ||
+    !Array.isArray(value.features)
+  ) {
     return false;
   }
 
@@ -199,7 +208,8 @@ export function isStableCaseFeatureCollection(
     }
 
     return (
-      (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon") &&
+      (feature.geometry.type === "Polygon" ||
+        feature.geometry.type === "MultiPolygon") &&
       Array.isArray(feature.geometry.coordinates)
     );
   });
@@ -214,7 +224,8 @@ export function toStableCaseProperties(
 
   return {
     registry_id_case:
-      typeof value.registry_id_case === "string" && value.registry_id_case.trim().length > 0
+      typeof value.registry_id_case === "string" &&
+      value.registry_id_case.trim().length > 0
         ? value.registry_id_case
         : value.id_case,
     id_case: value.id_case,

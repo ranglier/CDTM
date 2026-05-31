@@ -13,7 +13,10 @@ test("terrain_type vide desactive le calcul", () => {
   const result = calculateCaseSlots({ terrain_type: "" });
 
   assert.equal(result.available, false);
-  assert.equal(result.reason, "calcul indisponible : terrain principal non renseigné");
+  assert.equal(
+    result.reason,
+    "calcul indisponible : terrain principal non renseigné",
+  );
 });
 
 test("prairie sans bonus donne 5 emplacements max", () => {
@@ -94,7 +97,12 @@ test("cote + lac + fluvial + sindar applique le groupe logique une seule fois", 
 
   assert.equal(result.available, true);
   assert.equal(result.modificateur_peuple, 1);
-  assert.equal(result.modifiers.filter((line) => line.declencheur === "littoral_et_eaux_majeures").length, 1);
+  assert.equal(
+    result.modifiers.filter(
+      (line) => line.declencheur === "littoral_et_eaux_majeures",
+    ).length,
+    1,
+  );
 });
 
 test("plusieurs bonus contextuels se cumulent", () => {
@@ -132,7 +140,13 @@ test("ville 3 + fort 2 sur 5 est valide", () => {
 
   assert.equal(validation.valid, true);
   assert.equal(validation.depassement, false);
-  assert.equal(countConsumedSlots([{ consumes_slot: true, emp_requis: 3 }, { consumes_slot: true, emp_requis: 2 }]), 5);
+  assert.equal(
+    countConsumedSlots([
+      { consumes_slot: true, emp_requis: 3 },
+      { consumes_slot: true, emp_requis: 2 },
+    ]),
+    5,
+  );
 });
 
 test("cite 4 + village 1 sur 5 est valide", () => {
@@ -198,7 +212,10 @@ test("chaine d'amelioration refuse une dependance sans case", () => {
   });
 
   assert.equal(validation.valid, false);
-  assert.equal(validation.reason, "Une amelioration doit rester sur la meme case.");
+  assert.equal(
+    validation.reason,
+    "Une amelioration doit rester sur la meme case.",
+  );
 });
 
 test("chaine d'amelioration refuse un mauvais type precedent", () => {
@@ -213,7 +230,10 @@ test("chaine d'amelioration refuse un mauvais type precedent", () => {
   });
 
   assert.equal(validation.valid, false);
-  assert.equal(validation.reason, "La localite amelioree n'a pas le type attendu.");
+  assert.equal(
+    validation.reason,
+    "La localite amelioree n'a pas le type attendu.",
+  );
 });
 
 test("chaine d'amelioration refuse une dependance archivee", () => {
@@ -228,5 +248,8 @@ test("chaine d'amelioration refuse une dependance archivee", () => {
   });
 
   assert.equal(validation.valid, false);
-  assert.equal(validation.reason, "La localite amelioree ne peut pas etre archivee.");
+  assert.equal(
+    validation.reason,
+    "La localite amelioree ne peut pas etre archivee.",
+  );
 });

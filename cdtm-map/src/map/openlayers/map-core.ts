@@ -18,6 +18,8 @@ import {
   MAP_PROJECTION_CODE,
 } from "@/map/config";
 
+let backgroundImagePreloadPromise: Promise<void> | null = null;
+
 export const cdtmProjection = new Projection({
   code: MAP_PROJECTION_CODE,
   extent: MAP_EXTENT,
@@ -44,6 +46,43 @@ export function createCdtmBackgroundLayer() {
       projection: cdtmProjection,
     }),
   });
+}
+
+export function preloadCdtmBackgroundImage(): Promise<void> {
+  if (backgroundImagePreloadPromise) {
+    return backgroundImagePreloadPromise;
+  }
+
+  if (typeof window === "undefined") {
+    return Promise.resolve();
+  }
+
+  backgroundImagePreloadPromise = new Promise((resolve) => {
+    const image = new Image();
+
+    image.decoding = "async";
+    image.onload = () => {
+      if (typeof image.decode === "function") {
+        void image.decode().then(resolve).catch(resolve);
+        return;
+      }
+
+      resolve();
+    };
+    image.onerror = () => resolve();
+    image.src = MAP_BACKGROUND_PATH;
+
+    if (image.complete) {
+      if (typeof image.decode === "function") {
+        void image.decode().then(resolve).catch(resolve);
+        return;
+      }
+
+      resolve();
+    }
+  });
+
+  return backgroundImagePreloadPromise;
 }
 
 export function createCdtmMap(target: HTMLElement, layers: BaseLayer[]) {

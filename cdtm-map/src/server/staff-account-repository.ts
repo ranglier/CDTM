@@ -22,7 +22,10 @@ function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function normalizeRole(value: unknown, fallback: AdminRole | null = null): AdminRole {
+function normalizeRole(
+  value: unknown,
+  fallback: AdminRole | null = null,
+): AdminRole {
   if (isAdminRole(value)) {
     return value;
   }
@@ -49,7 +52,9 @@ function mapAccountRow(row: StaffAccountRow): StaffAccountSummary {
   };
 }
 
-async function listAccountsInternal(client: PoolClient): Promise<StaffAccountSummary[]> {
+async function listAccountsInternal(
+  client: PoolClient,
+): Promise<StaffAccountSummary[]> {
   const result = await client.query<StaffAccountRow>(
     `
       SELECT id, username, role, is_active, created_at, last_login_at
@@ -79,7 +84,10 @@ async function countOtherActiveTechAdmins(
   return Number.parseInt(result.rows[0]?.count ?? "0", 10);
 }
 
-async function invalidateUserSessions(client: PoolClient, userId: number): Promise<void> {
+async function invalidateUserSessions(
+  client: PoolClient,
+  userId: number,
+): Promise<void> {
   await client.query(
     `
       DELETE FROM staff_sessions
@@ -103,7 +111,10 @@ async function ensureRoleChangeSafe(
     return;
   }
 
-  const remainingTechAdmins = await countOtherActiveTechAdmins(client, currentAccount.id);
+  const remainingTechAdmins = await countOtherActiveTechAdmins(
+    client,
+    currentAccount.id,
+  );
 
   if (remainingTechAdmins === 0) {
     throw new Error(
@@ -141,7 +152,11 @@ export async function createStaffAccount(
   const rawPassword = typeof input.password === "string" ? input.password : "";
   const role = normalizeRole(input.role, "staff");
 
-  if (!username || rawPassword.length === 0 || rawPassword.trim().length === 0) {
+  if (
+    !username ||
+    rawPassword.length === 0 ||
+    rawPassword.trim().length === 0
+  ) {
     throw new Error("Identifiant et mot de passe obligatoires.");
   }
 
@@ -194,7 +209,8 @@ export async function updateStaffAccount(
     throw new Error("Identifiant de compte invalide.");
   }
 
-  const rawPassword = typeof patch.password === "string" ? patch.password : null;
+  const rawPassword =
+    typeof patch.password === "string" ? patch.password : null;
   const hasPasswordChange = rawPassword !== null && rawPassword.length > 0;
   const client = await getPool().connect();
 
@@ -218,10 +234,16 @@ export async function updateStaffAccount(
     }
 
     const currentAccount = mapAccountRow(currentRow);
-    const nextRole = patch.role ? normalizeRole(patch.role) : currentAccount.role;
+    const nextRole = patch.role
+      ? normalizeRole(patch.role)
+      : currentAccount.role;
     const nextIsActive = patch.is_active ?? currentAccount.is_active;
 
-    if (rawPassword !== null && rawPassword.length > 0 && rawPassword.trim().length === 0) {
+    if (
+      rawPassword !== null &&
+      rawPassword.length > 0 &&
+      rawPassword.trim().length === 0
+    ) {
       throw new Error("Le mot de passe ne peut pas etre vide.");
     }
 
@@ -268,7 +290,8 @@ export async function updateStaffAccount(
     const shouldInvalidateSessions =
       hasPasswordChange ||
       (patch.role !== undefined && patch.role !== currentAccount.role) ||
-      (patch.is_active !== undefined && patch.is_active !== currentAccount.is_active);
+      (patch.is_active !== undefined &&
+        patch.is_active !== currentAccount.is_active);
 
     if (shouldInvalidateSessions) {
       await invalidateUserSessions(client, userId);

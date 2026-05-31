@@ -3,6 +3,7 @@
 ## Objectif
 
 L'administration technique est volontairement separee en blocs simples :
+
 - navigation laterale
 - listes de valeurs
 - champs personnalises
@@ -32,6 +33,7 @@ Les composants techniques de l'administration sont regroupes sous `src/component
   - types UI locaux a cette zone
 
 Le composant `technical-admin-page.tsx` reste le point d'orchestration :
+
 - chargement des donnees
 - gestion des etats React
 - branchement des callbacks
@@ -49,6 +51,7 @@ Le composant `technical-admin-page.tsx` reste le point d'orchestration :
 `case_emplacements_current` reste une table metier liee aux cases.
 
 Elle ne fait pas partie du modele des objets cartographiques libres :
+
 - ce n'est pas `map_localities`
 - ce n'est pas `map_landmarks`
 - ce n'est pas `map_forces`

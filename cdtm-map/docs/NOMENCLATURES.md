@@ -13,6 +13,7 @@ La table technique unique est `reference_nomenclature_values`, mais l'interface 
 ## Groupes hors nomenclatures
 
 Les notions suivantes ont leur propre referentiel et ne doivent plus vivre dans `reference_nomenclature_values` :
+
 - peuples : `reference_peuples`
 - races : `reference_races`
 - factions : `reference_factions`
@@ -27,6 +28,7 @@ Le groupe `terrain_type` peut utiliser `parent_entry_key` pour rattacher un type
 ## Supprime
 
 Les groupes suivants ne doivent plus etre consideres comme actifs :
+
 - `peuple`
 - `peuple_majoritaire`
 - `bonus_special`

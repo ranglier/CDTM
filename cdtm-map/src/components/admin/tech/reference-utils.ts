@@ -5,7 +5,11 @@ import type {
   ReferenceTableRow,
   TechFieldDefinition,
 } from "@/admin/tech-types";
-import { normalizeHexColor, normalizePatternType, type MapPatternType } from "@/map/types";
+import {
+  normalizeHexColor,
+  normalizePatternType,
+  type MapPatternType,
+} from "@/map/types";
 
 import type {
   EditableRow,
@@ -15,13 +19,21 @@ import type {
 
 export const SIDEBAR_SECTION_STORAGE_KEY = "cdtm-tech-admin-sidebar-sections";
 
-export const STYLE_FIELDS = ["fill", "stroke", "pattern_type", "pattern_color"] as const;
+export const STYLE_FIELDS = [
+  "fill",
+  "stroke",
+  "pattern_type",
+  "pattern_color",
+] as const;
 export type StyleFieldName = (typeof STYLE_FIELDS)[number];
 
 export const DEFAULT_STYLE_STROKE = "#000000";
 export const DEFAULT_PATTERN_COLOR = "#000000";
 
-export const PATTERN_TYPE_OPTIONS: Array<{ value: "none" | MapPatternType; label: string }> = [
+export const PATTERN_TYPE_OPTIONS: Array<{
+  value: "none" | MapPatternType;
+  label: string;
+}> = [
   { value: "none", label: "Aucun" },
   { value: "diagonal", label: "Hachures diagonales" },
   { value: "diagonal_reverse", label: "Hachures diagonales inversees" },
@@ -68,9 +80,15 @@ export function toSnakeCaseIdentifier(value: string): string {
     .replace(/_+/g, "_");
 }
 
-function shouldReplaceAutoValue(currentValue: string, previousSuggestedValue: string): boolean {
+function shouldReplaceAutoValue(
+  currentValue: string,
+  previousSuggestedValue: string,
+): boolean {
   const normalizedCurrent = currentValue.trim();
-  return normalizedCurrent.length === 0 || normalizedCurrent === previousSuggestedValue;
+  return (
+    normalizedCurrent.length === 0 ||
+    normalizedCurrent === previousSuggestedValue
+  );
 }
 
 export function applyReferenceAutoFill(
@@ -79,12 +97,17 @@ export function applyReferenceAutoFill(
   nextValues: Record<string, string>,
 ): Record<string, string> {
   if (tableKey === "nomenclatures") {
-    const previousEntrySuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
+    const previousEntrySuggestion = toSnakeCaseIdentifier(
+      currentValues.label ?? "",
+    );
     const nextEntrySuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
 
     if (
       nextEntrySuggestion &&
-      shouldReplaceAutoValue(currentValues.entry_key ?? "", previousEntrySuggestion)
+      shouldReplaceAutoValue(
+        currentValues.entry_key ?? "",
+        previousEntrySuggestion,
+      )
     ) {
       nextValues.entry_key = nextEntrySuggestion;
     }
@@ -124,7 +147,10 @@ export function applyReferenceAutoFill(
 
     if (
       nextSuggestion &&
-      shouldReplaceAutoValue(currentValues.id_controleur ?? "", previousSuggestion)
+      shouldReplaceAutoValue(
+        currentValues.id_controleur ?? "",
+        previousSuggestion,
+      )
     ) {
       nextValues.id_controleur = nextSuggestion;
     }
@@ -142,7 +168,11 @@ export function applyReferenceAutoFill(
     }
   }
 
-  if (tableKey === "locality_types" || tableKey === "landmark_types" || tableKey === "force_types") {
+  if (
+    tableKey === "locality_types" ||
+    tableKey === "landmark_types" ||
+    tableKey === "force_types"
+  ) {
     const previousSuggestion = toSnakeCaseIdentifier(currentValues.label ?? "");
     const nextSuggestion = toSnakeCaseIdentifier(nextValues.label ?? "");
 
@@ -181,7 +211,10 @@ export function applyReferenceAutoFill(
   return nextValues;
 }
 
-export function getStyleTargetIdForRow(view: ReferenceView | null, values: Record<string, string>): string | null {
+export function getStyleTargetIdForRow(
+  view: ReferenceView | null,
+  values: Record<string, string>,
+): string | null {
   if (!view?.styleTargetType) {
     return null;
   }
@@ -233,7 +266,8 @@ export function buildStylePayload(
 
   if (
     normalizedFill.length === 0 &&
-    (normalizedStroke.length === 0 || normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
+    (normalizedStroke.length === 0 ||
+      normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
     (normalizedPatternType.length === 0 || normalizedPatternType === "none") &&
     normalizedPatternColor.length === 0
   ) {
@@ -250,7 +284,10 @@ export function buildStylePayload(
   };
 }
 
-export function getPatternCss(patternType: MapPatternType | null, patternColor: string) {
+export function getPatternCss(
+  patternType: MapPatternType | null,
+  patternColor: string,
+) {
   switch (patternType) {
     case "diagonal":
       return {
@@ -292,11 +329,17 @@ export function getPatternCss(patternType: MapPatternType | null, patternColor: 
   }
 }
 
-export function createStylePreview(fill: string, stroke: string, patternType: string, patternColor: string) {
+export function createStylePreview(
+  fill: string,
+  stroke: string,
+  patternType: string,
+  patternColor: string,
+) {
   const normalizedFill = normalizeHexColor(fill);
   const normalizedStroke = normalizeHexColor(stroke) ?? DEFAULT_STYLE_STROKE;
   const normalizedPatternType = normalizePatternType(patternType);
-  const normalizedPatternColor = normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
+  const normalizedPatternColor =
+    normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
 
   return {
     fill: normalizedFill ?? "#5f6b7a",
@@ -311,7 +354,11 @@ export function isHexColorInputValid(value: string): boolean {
 }
 
 export function isPatternTypeInputValid(value: string): boolean {
-  return value.trim().length === 0 || value === "none" || normalizePatternType(value) !== null;
+  return (
+    value.trim().length === 0 ||
+    value === "none" ||
+    normalizePatternType(value) !== null
+  );
 }
 
 export function isPreviewImageUrl(value: string): boolean {
@@ -319,7 +366,9 @@ export function isPreviewImageUrl(value: string): boolean {
   return trimmed.startsWith("/uploads/map-icons/");
 }
 
-export function rowValueToInputValue(value: string | number | boolean | null): string {
+export function rowValueToInputValue(
+  value: string | number | boolean | null,
+): string {
   if (value === null) {
     return "";
   }
@@ -331,26 +380,35 @@ export function rowValueToInputValue(value: string | number | boolean | null): s
   return String(value);
 }
 
-export function createEmptyRowValues(definition: ReferenceTableDefinition): Record<string, string> {
+export function createEmptyRowValues(
+  definition: ReferenceTableDefinition,
+): Record<string, string> {
   return Object.fromEntries(definition.fields.map((field) => [field.name, ""]));
 }
 
-export function toEditableRow(definition: ReferenceTableDefinition, row: ReferenceTableRow): EditableRow {
+export function toEditableRow(
+  definition: ReferenceTableDefinition,
+  row: ReferenceTableRow,
+): EditableRow {
   const updatedByUsername = row.updated_by_username;
   const fallbackLocalId =
-    globalThis.crypto?.randomUUID?.() ?? `row-${Math.random().toString(36).slice(2)}`;
+    globalThis.crypto?.randomUUID?.() ??
+    `row-${Math.random().toString(36).slice(2)}`;
 
   return {
     localId: `${definition.key}:${row[definition.primary_key] ?? fallbackLocalId}`,
     values: Object.fromEntries(
       definition.fields.map((field) => [
         field.name,
-        field.name === "updated_by_user_id" && typeof updatedByUsername === "string"
+        field.name === "updated_by_user_id" &&
+        typeof updatedByUsername === "string"
           ? updatedByUsername
           : rowValueToInputValue(row[field.name] ?? null),
       ]),
     ),
-    originalPrimaryKey: rowValueToInputValue(row[definition.primary_key] ?? null),
+    originalPrimaryKey: rowValueToInputValue(
+      row[definition.primary_key] ?? null,
+    ),
     saving: false,
     uploading: false,
     error: null,
@@ -378,7 +436,10 @@ export function withStyleValues(
   };
 }
 
-export function buildRowPayload(definition: ReferenceTableDefinition, row: EditableRow): Record<string, string> {
+export function buildRowPayload(
+  definition: ReferenceTableDefinition,
+  row: EditableRow,
+): Record<string, string> {
   return Object.fromEntries(
     definition.fields
       .filter((field) => !field.readOnly)
@@ -441,7 +502,10 @@ export function getFriendlyFieldLabel(fieldName: string): string {
   }
 }
 
-function getOptionLabel(options: ReferenceOption[] | undefined, value: string): string {
+function getOptionLabel(
+  options: ReferenceOption[] | undefined,
+  value: string,
+): string {
   return options?.find((option) => option.value === value)?.label ?? value;
 }
 
@@ -490,7 +554,8 @@ export function getReferenceRowSummary(
   return (
     displayFields
       .map((field) => row.values[field.name])
-      .find((value) => value && value.trim().length > 0) || "Aucun detail visible"
+      .find((value) => value && value.trim().length > 0) ||
+    "Aucun detail visible"
   );
 }
 

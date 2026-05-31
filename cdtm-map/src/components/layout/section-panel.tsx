@@ -7,7 +7,11 @@ type SectionPanelProps = HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
 };
 
-export function SectionPanel({ children, className, ...props }: SectionPanelProps) {
+export function SectionPanel({
+  children,
+  className,
+  ...props
+}: SectionPanelProps) {
   return (
     <Card className={cn("overflow-hidden", className)} {...props}>
       {children}

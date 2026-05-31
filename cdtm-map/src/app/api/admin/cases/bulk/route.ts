@@ -77,8 +77,10 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const message = error instanceof Error ? error.message : "Edition de masse impossible.";
-    const status = message.includes("invalide") || message.includes("requiert") ? 400 : 500;
+    const message =
+      error instanceof Error ? error.message : "Edition de masse impossible.";
+    const status =
+      message.includes("invalide") || message.includes("requiert") ? 400 : 500;
 
     return NextResponse.json(
       {

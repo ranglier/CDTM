@@ -11,6 +11,11 @@ import Stroke from "ol/style/Stroke";
 import Style from "ol/style/Style";
 
 import type { EditorMapLandmark, EditorMapLocality } from "@/editor/types";
+import {
+  MAP_POINTS_RENDER_BUFFER,
+  MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+  MAP_VECTOR_UPDATE_WHILE_INTERACTING,
+} from "@/map/config";
 
 type EditorPointFamily = "locality" | "landmark";
 type EditorPointRecord =
@@ -117,7 +122,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getIconScaleForResolution(resolution: number): number {
-  const safeResolution = Number.isFinite(resolution) && resolution > 0 ? resolution : 1;
+  const safeResolution =
+    Number.isFinite(resolution) && resolution > 0 ? resolution : 1;
   return clamp(1 / Math.sqrt(Math.max(safeResolution, 1)), 0.4, 1);
 }
 
@@ -275,14 +281,18 @@ function getPointStyleWithContext(
       return fallbackStyle;
     }
     const effectiveIconKey =
-      locality.icon_key ?? context?.getLocalityDefaultIconKeyForType(locality.type_key) ?? null;
+      locality.icon_key ??
+      context?.getLocalityDefaultIconKeyForType(locality.type_key) ??
+      null;
     const iconSource = context?.getIconImagePath(effectiveIconKey) ?? null;
-    return iconSource ? getCachedIconStyles(iconSource, locality.status, resolution) : fallbackStyle;
+    return iconSource
+      ? getCachedIconStyles(iconSource, locality.status, resolution)
+      : fallbackStyle;
   }
 
   const landmark = getEditorLandmarkFromPointFeature(feature);
   const category = landmark
-    ? context?.getLandmarkTypeCategory(landmark.type_key) ?? "landmark"
+    ? (context?.getLandmarkTypeCategory(landmark.type_key) ?? "landmark")
     : "landmark";
   const fallbackStyle = getLandmarkFallbackStyle(landmark, category);
   if (!landmark) {
@@ -292,9 +302,13 @@ function getPointStyleWithContext(
     return fallbackStyle;
   }
   const effectiveIconKey =
-    landmark.icon_key ?? context?.getLandmarkDefaultIconKeyForType(landmark.type_key) ?? null;
+    landmark.icon_key ??
+    context?.getLandmarkDefaultIconKeyForType(landmark.type_key) ??
+    null;
   const iconSource = context?.getIconImagePath(effectiveIconKey) ?? null;
-  return iconSource ? getCachedIconStyles(iconSource, landmark.status, resolution) : fallbackStyle;
+  return iconSource
+    ? getCachedIconStyles(iconSource, landmark.status, resolution)
+    : fallbackStyle;
 }
 
 export function createEditorPointsVectorSource(): VectorSource {
@@ -303,16 +317,33 @@ export function createEditorPointsVectorSource(): VectorSource {
 
 export function createEditorPointsVectorLayer(
   source: VectorSource,
-  options: { visible?: boolean; context?: EditorPointsLayerContext } = {},
+  options: {
+    visible?: boolean;
+    context?: EditorPointsLayerContext;
+    renderBuffer?: number;
+    updateWhileAnimating?: boolean;
+    updateWhileInteracting?: boolean;
+  } = {},
 ): VectorLayer {
   return new VectorLayer({
     source,
     visible: options.visible ?? true,
+    renderBuffer: options.renderBuffer ?? MAP_POINTS_RENDER_BUFFER,
+    updateWhileAnimating:
+      options.updateWhileAnimating ?? MAP_VECTOR_UPDATE_WHILE_ANIMATING,
+    updateWhileInteracting:
+      options.updateWhileInteracting ?? MAP_VECTOR_UPDATE_WHILE_INTERACTING,
     style: (feature, resolution) => {
       if (!(feature instanceof Feature)) {
         return undefined;
       }
-      return getPointStyleWithContext(feature as Feature<Geometry>, options.context, resolution) ?? undefined;
+      return (
+        getPointStyleWithContext(
+          feature as Feature<Geometry>,
+          options.context,
+          resolution,
+        ) ?? undefined
+      );
     },
   });
 }
@@ -323,12 +354,19 @@ export function replaceEditorPointFeatures(
 ): void {
   source.clear(true);
   source.addFeatures([
-    ...payload.localities.map((locality) => createPointFeature({ family: "locality", locality })),
-    ...payload.landmarks.map((landmark) => createPointFeature({ family: "landmark", landmark })),
+    ...payload.localities.map((locality) =>
+      createPointFeature({ family: "locality", locality }),
+    ),
+    ...payload.landmarks.map((landmark) =>
+      createPointFeature({ family: "landmark", landmark }),
+    ),
   ]);
 }
 
-export function upsertEditorPointFeature(source: VectorSource, point: EditorPointRecord): void {
+export function upsertEditorPointFeature(
+  source: VectorSource,
+  point: EditorPointRecord,
+): void {
   const featureId =
     point.family === "locality"
       ? `locality:${point.locality.id_locality}`

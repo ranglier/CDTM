@@ -18,11 +18,17 @@ export async function ensureTechAdmin(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ error: "Acces admin non autorise." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Acces admin non autorise." },
+      { status: 401 },
+    );
   }
 }
 
-export function editorErrorResponse(error: unknown, fallbackMessage: string): NextResponse {
+export function editorErrorResponse(
+  error: unknown,
+  fallbackMessage: string,
+): NextResponse {
   if (error instanceof EditorValidationError) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
@@ -51,6 +57,8 @@ export function parseEditorListOptions(request: NextRequest) {
     faction: searchParams.get("faction"),
     controleur: searchParams.get("controleur"),
     search: searchParams.get("search"),
-    limit: searchParams.has("limit") ? Number.parseInt(searchParams.get("limit") ?? "", 10) : null,
+    limit: searchParams.has("limit")
+      ? Number.parseInt(searchParams.get("limit") ?? "", 10)
+      : null,
   };
 }

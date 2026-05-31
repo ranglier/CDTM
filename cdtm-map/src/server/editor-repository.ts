@@ -113,7 +113,10 @@ type EditorRouteRow = {
 type EditorEntityConfig = {
   tableName: "map_localities" | "map_landmarks" | "map_forces";
   idColumn: "id_locality" | "id_landmark" | "id_force";
-  typeTable: "reference_locality_types" | "reference_landmark_types" | "reference_force_types";
+  typeTable:
+    | "reference_locality_types"
+    | "reference_landmark_types"
+    | "reference_force_types";
   typeLabel: "localite" | "landmark" | "force";
   idPrefix: "locality" | "landmark" | "force";
   dependsOnColumn?: "depends_on_locality_id";
@@ -133,8 +136,13 @@ type NormalizedEditorObjectInput = {
   description: string | null;
   depends_on_locality_id: string | null;
 };
-type EditorEntityPatch = EditorMapLocalityPatch | EditorMapLandmarkPatch | EditorMapForcePatch;
-type NormalizedEditorObjectPatch = Partial<Omit<NormalizedEditorObjectInput, "id">>;
+type EditorEntityPatch =
+  | EditorMapLocalityPatch
+  | EditorMapLandmarkPatch
+  | EditorMapForcePatch;
+type NormalizedEditorObjectPatch = Partial<
+  Omit<NormalizedEditorObjectInput, "id">
+>;
 type SlotOverrideInput = {
   force_slot_override?: boolean | null;
   slot_override_reason?: string | null;
@@ -159,7 +167,9 @@ type NormalizedEditorRouteInput = {
   description: string | null;
 };
 
-type NormalizedEditorRoutePatch = Partial<Omit<NormalizedEditorRouteInput, "id_route">>;
+type NormalizedEditorRoutePatch = Partial<
+  Omit<NormalizedEditorRouteInput, "id_route">
+>;
 
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -230,7 +240,9 @@ function normalizeFiniteNumber(value: unknown, fieldName: string): number {
   return nextValue;
 }
 
-function generateEditorObjectId(prefix: EditorEntityConfig["idPrefix"]): string {
+function generateEditorObjectId(
+  prefix: EditorEntityConfig["idPrefix"],
+): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
@@ -312,7 +324,9 @@ function normalizeRoutePoint(
   index: number,
 ): EditorMapRoutePoint {
   if (!Array.isArray(value) || value.length !== 2) {
-    throw new EditorValidationError(`Le point ${index + 1} de la route est invalide.`);
+    throw new EditorValidationError(
+      `Le point ${index + 1} de la route est invalide.`,
+    );
   }
 
   return [
@@ -329,7 +343,9 @@ function normalizeRoutePoints(value: unknown): EditorMapRoutePoint[] {
   const points = value.map((point, index) => normalizeRoutePoint(point, index));
 
   if (points.length < 2) {
-    throw new EditorValidationError("Une route doit contenir au moins deux points.");
+    throw new EditorValidationError(
+      "Une route doit contenir au moins deux points.",
+    );
   }
 
   return points;
@@ -411,8 +427,12 @@ function mapRouteRow(row: EditorRouteRow): EditorMapRoute {
     name: row.name,
     route_type: row.route_type,
     points: normalizeRoutePointsFromStorage(row.points_json, row.id_route),
-    geometry_mode: isRouteGeometryMode(row.geometry_mode) ? row.geometry_mode : "curved",
-    stroke_style: isRouteStrokeStyle(row.stroke_style) ? row.stroke_style : "solid",
+    geometry_mode: isRouteGeometryMode(row.geometry_mode)
+      ? row.geometry_mode
+      : "curved",
+    stroke_style: isRouteStrokeStyle(row.stroke_style)
+      ? row.stroke_style
+      : "solid",
     stroke_width:
       typeof row.stroke_width === "number" &&
       Number.isInteger(row.stroke_width) &&
@@ -499,8 +519,13 @@ async function validateEditorObjectReferences(
   );
 
   if (config.dependsOnColumn) {
-    if (input.depends_on_locality_id && input.depends_on_locality_id === input.id) {
-      throw new EditorValidationError("Une localite ne peut pas dependre d'elle-meme.");
+    if (
+      input.depends_on_locality_id &&
+      input.depends_on_locality_id === input.id
+    ) {
+      throw new EditorValidationError(
+        "Une localite ne peut pas dependre d'elle-meme.",
+      );
     }
 
     await assertValueExists(
@@ -543,7 +568,9 @@ async function validateEditorObjectReferences(
       });
 
       if (!validation.valid) {
-        throw new EditorValidationError(validation.reason ?? "La chaine d'amelioration est invalide.");
+        throw new EditorValidationError(
+          validation.reason ?? "La chaine d'amelioration est invalide.",
+        );
       }
     }
   }
@@ -552,9 +579,9 @@ async function validateEditorObjectReferences(
 function shouldForceSlotOverride(input: unknown): boolean {
   return Boolean(
     input &&
-      typeof input === "object" &&
-      "force_slot_override" in input &&
-      (input as SlotOverrideInput).force_slot_override === true,
+    typeof input === "object" &&
+    "force_slot_override" in input &&
+    (input as SlotOverrideInput).force_slot_override === true,
   );
 }
 
@@ -584,7 +611,11 @@ async function getReferenceSlotConsumer(
 async function listExistingCaseSlotConsumers(
   client: PoolClient,
   idCase: string,
-  exclude?: { tableName: "map_localities" | "map_landmarks"; idColumn: "id_locality" | "id_landmark"; id: string },
+  exclude?: {
+    tableName: "map_localities" | "map_landmarks";
+    idColumn: "id_locality" | "id_landmark";
+    id: string;
+  },
   replacedLocality?: { id: string; typeKey: string },
 ): Promise<SlotConsumer[]> {
   const result = await client.query<SlotConsumer>(
@@ -664,7 +695,10 @@ async function calculateCaseSlotCapacity(
   const row = caseResult.rows[0];
 
   if (!row) {
-    return calculateCaseSlots({ terrain_type: null, emplacements_utilises: emplacementsUtilises });
+    return calculateCaseSlots({
+      terrain_type: null,
+      emplacements_utilises: emplacementsUtilises,
+    });
   }
 
   const [modifierResult, bonusResult] = await Promise.all([
@@ -717,7 +751,11 @@ async function recalculateAndPersistEditorSlots(
   }
 
   const consumers = await listExistingCaseSlotConsumers(client, idCase);
-  const calculation = await calculateCaseSlotCapacity(client, idCase, countConsumedSlots(consumers));
+  const calculation = await calculateCaseSlotCapacity(
+    client,
+    idCase,
+    countConsumedSlots(consumers),
+  );
 
   if (!calculation.available) {
     await client.query(
@@ -812,13 +850,23 @@ async function assertSlotCapacityForEditorObject(
   rawInput: unknown,
   existingId?: string,
 ): Promise<void> {
-  if (!input.id_case_detected || (config.tableName !== "map_localities" && config.tableName !== "map_landmarks")) {
+  if (
+    !input.id_case_detected ||
+    (config.tableName !== "map_localities" &&
+      config.tableName !== "map_landmarks")
+  ) {
     return;
   }
 
   const typeTable =
-    config.tableName === "map_localities" ? "reference_locality_types" : "reference_landmark_types";
-  const candidate = await getReferenceSlotConsumer(client, typeTable, input.type_key);
+    config.tableName === "map_localities"
+      ? "reference_locality_types"
+      : "reference_landmark_types";
+  const candidate = await getReferenceSlotConsumer(
+    client,
+    typeTable,
+    input.type_key,
+  );
 
   if (!candidate.consumes_slot || input.status === "archived") {
     return;
@@ -828,7 +876,10 @@ async function assertSlotCapacityForEditorObject(
     config.tableName === "map_localities" &&
     input.depends_on_locality_id &&
     candidate.upgrades_from_type_id
-      ? { id: input.depends_on_locality_id, typeKey: candidate.upgrades_from_type_id }
+      ? {
+          id: input.depends_on_locality_id,
+          typeKey: candidate.upgrades_from_type_id,
+        }
       : undefined;
 
   const [calculation, existingConsumers] = await Promise.all([
@@ -900,7 +951,8 @@ function normalizeEditorRouteInput(
     providedId !== undefined
       ? assertSimpleIdentifier(providedId, "id_route")
       : assertSimpleIdentifier(
-          normalizeText((input as EditorMapRouteInput).id_route) || generateEditorRouteId(),
+          normalizeText((input as EditorMapRouteInput).id_route) ||
+            generateEditorRouteId(),
           "id_route",
         );
 
@@ -920,7 +972,9 @@ function normalizeEditorRouteInput(
   };
 }
 
-function normalizeEditorRoutePatch(input: EditorMapRoutePatch): NormalizedEditorRoutePatch {
+function normalizeEditorRoutePatch(
+  input: EditorMapRoutePatch,
+): NormalizedEditorRoutePatch {
   const payload = assertPlainObject(input);
   const patch: NormalizedEditorRoutePatch = {};
   const allowedFields = new Set([
@@ -939,7 +993,9 @@ function normalizeEditorRoutePatch(input: EditorMapRoutePatch): NormalizedEditor
 
   for (const key of Object.keys(payload)) {
     if (!allowedFields.has(key)) {
-      throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+      throw new EditorValidationError(
+        `Le champ ${key} ne peut pas etre modifie.`,
+      );
     }
 
     const value = payload[key];
@@ -982,7 +1038,9 @@ function normalizeEditorRoutePatch(input: EditorMapRoutePatch): NormalizedEditor
         patch.description = normalizeNullableText(value);
         break;
       default:
-        throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+        throw new EditorValidationError(
+          `Le champ ${key} ne peut pas etre modifie.`,
+        );
     }
   }
 
@@ -1011,7 +1069,10 @@ function getAllowedPatchFields(config: EditorEntityConfig): Set<string> {
   ]);
 }
 
-function normalizeRequiredStringField(value: unknown, fieldName: string): string {
+function normalizeRequiredStringField(
+  value: unknown,
+  fieldName: string,
+): string {
   const normalized = normalizeText(value);
 
   if (!normalized) {
@@ -1039,8 +1100,13 @@ function normalizeEditorObjectInput(
     providedId !== undefined
       ? assertSimpleIdentifier(providedId, config.idColumn)
       : assertSimpleIdentifier(
-          normalizeText((input as EditorMapLocalityInput & EditorMapLandmarkInput & EditorMapForceInput)[config.idColumn]) ||
-            generateEditorObjectId(config.idPrefix),
+          normalizeText(
+            (
+              input as EditorMapLocalityInput &
+                EditorMapLandmarkInput &
+                EditorMapForceInput
+            )[config.idColumn],
+          ) || generateEditorObjectId(config.idPrefix),
           config.idColumn,
         );
 
@@ -1057,7 +1123,9 @@ function normalizeEditorObjectInput(
     status: normalizeStatusForCreate(input.status),
     description: normalizeNullableText(input.description),
     depends_on_locality_id: config.dependsOnColumn
-      ? normalizeNullableText((input as EditorMapLocalityInput).depends_on_locality_id)
+      ? normalizeNullableText(
+          (input as EditorMapLocalityInput).depends_on_locality_id,
+        )
       : null,
   };
 }
@@ -1072,7 +1140,9 @@ function normalizeEditorObjectPatch(
 
   for (const key of Object.keys(payload)) {
     if (!allowedFields.has(key)) {
-      throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+      throw new EditorValidationError(
+        `Le champ ${key} ne peut pas etre modifie.`,
+      );
     }
 
     const value = payload[key];
@@ -1115,7 +1185,9 @@ function normalizeEditorObjectPatch(
         patch.depends_on_locality_id = normalizeNullableText(value);
         break;
       default:
-        throw new EditorValidationError(`Le champ ${key} ne peut pas etre modifie.`);
+        throw new EditorValidationError(
+          `Le champ ${key} ne peut pas etre modifie.`,
+        );
     }
   }
 
@@ -1205,7 +1277,9 @@ function buildListQuery(
 
   if (search) {
     values.push(`%${search}%`);
-    clauses.push(`(name ILIKE $${values.length} OR COALESCE(description, '') ILIKE $${values.length})`);
+    clauses.push(
+      `(name ILIKE $${values.length} OR COALESCE(description, '') ILIKE $${values.length})`,
+    );
   }
 
   values.push(normalizeLimit(options?.limit ?? null));
@@ -1222,9 +1296,10 @@ function buildListQuery(
   };
 }
 
-function buildRouteListQuery(
-  options: EditorListOptions | undefined,
-): { sql: string; values: Array<string | number> } {
+function buildRouteListQuery(options: EditorListOptions | undefined): {
+  sql: string;
+  values: Array<string | number>;
+} {
   const clauses: string[] = [];
   const values: Array<string | number> = [];
 
@@ -1356,27 +1431,40 @@ async function listEditorMapIconOptions(
   return result.rows;
 }
 
-async function getEditorReferenceDataInternal(client: PoolClient): Promise<EditorReferenceData> {
-  const [localityTypes, landmarkTypes, forceTypes, mapIcons, factions, controleurs] =
-    await Promise.all([
-      listEditorLocalityTypeOptions(client),
-      listEditorLandmarkTypeOptions(client),
-      listReferenceOptions(
-        client,
-        "reference_force_types",
-        "type_key",
-        "COALESCE(label, type_key)",
-        "WHERE is_active = TRUE",
-      ),
-      listEditorMapIconOptions(client),
-      listReferenceOptions(client, "reference_factions", "id_faction", "COALESCE(nom, id_faction)"),
-      listReferenceOptions(
-        client,
-        "reference_controleurs",
-        "id_controleur",
-        "COALESCE(nom, id_controleur)",
-      ),
-    ]);
+async function getEditorReferenceDataInternal(
+  client: PoolClient,
+): Promise<EditorReferenceData> {
+  const [
+    localityTypes,
+    landmarkTypes,
+    forceTypes,
+    mapIcons,
+    factions,
+    controleurs,
+  ] = await Promise.all([
+    listEditorLocalityTypeOptions(client),
+    listEditorLandmarkTypeOptions(client),
+    listReferenceOptions(
+      client,
+      "reference_force_types",
+      "type_key",
+      "COALESCE(label, type_key)",
+      "WHERE is_active = TRUE",
+    ),
+    listEditorMapIconOptions(client),
+    listReferenceOptions(
+      client,
+      "reference_factions",
+      "id_faction",
+      "COALESCE(nom, id_faction)",
+    ),
+    listReferenceOptions(
+      client,
+      "reference_controleurs",
+      "id_controleur",
+      "COALESCE(nom, id_controleur)",
+    ),
+  ]);
 
   return {
     locality_types: localityTypes,
@@ -1388,11 +1476,9 @@ async function getEditorReferenceDataInternal(client: PoolClient): Promise<Edito
   };
 }
 
-async function getEditorEntityRow<T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow>(
-  client: PoolClient,
-  config: EditorEntityConfig,
-  id: string,
-): Promise<T> {
+async function getEditorEntityRow<
+  T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow,
+>(client: PoolClient, config: EditorEntityConfig, id: string): Promise<T> {
   const result = await client.query<T>(
     `
       SELECT *
@@ -1412,13 +1498,12 @@ async function getEditorEntityRow<T extends EditorLocalityRow | EditorLandmarkRo
   return row;
 }
 
-async function createEditorEntity<T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow>(
+async function createEditorEntity<
+  T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow,
+>(
   client: PoolClient,
   config: EditorEntityConfig,
-  input:
-    | EditorMapLocalityInput
-    | EditorMapLandmarkInput
-    | EditorMapForceInput,
+  input: EditorMapLocalityInput | EditorMapLandmarkInput | EditorMapForceInput,
   userId: number,
 ): Promise<T> {
   const normalized = normalizeEditorObjectInput(config, input);
@@ -1480,7 +1565,9 @@ async function createEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
   return row;
 }
 
-async function updateEditorEntity<T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow>(
+async function updateEditorEntity<
+  T extends EditorLocalityRow | EditorLandmarkRow | EditorForceRow,
+>(
   client: PoolClient,
   config: EditorEntityConfig,
   id: string,
@@ -1502,7 +1589,10 @@ async function updateEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
   let parameterIndex = 2;
 
   for (const [fieldName, fieldValue] of Object.entries(patch)) {
-    const columnName = fieldName === "depends_on_locality_id" ? config.dependsOnColumn : fieldName;
+    const columnName =
+      fieldName === "depends_on_locality_id"
+        ? config.dependsOnColumn
+        : fieldName;
 
     if (!columnName) {
       continue;
@@ -1651,7 +1741,10 @@ async function updateEditorRouteInternal(
     id_route: existingRow.id_route,
     name: existingRow.name,
     route_type: existingRow.route_type,
-    points: normalizeRoutePointsFromStorage(existingRow.points_json, existingRow.id_route),
+    points: normalizeRoutePointsFromStorage(
+      existingRow.points_json,
+      existingRow.id_route,
+    ),
     geometry_mode: normalizeRouteGeometryMode(existingRow.geometry_mode),
     stroke_style: normalizeRouteStrokeStyle(existingRow.stroke_style),
     stroke_width: normalizeRouteStrokeWidth(existingRow.stroke_width),
@@ -1671,9 +1764,13 @@ async function updateEditorRouteInternal(
 
   for (const [fieldName, fieldValue] of Object.entries(patch)) {
     const columnName = fieldName === "points" ? "points_json" : fieldName;
-    assignments.push(`${columnName} = $${parameterIndex}${fieldName === "points" ? "::jsonb" : ""}`);
+    assignments.push(
+      `${columnName} = $${parameterIndex}${fieldName === "points" ? "::jsonb" : ""}`,
+    );
     values.push(
-      fieldName === "points" ? JSON.stringify(fieldValue as EditorMapRoutePoint[]) : (fieldValue as string | number | null),
+      fieldName === "points"
+        ? JSON.stringify(fieldValue as EditorMapRoutePoint[])
+        : (fieldValue as string | number | null),
     );
     parameterIndex += 1;
   }
@@ -1701,7 +1798,10 @@ async function updateEditorRouteInternal(
   return row;
 }
 
-async function deleteEditorRouteInternal(client: PoolClient, id: string): Promise<void> {
+async function deleteEditorRouteInternal(
+  client: PoolClient,
+  id: string,
+): Promise<void> {
   const result = await client.query(
     `
       DELETE FROM map_routes
@@ -1756,7 +1856,9 @@ export async function getEditorReferenceData(): Promise<EditorReferenceData> {
   }
 }
 
-export async function listEditorLocalities(options?: EditorListOptions): Promise<EditorMapLocality[]> {
+export async function listEditorLocalities(
+  options?: EditorListOptions,
+): Promise<EditorMapLocality[]> {
   const hasDatabase = await ensureDatabaseReady();
 
   if (!hasDatabase) {
@@ -1767,19 +1869,26 @@ export async function listEditorLocalities(options?: EditorListOptions): Promise
 
   try {
     const query = buildListQuery(LOCALITY_CONFIG, options);
-    const result = await client.query<EditorLocalityRow>(query.sql, query.values);
+    const result = await client.query<EditorLocalityRow>(
+      query.sql,
+      query.values,
+    );
     return result.rows.map(mapLocalityRow);
   } finally {
     client.release();
   }
 }
 
-export async function getEditorLocality(id: string): Promise<EditorMapLocality> {
+export async function getEditorLocality(
+  id: string,
+): Promise<EditorMapLocality> {
   const hasDatabase = await ensureDatabaseReady();
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();
   try {
-    return mapLocalityRow(await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id));
+    return mapLocalityRow(
+      await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id),
+    );
   } finally {
     client.release();
   }
@@ -1794,8 +1903,17 @@ export async function createEditorLocality(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await createEditorEntity<EditorLocalityRow>(client, LOCALITY_CONFIG, input, userId);
-    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
+    const row = await createEditorEntity<EditorLocalityRow>(
+      client,
+      LOCALITY_CONFIG,
+      input,
+      userId,
+    );
+    await recalculateAndPersistEditorSlots(
+      client,
+      row.id_case_detected,
+      userId,
+    );
     await client.query("COMMIT");
     return mapLocalityRow(row);
   } catch (error) {
@@ -1816,12 +1934,30 @@ export async function updateEditorLocality(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const previousRow = await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id);
-    const row = await updateEditorEntity<EditorLocalityRow>(client, LOCALITY_CONFIG, id, input, userId);
+    const previousRow = await getEditorEntityRow<EditorLocalityRow>(
+      client,
+      LOCALITY_CONFIG,
+      id,
+    );
+    const row = await updateEditorEntity<EditorLocalityRow>(
+      client,
+      LOCALITY_CONFIG,
+      id,
+      input,
+      userId,
+    );
     if (previousRow.id_case_detected !== row.id_case_detected) {
-      await recalculateAndPersistEditorSlots(client, previousRow.id_case_detected, userId);
+      await recalculateAndPersistEditorSlots(
+        client,
+        previousRow.id_case_detected,
+        userId,
+      );
     }
-    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
+    await recalculateAndPersistEditorSlots(
+      client,
+      row.id_case_detected,
+      userId,
+    );
     await client.query("COMMIT");
     return mapLocalityRow(row);
   } catch (error) {
@@ -1838,7 +1974,11 @@ export async function deleteEditorLocality(id: string): Promise<void> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id);
+    const row = await getEditorEntityRow<EditorLocalityRow>(
+      client,
+      LOCALITY_CONFIG,
+      id,
+    );
     await deleteEditorEntity(client, LOCALITY_CONFIG, id);
     await recalculateAndPersistEditorSlots(client, row.id_case_detected, null);
     await client.query("COMMIT");
@@ -1850,25 +1990,34 @@ export async function deleteEditorLocality(id: string): Promise<void> {
   }
 }
 
-export async function listEditorLandmarks(options?: EditorListOptions): Promise<EditorMapLandmark[]> {
+export async function listEditorLandmarks(
+  options?: EditorListOptions,
+): Promise<EditorMapLandmark[]> {
   const hasDatabase = await ensureDatabaseReady();
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();
   try {
     const query = buildListQuery(LANDMARK_CONFIG, options);
-    const result = await client.query<EditorLandmarkRow>(query.sql, query.values);
+    const result = await client.query<EditorLandmarkRow>(
+      query.sql,
+      query.values,
+    );
     return result.rows.map(mapLandmarkRow);
   } finally {
     client.release();
   }
 }
 
-export async function getEditorLandmark(id: string): Promise<EditorMapLandmark> {
+export async function getEditorLandmark(
+  id: string,
+): Promise<EditorMapLandmark> {
   const hasDatabase = await ensureDatabaseReady();
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();
   try {
-    return mapLandmarkRow(await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id));
+    return mapLandmarkRow(
+      await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id),
+    );
   } finally {
     client.release();
   }
@@ -1883,8 +2032,17 @@ export async function createEditorLandmark(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await createEditorEntity<EditorLandmarkRow>(client, LANDMARK_CONFIG, input, userId);
-    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
+    const row = await createEditorEntity<EditorLandmarkRow>(
+      client,
+      LANDMARK_CONFIG,
+      input,
+      userId,
+    );
+    await recalculateAndPersistEditorSlots(
+      client,
+      row.id_case_detected,
+      userId,
+    );
     await client.query("COMMIT");
     return mapLandmarkRow(row);
   } catch (error) {
@@ -1905,12 +2063,30 @@ export async function updateEditorLandmark(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const previousRow = await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id);
-    const row = await updateEditorEntity<EditorLandmarkRow>(client, LANDMARK_CONFIG, id, input, userId);
+    const previousRow = await getEditorEntityRow<EditorLandmarkRow>(
+      client,
+      LANDMARK_CONFIG,
+      id,
+    );
+    const row = await updateEditorEntity<EditorLandmarkRow>(
+      client,
+      LANDMARK_CONFIG,
+      id,
+      input,
+      userId,
+    );
     if (previousRow.id_case_detected !== row.id_case_detected) {
-      await recalculateAndPersistEditorSlots(client, previousRow.id_case_detected, userId);
+      await recalculateAndPersistEditorSlots(
+        client,
+        previousRow.id_case_detected,
+        userId,
+      );
     }
-    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
+    await recalculateAndPersistEditorSlots(
+      client,
+      row.id_case_detected,
+      userId,
+    );
     await client.query("COMMIT");
     return mapLandmarkRow(row);
   } catch (error) {
@@ -1927,7 +2103,11 @@ export async function deleteEditorLandmark(id: string): Promise<void> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id);
+    const row = await getEditorEntityRow<EditorLandmarkRow>(
+      client,
+      LANDMARK_CONFIG,
+      id,
+    );
     await deleteEditorEntity(client, LANDMARK_CONFIG, id);
     await recalculateAndPersistEditorSlots(client, row.id_case_detected, null);
     await client.query("COMMIT");
@@ -1939,7 +2119,9 @@ export async function deleteEditorLandmark(id: string): Promise<void> {
   }
 }
 
-export async function listEditorForces(options?: EditorListOptions): Promise<EditorMapForce[]> {
+export async function listEditorForces(
+  options?: EditorListOptions,
+): Promise<EditorMapForce[]> {
   const hasDatabase = await ensureDatabaseReady();
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();
@@ -1957,7 +2139,9 @@ export async function getEditorForce(id: string): Promise<EditorMapForce> {
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();
   try {
-    return mapForceRow(await getEditorEntityRow<EditorForceRow>(client, FORCE_CONFIG, id));
+    return mapForceRow(
+      await getEditorEntityRow<EditorForceRow>(client, FORCE_CONFIG, id),
+    );
   } finally {
     client.release();
   }
@@ -1972,7 +2156,12 @@ export async function createEditorForce(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await createEditorEntity<EditorForceRow>(client, FORCE_CONFIG, input, userId);
+    const row = await createEditorEntity<EditorForceRow>(
+      client,
+      FORCE_CONFIG,
+      input,
+      userId,
+    );
     await client.query("COMMIT");
     return mapForceRow(row);
   } catch (error) {
@@ -1993,7 +2182,13 @@ export async function updateEditorForce(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const row = await updateEditorEntity<EditorForceRow>(client, FORCE_CONFIG, id, input, userId);
+    const row = await updateEditorEntity<EditorForceRow>(
+      client,
+      FORCE_CONFIG,
+      id,
+      input,
+      userId,
+    );
     await client.query("COMMIT");
     return mapForceRow(row);
   } catch (error) {
@@ -2020,7 +2215,9 @@ export async function deleteEditorForce(id: string): Promise<void> {
   }
 }
 
-export async function listEditorRoutes(options?: EditorListOptions): Promise<EditorMapRoute[]> {
+export async function listEditorRoutes(
+  options?: EditorListOptions,
+): Promise<EditorMapRoute[]> {
   const hasDatabase = await ensureDatabaseReady();
   if (!hasDatabase) throw new Error("La base de donnees n'est pas configuree.");
   const client = await getPool().connect();

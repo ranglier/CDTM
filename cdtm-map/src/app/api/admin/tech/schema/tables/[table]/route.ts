@@ -71,7 +71,8 @@ export async function GET(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lecture de table impossible.";
+    const message =
+      error instanceof Error ? error.message : "Lecture de table impossible.";
 
     return NextResponse.json(
       {
@@ -119,7 +120,10 @@ export async function PATCH(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Mise a jour de table impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Mise a jour de table impossible.";
     const status = message.includes("inconnue") ? 404 : 400;
 
     return NextResponse.json(

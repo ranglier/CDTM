@@ -52,7 +52,11 @@ export function ReferenceAdminPanel({
               <h2 className="text-2xl font-semibold text-foreground">
                 {activeReferenceView?.title ?? activeReference.definition.title}
               </h2>
-              <Button type="button" onClick={onAddReferenceRow} disabled={!activeReferenceView}>
+              <Button
+                type="button"
+                onClick={onAddReferenceRow}
+                disabled={!activeReferenceView}
+              >
                 Ajouter une valeur
               </Button>
             </div>
@@ -68,7 +72,9 @@ export function ReferenceAdminPanel({
                 className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 sm:w-72"
                 placeholder="Filtrer cette liste"
                 value={referenceSearchInput}
-                onChange={(event) => setReferenceSearchInput(event.target.value)}
+                onChange={(event) =>
+                  setReferenceSearchInput(event.target.value)
+                }
               />
               <Button type="submit" variant="outline">
                 Filtrer
@@ -77,13 +83,19 @@ export function ReferenceAdminPanel({
           </div>
         </div>
 
-        {referenceError ? <p className="mt-4 text-sm text-destructive">{referenceError}</p> : null}
+        {referenceError ? (
+          <p className="mt-4 text-sm text-destructive">{referenceError}</p>
+        ) : null}
 
         <div className="mt-6 space-y-4">
           {referenceRowsLoading ? (
-            <p className="text-sm text-muted-foreground">Chargement des lignes...</p>
+            <p className="text-sm text-muted-foreground">
+              Chargement des lignes...
+            </p>
           ) : referenceRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucune ligne pour cette vue.</p>
+            <p className="text-sm text-muted-foreground">
+              Aucune ligne pour cette vue.
+            </p>
           ) : (
             <section className="rounded-[20px] border border-border/70 bg-background/35 p-4">
               <div className="flex items-center justify-between gap-3">
@@ -94,18 +106,26 @@ export function ReferenceAdminPanel({
               </div>
               <div className="mt-4 space-y-3">
                 {referenceRows.map((row) => {
-                  const displayFields = activeReference.definition.fields.filter(
-                    (field) =>
-                      !REFERENCE_TECHNICAL_FIELDS.has(field.name) &&
-                      !STYLE_FIELDS.includes(field.name as StyleFieldName),
+                  const displayFields =
+                    activeReference.definition.fields.filter(
+                      (field) =>
+                        !REFERENCE_TECHNICAL_FIELDS.has(field.name) &&
+                        !STYLE_FIELDS.includes(field.name as StyleFieldName),
+                    );
+                  const technicalFields =
+                    activeReference.definition.fields.filter((field) =>
+                      REFERENCE_TECHNICAL_FIELDS.has(field.name),
+                    );
+                  const showStyles = Boolean(
+                    activeReferenceView?.styleTargetType,
                   );
-                  const technicalFields = activeReference.definition.fields.filter((field) =>
-                    REFERENCE_TECHNICAL_FIELDS.has(field.name),
-                  );
-                  const showStyles = Boolean(activeReferenceView?.styleTargetType);
                   const hasImageFields =
-                    activeReference.definition.fields.some((field) => field.name === "image_path") &&
-                    activeReference.definition.fields.some((field) => field.name === "image_alt");
+                    activeReference.definition.fields.some(
+                      (field) => field.name === "image_path",
+                    ) &&
+                    activeReference.definition.fields.some(
+                      (field) => field.name === "image_alt",
+                    );
                   const previewAlt =
                     row.values.image_alt ||
                     row.values.label ||
@@ -131,7 +151,11 @@ export function ReferenceAdminPanel({
                         className="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
                         onClick={(event) => {
                           event.preventDefault();
-                          setSelectedReferenceRowId(selectedReferenceRowId === row.localId ? null : row.localId);
+                          setSelectedReferenceRowId(
+                            selectedReferenceRowId === row.localId
+                              ? null
+                              : row.localId,
+                          );
                         }}
                       >
                         <div className="flex items-center gap-4 text-left">
@@ -148,10 +172,14 @@ export function ReferenceAdminPanel({
                               {row.values.label ||
                                 row.values.nom ||
                                 row.values.entry_key ||
-                                row.values[activeReference.definition.primary_key] ||
+                                row.values[
+                                  activeReference.definition.primary_key
+                                ] ||
                                 "Nouvelle ligne"}
                             </p>
-                            <p className="mt-1 text-sm text-muted-foreground">{summaryText}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {summaryText}
+                            </p>
                           </div>
                         </div>
                         <div className="flex gap-3">
@@ -167,7 +195,11 @@ export function ReferenceAdminPanel({
                           >
                             Supprimer
                           </Button>
-                          <Button type="button" size="sm" disabled={row.saving || row.uploading}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={row.saving || row.uploading}
+                          >
                             Modifier
                           </Button>
                         </div>
@@ -177,23 +209,35 @@ export function ReferenceAdminPanel({
                         {displayFields.map((field) => (
                           <div
                             key={`${row.localId}:${field.name}`}
-                            className={field.type === "textarea" ? "lg:col-span-2" : ""}
+                            className={
+                              field.type === "textarea" ? "lg:col-span-2" : ""
+                            }
                           >
                             <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                               {getFriendlyFieldLabel(field.label)}
                             </p>
-                            {activeReferenceView?.supportsTerrainParentSelect && field.name === "parent_entry_key" ? (
+                            {activeReferenceView?.supportsTerrainParentSelect &&
+                            field.name === "parent_entry_key" ? (
                               <select
                                 className="w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60"
                                 value={row.values[field.name] ?? ""}
                                 disabled={row.saving}
                                 onChange={(event) =>
-                                  onReferenceRowValueChange(row.localId, field.name, event.target.value)
+                                  onReferenceRowValueChange(
+                                    row.localId,
+                                    field.name,
+                                    event.target.value,
+                                  )
                                 }
                               >
-                                <option value="">Aucune categorie parente</option>
+                                <option value="">
+                                  Aucune categorie parente
+                                </option>
                                 {terrainCategoryOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
                                     {option.label}
                                   </option>
                                 ))}
@@ -204,7 +248,13 @@ export function ReferenceAdminPanel({
                                 value={row.values[field.name] ?? ""}
                                 disabled={row.saving || row.uploading}
                                 options={referenceFieldOptions[field.name]}
-                                onChange={(value) => onReferenceRowValueChange(row.localId, field.name, value)}
+                                onChange={(value) =>
+                                  onReferenceRowValueChange(
+                                    row.localId,
+                                    field.name,
+                                    value,
+                                  )
+                                }
                               />
                             )}
                           </div>
@@ -223,12 +273,15 @@ export function ReferenceAdminPanel({
                                   className="hidden"
                                   disabled={row.saving || row.uploading}
                                   onChange={(event) => {
-                                    const file = event.target.files?.[0] ?? null;
+                                    const file =
+                                      event.target.files?.[0] ?? null;
                                     void onMapIconUpload(row, file);
                                     event.currentTarget.value = "";
                                   }}
                                 />
-                                {row.uploading ? "Import..." : "Importer une image"}
+                                {row.uploading
+                                  ? "Import..."
+                                  : "Importer une image"}
                               </label>
                             </div>
                             <ImagePreview
@@ -249,10 +302,17 @@ export function ReferenceAdminPanel({
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
-                                  value={normalizeHexColor(row.values.fill ?? "") ?? "#5f6b7a"}
+                                  value={
+                                    normalizeHexColor(row.values.fill ?? "") ??
+                                    "#5f6b7a"
+                                  }
                                   disabled={row.saving}
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "fill", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "fill",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                                 <input
@@ -264,7 +324,11 @@ export function ReferenceAdminPanel({
                                   value={row.values.fill ?? ""}
                                   disabled={row.saving}
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "fill", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "fill",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                               </div>
@@ -278,22 +342,36 @@ export function ReferenceAdminPanel({
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
-                                  value={normalizeHexColor(row.values.stroke ?? "") ?? DEFAULT_STYLE_STROKE}
+                                  value={
+                                    normalizeHexColor(
+                                      row.values.stroke ?? "",
+                                    ) ?? DEFAULT_STYLE_STROKE
+                                  }
                                   disabled={row.saving}
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "stroke", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "stroke",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                                 <input
                                   className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
-                                    isHexColorInputValid(row.values.stroke ?? "")
+                                    isHexColorInputValid(
+                                      row.values.stroke ?? "",
+                                    )
                                       ? "border-border/70"
                                       : "border-destructive/70"
                                   }`}
                                   value={row.values.stroke ?? ""}
                                   disabled={row.saving}
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "stroke", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "stroke",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                               </div>
@@ -305,18 +383,27 @@ export function ReferenceAdminPanel({
                               </p>
                               <select
                                 className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
-                                  isPatternTypeInputValid(row.values.pattern_type ?? "")
+                                  isPatternTypeInputValid(
+                                    row.values.pattern_type ?? "",
+                                  )
                                     ? "border-border/70"
                                     : "border-destructive/70"
                                 }`}
                                 value={row.values.pattern_type ?? "none"}
                                 disabled={row.saving}
                                 onChange={(event) =>
-                                  onReferenceRowValueChange(row.localId, "pattern_type", event.target.value)
+                                  onReferenceRowValueChange(
+                                    row.localId,
+                                    "pattern_type",
+                                    event.target.value,
+                                  )
                                 }
                               >
                                 {PATTERN_TYPE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
                                     {option.label}
                                   </option>
                                 ))}
@@ -331,22 +418,44 @@ export function ReferenceAdminPanel({
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
-                                  value={normalizeHexColor(row.values.pattern_color ?? "") ?? DEFAULT_PATTERN_COLOR}
-                                  disabled={row.saving || (row.values.pattern_type ?? "none") === "none"}
+                                  value={
+                                    normalizeHexColor(
+                                      row.values.pattern_color ?? "",
+                                    ) ?? DEFAULT_PATTERN_COLOR
+                                  }
+                                  disabled={
+                                    row.saving ||
+                                    (row.values.pattern_type ?? "none") ===
+                                      "none"
+                                  }
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "pattern_color", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "pattern_color",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                                 <input
                                   className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
-                                    isHexColorInputValid(row.values.pattern_color ?? "")
+                                    isHexColorInputValid(
+                                      row.values.pattern_color ?? "",
+                                    )
                                       ? "border-border/70"
                                       : "border-destructive/70"
                                   }`}
                                   value={row.values.pattern_color ?? ""}
-                                  disabled={row.saving || (row.values.pattern_type ?? "none") === "none"}
+                                  disabled={
+                                    row.saving ||
+                                    (row.values.pattern_type ?? "none") ===
+                                      "none"
+                                  }
                                   onChange={(event) =>
-                                    onReferenceRowValueChange(row.localId, "pattern_color", event.target.value)
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "pattern_color",
+                                      event.target.value,
+                                    )
                                   }
                                 />
                               </div>
@@ -364,7 +473,11 @@ export function ReferenceAdminPanel({
                             {technicalFields.map((field) => (
                               <div
                                 key={`${row.localId}:tech:${field.name}`}
-                                className={field.type === "textarea" ? "lg:col-span-2" : ""}
+                                className={
+                                  field.type === "textarea"
+                                    ? "lg:col-span-2"
+                                    : ""
+                                }
                               >
                                 <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                   {getFriendlyFieldLabel(field.label)}
@@ -376,12 +489,21 @@ export function ReferenceAdminPanel({
                                     value={row.values[field.name] ?? ""}
                                     disabled={row.saving || row.uploading}
                                     onChange={(event) =>
-                                      onReferenceRowValueChange(row.localId, field.name, event.target.value)
+                                      onReferenceRowValueChange(
+                                        row.localId,
+                                        field.name,
+                                        event.target.value,
+                                      )
                                     }
                                   >
-                                    <option value="">Aucune categorie parente</option>
+                                    <option value="">
+                                      Aucune categorie parente
+                                    </option>
                                     {terrainCategoryOptions.map((option) => (
-                                      <option key={option.value} value={option.value}>
+                                      <option
+                                        key={option.value}
+                                        value={option.value}
+                                      >
                                         {option.label}
                                       </option>
                                     ))}
@@ -391,11 +513,17 @@ export function ReferenceAdminPanel({
                                     field={field}
                                     value={row.values[field.name] ?? ""}
                                     disabled={
-                                      row.saving || row.uploading || LOCKED_REFERENCE_FIELDS.has(field.name)
+                                      row.saving ||
+                                      row.uploading ||
+                                      LOCKED_REFERENCE_FIELDS.has(field.name)
                                     }
                                     options={referenceFieldOptions[field.name]}
                                     onChange={(value) =>
-                                      onReferenceRowValueChange(row.localId, field.name, value)
+                                      onReferenceRowValueChange(
+                                        row.localId,
+                                        field.name,
+                                        value,
+                                      )
                                     }
                                   />
                                 )}
@@ -405,7 +533,11 @@ export function ReferenceAdminPanel({
                         </details>
                       ) : null}
 
-                      {row.error ? <p className="mt-4 text-sm text-destructive">{row.error}</p> : null}
+                      {row.error ? (
+                        <p className="mt-4 text-sm text-destructive">
+                          {row.error}
+                        </p>
+                      ) : null}
 
                       <div className="mt-4 flex justify-end gap-3">
                         <Button
@@ -430,7 +562,11 @@ export function ReferenceAdminPanel({
                           disabled={row.saving || row.uploading}
                           onClick={() => void onSaveReferenceRow(row)}
                         >
-                          {row.saving ? "Enregistrement..." : row.uploading ? "Import..." : "Enregistrer"}
+                          {row.saving
+                            ? "Enregistrement..."
+                            : row.uploading
+                              ? "Import..."
+                              : "Enregistrer"}
                         </Button>
                       </div>
                     </details>
@@ -448,8 +584,12 @@ export function ReferenceAdminPanel({
     return (
       <>
         <div className="flex flex-col gap-3">
-          <h2 className="text-2xl font-semibold text-foreground">{activeReferenceSection.title}</h2>
-          <p className="text-sm text-muted-foreground">Selectionne une liste dans cette categorie.</p>
+          <h2 className="text-2xl font-semibold text-foreground">
+            {activeReferenceSection.title}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Selectionne une liste dans cette categorie.
+          </p>
         </div>
 
         <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
@@ -462,7 +602,9 @@ export function ReferenceAdminPanel({
                 onClick={() => onSelectReferenceView(view.id)}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-foreground">{view.title}</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {view.title}
+                  </span>
                   {view.rowCount !== null ? (
                     <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                       {view.rowCount}
@@ -477,5 +619,9 @@ export function ReferenceAdminPanel({
     );
   }
 
-  return <p className="text-sm text-muted-foreground">Aucune liste de valeurs selectionnee.</p>;
+  return (
+    <p className="text-sm text-muted-foreground">
+      Aucune liste de valeurs selectionnee.
+    </p>
+  );
 }

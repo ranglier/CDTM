@@ -47,10 +47,17 @@ export function AdminLoginDialog({
               Connexion admin
             </h2>
             <p className="text-sm leading-6 text-muted-foreground">
-              Connecte-toi avec les identifiants staff pour activer l&apos;edition integree.
+              Connecte-toi avec les identifiants staff pour activer
+              l&apos;edition integree.
             </p>
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Fermer">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Fermer"
+          >
             <X />
           </Button>
         </div>
@@ -97,7 +104,12 @@ export function AdminLoginDialog({
           ) : null}
 
           <div className="flex items-center justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={pending}
+            >
               Fermer
             </Button>
             <Button type="submit" disabled={pending}>

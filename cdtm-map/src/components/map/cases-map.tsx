@@ -54,6 +54,7 @@ import {
   createCdtmMap,
   createCdtmView,
   fitCdtmCasesExtent,
+  preloadCdtmBackgroundImage,
 } from "@/map/openlayers/map-core";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
@@ -288,7 +289,7 @@ export function CasesMap({
     } else if (target.kind === "landmark") {
       const publicLandmark = publicLandmarksByIdRef.current[target.id];
       coordinate = [target.x, target.y];
-      title = "Landmark";
+      title = publicLandmark?.name ?? target.label;
       rows = publicLandmark
         ? buildPublicLandmarkHoverRows(publicLandmark)
         : [{ label: "Type", value: "Landmark" }];
@@ -523,6 +524,8 @@ export function CasesMap({
       return;
     }
 
+    void preloadCdtmBackgroundImage();
+
     const backgroundLayer = createCdtmBackgroundLayer();
     const source = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
@@ -620,7 +623,7 @@ export function CasesMap({
       );
     };
 
-    const pointerMoveHandler = (rawEvent: unknown) => {
+    const runPointerMoveHitTests = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
       const viewportWidth =
@@ -693,7 +696,7 @@ export function CasesMap({
 
             if (publicLandmark) {
               setTooltip(
-                "Landmark",
+                publicLandmark.name,
                 buildPublicLandmarkHoverRows(publicLandmark),
               );
               return;
@@ -774,6 +777,53 @@ export function CasesMap({
       setTooltip("Case", rows);
     };
 
+    let mapInteracting = false;
+    let pointerMoveFrame: number | null = null;
+    let latestPointerMoveEvent: unknown = null;
+    const clearPointerHover = () => {
+      map.getTargetElement().style.cursor = "";
+      setHoverInfo(null);
+    };
+    const cancelPointerMoveFrame = () => {
+      if (pointerMoveFrame !== null) {
+        window.cancelAnimationFrame(pointerMoveFrame);
+        pointerMoveFrame = null;
+      }
+      latestPointerMoveEvent = null;
+    };
+    const pointerMoveHandler = (rawEvent: unknown) => {
+      latestPointerMoveEvent = rawEvent;
+
+      if (pointerMoveFrame !== null) {
+        return;
+      }
+
+      pointerMoveFrame = window.requestAnimationFrame(() => {
+        pointerMoveFrame = null;
+        const event = latestPointerMoveEvent;
+        latestPointerMoveEvent = null;
+
+        if (!event) {
+          return;
+        }
+
+        if (mapInteracting) {
+          clearPointerHover();
+          return;
+        }
+
+        runPointerMoveHitTests(event);
+      });
+    };
+    const moveStartKey = map.on("movestart", () => {
+      mapInteracting = true;
+      cancelPointerMoveFrame();
+      clearPointerHover();
+    });
+    const moveEndKey = map.on("moveend", () => {
+      mapInteracting = false;
+    });
+
     const singleClickKey = map.on("singleclick", singleClickHandler);
     const pointerMoveKey = map.on("pointermove", pointerMoveHandler);
 
@@ -792,8 +842,11 @@ export function CasesMap({
 
     return () => {
       resizeObserver.disconnect();
+      cancelPointerMoveFrame();
       unByKey(singleClickKey);
       unByKey(pointerMoveKey);
+      unByKey(moveStartKey);
+      unByKey(moveEndKey);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
       sourceRef.current = null;
@@ -900,8 +953,20 @@ export function CasesMap({
             typeRef.category,
           ]),
         );
+        mapIconSourceByKeyRef.current = {};
 
-        const iconEntries = await Promise.all(
+        replaceEditorPointFeatures(pointsSourceRef.current, {
+          localities: toRenderablePublicLocalities(payload.localities),
+          landmarks: toRenderablePublicLandmarks(payload.landmarks),
+        });
+        replaceEditorRouteFeatures(
+          routesSourceRef.current,
+          toRenderablePublicRoutes(payload.routes),
+        );
+        pointsLayerRef.current?.changed();
+        routesLayerRef.current?.changed();
+
+        void Promise.all(
           payload.reference.map_icons.map(async (iconRef) => {
             if (!iconRef.image_path) {
               return [iconRef.value, null] as const;
@@ -918,28 +983,18 @@ export function CasesMap({
               return [iconRef.value, iconRef.image_path] as const;
             }
           }),
-        );
+        ).then((iconEntries) => {
+          if (cancelled || !pointsLayerRef.current) {
+            return;
+          }
 
-        if (cancelled || !pointsSourceRef.current || !routesSourceRef.current) {
-          return;
-        }
-
-        mapIconSourceByKeyRef.current = Object.fromEntries(
-          iconEntries.filter(
-            (entry): entry is [string, string] => entry[1] !== null,
-          ),
-        );
-
-        replaceEditorPointFeatures(pointsSourceRef.current, {
-          localities: toRenderablePublicLocalities(payload.localities),
-          landmarks: toRenderablePublicLandmarks(payload.landmarks),
+          mapIconSourceByKeyRef.current = Object.fromEntries(
+            iconEntries.filter(
+              (entry): entry is [string, string] => entry[1] !== null,
+            ),
+          );
+          pointsLayerRef.current.changed();
         });
-        replaceEditorRouteFeatures(
-          routesSourceRef.current,
-          toRenderablePublicRoutes(payload.routes),
-        );
-        pointsLayerRef.current?.changed();
-        routesLayerRef.current?.changed();
       } catch (error) {
         if (cancelled) {
           return;

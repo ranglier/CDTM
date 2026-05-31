@@ -14,7 +14,9 @@ export function getStableCasesFromCollection(
 ): StableCaseProperties[] {
   return collection.features
     .map((feature) => toStableCaseProperties(feature.properties))
-    .filter((stableCase): stableCase is StableCaseProperties => stableCase !== null);
+    .filter(
+      (stableCase): stableCase is StableCaseProperties => stableCase !== null,
+    );
 }
 
 export function mergeStableCases(
@@ -57,6 +59,9 @@ export function buildCasePropertiesById(
   stableCases: StableCaseProperties[],
 ): Record<string, StableCaseProperties> {
   return Object.fromEntries(
-    stableCases.map((stableCase) => [getRegistryCaseId(stableCase), stableCase]),
+    stableCases.map((stableCase) => [
+      getRegistryCaseId(stableCase),
+      stableCase,
+    ]),
   );
 }

@@ -114,7 +114,9 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
     `,
   );
 
-  for (const category of Array.from(new Set(TERRAIN_DEFINITIONS.map((terrain) => terrain.category)))) {
+  for (const category of Array.from(
+    new Set(TERRAIN_DEFINITIONS.map((terrain) => terrain.category)),
+  )) {
     await client.query(
       `
         INSERT INTO reference_nomenclature_values (id_entry, group_key, entry_key, label)
@@ -165,7 +167,10 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
     return;
   }
 
-  const futureBusiness = nomenclatures.future_business as Record<string, unknown>;
+  const futureBusiness = nomenclatures.future_business as Record<
+    string,
+    unknown
+  >;
   async function insertRow(
     groupKey: string,
     entryKey: string,
@@ -188,20 +193,37 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
   }
 
   for (const [groupKey, rawValue] of Object.entries(futureBusiness)) {
-    if (groupKey === "terrain_type" || groupKey === "faction" || groupKey === "peuple" || groupKey === "visibilite") {
+    if (
+      groupKey === "terrain_type" ||
+      groupKey === "faction" ||
+      groupKey === "peuple" ||
+      groupKey === "visibilite"
+    ) {
       continue;
     }
 
-    if (groupKey === "terrain_type_by_cat" && rawValue && typeof rawValue === "object") {
-      for (const [categoryKey, values] of Object.entries(rawValue as Record<string, unknown>)) {
+    if (
+      groupKey === "terrain_type_by_cat" &&
+      rawValue &&
+      typeof rawValue === "object"
+    ) {
+      for (const [categoryKey, values] of Object.entries(
+        rawValue as Record<string, unknown>,
+      )) {
         if (!Array.isArray(values)) {
           continue;
         }
 
         for (const entry of values) {
           if (typeof entry === "string") {
-            const normalizedEntry = entry === "desert_glace" ? "terres_gelees" : entry;
-            await insertRow("terrain_type", normalizedEntry, normalizedEntry, categoryKey);
+            const normalizedEntry =
+              entry === "desert_glace" ? "terres_gelees" : entry;
+            await insertRow(
+              "terrain_type",
+              normalizedEntry,
+              normalizedEntry,
+              categoryKey,
+            );
           }
         }
       }
@@ -216,7 +238,9 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
     for (const entry of rawValue) {
       if (typeof entry === "string") {
         const normalizedEntry =
-          groupKey === "terrain_type" && entry === "desert_glace" ? "terres_gelees" : entry;
+          groupKey === "terrain_type" && entry === "desert_glace"
+            ? "terres_gelees"
+            : entry;
         await insertRow(groupKey, normalizedEntry, normalizedEntry);
       }
     }
@@ -233,7 +257,9 @@ async function seedFactions(client: PoolClient): Promise<void> {
   }
 
   const factions =
-    ((nomenclatures.future_business as Record<string, unknown>).faction as string[] | undefined) ?? [];
+    ((nomenclatures.future_business as Record<string, unknown>).faction as
+      | string[]
+      | undefined) ?? [];
 
   for (const factionId of factions) {
     await client.query(
@@ -255,14 +281,18 @@ async function seedControleurs(client: PoolClient): Promise<void> {
     return;
   }
 
-  for (const controleur of controleursExample as Array<Record<string, unknown>>) {
+  for (const controleur of controleursExample as Array<
+    Record<string, unknown>
+  >) {
     await client.query(
       `
         INSERT INTO reference_controleurs (id_controleur, nom, pnj)
         VALUES ($1, $2, $3)
       `,
       [
-        typeof controleur.id_controleur === "string" ? controleur.id_controleur : "",
+        typeof controleur.id_controleur === "string"
+          ? controleur.id_controleur
+          : "",
         typeof controleur.nom === "string" ? controleur.nom : null,
         typeof controleur.pnj === "boolean" ? controleur.pnj : null,
       ],
@@ -271,13 +301,7 @@ async function seedControleurs(client: PoolClient): Promise<void> {
 }
 
 async function seedReferenceRaces(client: PoolClient): Promise<void> {
-  const races = [
-    "nains",
-    "orques",
-    "elfes",
-    "hommes",
-    "hobbits",
-  ] as const;
+  const races = ["nains", "orques", "elfes", "hommes", "hobbits"] as const;
 
   for (const raceKey of races) {
     await client.query(
@@ -355,8 +379,8 @@ async function seedPeupleModificateurs(client: PoolClient): Promise<void> {
         modifier.type_declencheur,
         modifier.declencheur,
         modifier.valeur,
-        "groupe_logique" in modifier ? modifier.groupe_logique ?? null : null,
-        "description" in modifier ? modifier.description ?? null : null,
+        "groupe_logique" in modifier ? (modifier.groupe_logique ?? null) : null,
+        "description" in modifier ? (modifier.description ?? null) : null,
       ],
     );
   }
@@ -399,12 +423,32 @@ async function seedLocalityTypes(client: PoolClient): Promise<void> {
 
 async function seedLandmarkTypes(client: PoolClient): Promise<void> {
   for (const [typeKey, label, description, category] of [
-    ["pont", "Pont", "Passage construit permettant de franchir un obstacle.", "landmark"],
+    [
+      "pont",
+      "Pont",
+      "Passage construit permettant de franchir un obstacle.",
+      "landmark",
+    ],
     ["gue", "Gue", "Passage praticable a travers un cours d'eau.", "landmark"],
     ["mine", "Mine", "Exploitation miniere ou site d'extraction.", "landmark"],
-    ["port", "Port", "Port, embarcadere ou point d'acces fluvial ou maritime.", "landmark"],
-    ["col_montagne", "Col de montagne", "Passage notable a travers une chaine montagneuse.", "landmark"],
-    ["lieu_unique", "Lieu unique", "Lieu nomme ou remarquable propre a la Terre du Milieu.", "unique"],
+    [
+      "port",
+      "Port",
+      "Port, embarcadere ou point d'acces fluvial ou maritime.",
+      "landmark",
+    ],
+    [
+      "col_montagne",
+      "Col de montagne",
+      "Passage notable a travers une chaine montagneuse.",
+      "landmark",
+    ],
+    [
+      "lieu_unique",
+      "Lieu unique",
+      "Lieu nomme ou remarquable propre a la Terre du Milieu.",
+      "unique",
+    ],
   ] as const) {
     await client.query(
       `
@@ -488,7 +532,10 @@ async function syncCaseRegistry(pool: Pool): Promise<void> {
 
   try {
     await client.query("BEGIN");
-    await client.query("DELETE FROM case_registry WHERE NOT (id_case = ANY($1::text[]))", [caseIds]);
+    await client.query(
+      "DELETE FROM case_registry WHERE NOT (id_case = ANY($1::text[]))",
+      [caseIds],
+    );
 
     for (const caseId of caseIds) {
       await client.query(
@@ -558,7 +605,12 @@ async function bootstrapAdminUser(pool: Pool): Promise<void> {
         is_active = EXCLUDED.is_active,
         updated_at = NOW()
     `,
-    [env.bootstrapAdminUsername, passwordHash, "tech_admin" satisfies AdminRole, true],
+    [
+      env.bootstrapAdminUsername,
+      passwordHash,
+      "tech_admin" satisfies AdminRole,
+      true,
+    ],
   );
 }
 

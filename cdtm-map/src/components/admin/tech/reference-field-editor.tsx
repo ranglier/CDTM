@@ -67,7 +67,9 @@ export function ReferenceFieldEditor({
   return (
     <input
       className={className}
-      type={field.type === "integer" || field.type === "number" ? "number" : "text"}
+      type={
+        field.type === "integer" || field.type === "number" ? "number" : "text"
+      }
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}

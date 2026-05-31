@@ -29,7 +29,9 @@ type RootLayoutProps = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="fr">
-      <body className={`${uiFont.variable} ${displayFont.variable} bg-background text-foreground antialiased`}>
+      <body
+        className={`${uiFont.variable} ${displayFont.variable} bg-background text-foreground antialiased`}
+      >
         {children}
       </body>
     </html>

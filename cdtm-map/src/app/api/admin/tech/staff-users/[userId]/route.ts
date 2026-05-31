@@ -60,7 +60,10 @@ export async function PATCH(
   try {
     const params = await context.params;
     const body = (await request.json()) as StaffAccountUpdateInput;
-    const account = await updateStaffAccount(Number.parseInt(params.userId, 10), body);
+    const account = await updateStaffAccount(
+      Number.parseInt(params.userId, 10),
+      body,
+    );
 
     return NextResponse.json(account, {
       status: 200,
@@ -69,7 +72,10 @@ export async function PATCH(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Mise a jour du compte impossible.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Mise a jour du compte impossible.";
     const status =
       message.includes("invalide") ||
       message.includes("introuvable") ||

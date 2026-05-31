@@ -6,7 +6,10 @@ import {
   getEditorLandmark,
   updateEditorLandmark,
 } from "@/server/editor-repository";
-import { editorErrorResponse, ensureTechAdmin } from "@/app/api/admin/editor/utils";
+import {
+  editorErrorResponse,
+  ensureTechAdmin,
+} from "@/app/api/admin/editor/utils";
 
 export const runtime = "nodejs";
 

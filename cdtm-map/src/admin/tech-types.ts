@@ -1,5 +1,9 @@
 import type { AdminRole } from "@/admin/roles";
-import type { MapPatternType, MapStyleRecord, MapStyleTargetType } from "@/map/types";
+import type {
+  MapPatternType,
+  MapStyleRecord,
+  MapStyleTargetType,
+} from "@/map/types";
 
 type TechFieldType =
   | "text"
@@ -69,7 +73,10 @@ export type ReferenceTableRowsResponse = {
   search: string;
   field_options?: Record<string, ReferenceOption[]>;
   style_target_type?: MapStyleTargetType | null;
-  styles?: Record<string, Pick<MapStyleRecord, "fill" | "stroke" | "pattern_type" | "pattern_color">>;
+  styles?: Record<
+    string,
+    Pick<MapStyleRecord, "fill" | "stroke" | "pattern_type" | "pattern_color">
+  >;
 };
 
 export type ReferenceStyleValue = Pick<
@@ -182,19 +189,62 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
   {
     key: "nomenclatures",
     title: "Listes generales",
-    description: "Listes de choix communes, y compris les familles de valeurs organisees.",
+    description:
+      "Listes de choix communes, y compris les familles de valeurs organisees.",
     physical_name: "reference_nomenclature_values",
     primary_key: "id_entry",
     fields: [
-      { name: "id_entry", label: "id_entry", type: "text", required: true, searchable: true },
-      { name: "group_key", label: "group_key", type: "text", required: true, searchable: true },
-      { name: "entry_key", label: "entry_key", type: "text", required: true, searchable: true },
+      {
+        name: "id_entry",
+        label: "id_entry",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "group_key",
+        label: "group_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "entry_key",
+        label: "entry_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "label", label: "label", type: "text", searchable: true },
-      { name: "parent_entry_key", label: "parent_entry_key", type: "text", searchable: true },
-      { name: "emplacements_base", label: "emplacements_base", type: "integer" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "parent_entry_key",
+        label: "parent_entry_key",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "emplacements_base",
+        label: "emplacements_base",
+        type: "integer",
+      },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -204,13 +254,39 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_factions",
     primary_key: "id_faction",
     fields: [
-      { name: "id_faction", label: "id_faction", type: "text", required: true, searchable: true },
+      {
+        name: "id_faction",
+        label: "id_faction",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "nom", label: "nom", type: "text", searchable: true },
-      { name: "description_courte", label: "description_courte", type: "textarea", searchable: true },
+      {
+        name: "description_courte",
+        label: "description_courte",
+        type: "textarea",
+        searchable: true,
+      },
       { name: "statut", label: "statut", type: "text", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -220,64 +296,183 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_controleurs",
     primary_key: "id_controleur",
     fields: [
-      { name: "id_controleur", label: "id_controleur", type: "text", required: true, searchable: true },
+      {
+        name: "id_controleur",
+        label: "id_controleur",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "nom", label: "nom", type: "text", searchable: true },
       { name: "pnj", label: "pnj", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
     key: "styles",
     title: "Styles",
-    description: "Liste des styles reutilisables pour l'affichage cartographique.",
+    description:
+      "Liste des styles reutilisables pour l'affichage cartographique.",
     physical_name: "reference_styles",
     primary_key: "id_style",
     fields: [
-      { name: "id_style", label: "id_style", type: "text", required: true, searchable: true },
-      { name: "cible_type", label: "cible_type", type: "text", searchable: true },
+      {
+        name: "id_style",
+        label: "id_style",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "cible_type",
+        label: "cible_type",
+        type: "text",
+        searchable: true,
+      },
       { name: "cible_id", label: "cible_id", type: "text", searchable: true },
       { name: "fill", label: "fill", type: "text", searchable: true },
       { name: "stroke", label: "stroke", type: "text", searchable: true },
-      { name: "pattern_type", label: "pattern_type", type: "text", searchable: true },
-      { name: "pattern_color", label: "pattern_color", type: "text", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "pattern_type",
+        label: "pattern_type",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "pattern_color",
+        label: "pattern_color",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
     key: "map_icons",
     title: "Icones de carte",
-    description: "Catalogue vide par defaut des icones Game-icons utilisables sur la carte.",
+    description:
+      "Catalogue vide par defaut des icones Game-icons utilisables sur la carte.",
     physical_name: "reference_map_icons",
     primary_key: "icon_key",
     fields: [
-      { name: "icon_key", label: "icon_key", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      {
+        name: "icon_key",
+        label: "icon_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "category", label: "category", type: "text", searchable: true },
-      { name: "image_path", label: "image_path", type: "text", searchable: true },
-      { name: "image_original_name", label: "image_original_name", type: "text", searchable: true },
-      { name: "image_mime_type", label: "image_mime_type", type: "text", searchable: true },
+      {
+        name: "image_path",
+        label: "image_path",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "image_original_name",
+        label: "image_original_name",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "image_mime_type",
+        label: "image_mime_type",
+        type: "text",
+        searchable: true,
+      },
       { name: "image_size_bytes", label: "image_size_bytes", type: "integer" },
       { name: "image_alt", label: "image_alt", type: "text", searchable: true },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
     key: "locality_types",
     title: "Types de localites",
-    description: "Types d'agglomerations, ports, forts et autres implantations.",
+    description:
+      "Types d'agglomerations, ports, forts et autres implantations.",
     physical_name: "reference_locality_types",
     primary_key: "type_key",
     fields: [
-      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "type_key",
+        label: "type_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       {
         name: "default_icon_key",
         label: "default_icon_key",
@@ -293,9 +488,24 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         reference_table_key: "locality_types",
       },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -305,10 +515,27 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_landmark_types",
     primary_key: "type_key",
     fields: [
-      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      {
+        name: "type_key",
+        label: "type_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "category", label: "category", type: "text", searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       {
         name: "default_icon_key",
         label: "default_icon_key",
@@ -318,9 +545,24 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
       { name: "emp_requis", label: "emp_requis", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -330,9 +572,26 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_force_types",
     primary_key: "type_key",
     fields: [
-      { name: "type_key", label: "type_key", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "type_key",
+        label: "type_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       {
         name: "default_icon_key",
         label: "default_icon_key",
@@ -340,9 +599,24 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         reference_table_key: "map_icons",
       },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -352,13 +626,45 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_races",
     primary_key: "race_key",
     fields: [
-      { name: "race_key", label: "race_key", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "race_key",
+        label: "race_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -368,7 +674,13 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     physical_name: "reference_peuples",
     primary_key: "peuple_key",
     fields: [
-      { name: "peuple_key", label: "peuple_key", type: "text", required: true, searchable: true },
+      {
+        name: "peuple_key",
+        label: "peuple_key",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       {
         name: "race_key",
         label: "race_key",
@@ -377,12 +689,38 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         searchable: true,
         reference_table_key: "races",
       },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       { name: "is_active", label: "is_active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -401,14 +739,51 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         searchable: true,
         reference_table_key: "peuples",
       },
-      { name: "type_declencheur", label: "type_declencheur", type: "text", required: true, searchable: true },
-      { name: "declencheur", label: "declencheur", type: "text", required: true, searchable: true },
+      {
+        name: "type_declencheur",
+        label: "type_declencheur",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "declencheur",
+        label: "declencheur",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "valeur", label: "valeur", type: "integer", required: true },
-      { name: "groupe_logique", label: "groupe_logique", type: "text", searchable: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "groupe_logique",
+        label: "groupe_logique",
+        type: "text",
+        searchable: true,
+      },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
   {
@@ -419,18 +794,55 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
     primary_key: "id",
     fields: [
       { name: "id", label: "id", type: "integer", readOnly: true },
-      { name: "slug", label: "slug", type: "text", required: true, searchable: true },
-      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      {
+        name: "slug",
+        label: "slug",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
+      {
+        name: "label",
+        label: "label",
+        type: "text",
+        required: true,
+        searchable: true,
+      },
       { name: "valeur", label: "valeur", type: "integer", required: true },
-      { name: "description", label: "description", type: "textarea", searchable: true },
+      {
+        name: "description",
+        label: "description",
+        type: "textarea",
+        searchable: true,
+      },
       { name: "active", label: "active", type: "boolean" },
-      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
-      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
-      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+      {
+        name: "updated_by_user_id",
+        label: "updated_by_user_id",
+        type: "integer",
+        readOnly: true,
+      },
+      {
+        name: "created_at",
+        label: "created_at",
+        type: "datetime",
+        readOnly: true,
+      },
+      {
+        name: "updated_at",
+        label: "updated_at",
+        type: "datetime",
+        readOnly: true,
+      },
     ],
   },
 ];
 
-export function getReferenceTableDefinition(key: string): ReferenceTableDefinition | null {
-  return referenceTableDefinitions.find((definition) => definition.key === key) ?? null;
+export function getReferenceTableDefinition(
+  key: string,
+): ReferenceTableDefinition | null {
+  return (
+    referenceTableDefinitions.find((definition) => definition.key === key) ??
+    null
+  );
 }

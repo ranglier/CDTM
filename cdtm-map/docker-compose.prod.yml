@@ -51,7 +51,11 @@ services:
     networks:
       - cdtm_internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cdtm} -d ${POSTGRES_DB:-cdtm}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-cdtm} -d ${POSTGRES_DB:-cdtm}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
