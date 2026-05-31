@@ -579,7 +579,7 @@ export function CasesMap({
         return;
       }
 
-      setTooltip(resolvedCase?.id_case ?? "Case", rows);
+      setTooltip("Case", rows);
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);

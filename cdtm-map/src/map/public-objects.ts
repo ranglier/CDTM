@@ -182,7 +182,6 @@ export function buildPublicLocalityHoverRows(
 ): Array<{ label: string; value: string }> {
   return [
     locality.type_label ? { label: "Type", value: locality.type_label } : null,
-    locality.id_case_detected ? { label: "Case", value: locality.id_case_detected } : null,
     shortenDescription(locality.description)
       ? { label: "Description", value: shortenDescription(locality.description)! }
       : null,
@@ -200,7 +199,6 @@ export function buildPublicLandmarkHoverRows(
           value: landmark.category === "unique" ? "Lieu unique" : "Landmark",
         }
       : null,
-    landmark.id_case_detected ? { label: "Case", value: landmark.id_case_detected } : null,
     shortenDescription(landmark.description)
       ? { label: "Description", value: shortenDescription(landmark.description)! }
       : null,

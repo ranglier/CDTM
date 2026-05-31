@@ -2293,9 +2293,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     value: getLandmarkCategoryLabel(category),
                   },
                   { label: "Statut", value: landmark.status },
-                  landmark.id_case_detected
-                    ? { label: "Case", value: landmark.id_case_detected }
-                    : null,
                 ].filter(
                   (row): row is { label: string; value: string } =>
                     row !== null,
@@ -2318,9 +2315,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 rows: [
                   { label: "Type", value: locality.type_key },
                   { label: "Statut", value: locality.status },
-                  locality.id_case_detected
-                    ? { label: "Case", value: locality.id_case_detected }
-                    : null,
                 ].filter(
                   (row): row is { label: string; value: string } =>
                     row !== null,
@@ -2423,7 +2417,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       setHoverInfo({
         x: position.x,
         y: position.y,
-        title: resolvedCase?.id_case ?? "Case",
+        title: "Case",
         rows,
       });
     };
