@@ -36,12 +36,22 @@ export const PATTERN_TYPE_OPTIONS: Array<{
 }> = [
   { value: "none", label: "Aucun" },
   { value: "diagonal", label: "Hachures diagonales" },
+  { value: "diagonal_spaced", label: "Hachures diagonales espacees" },
   { value: "diagonal_reverse", label: "Hachures diagonales inversees" },
+  {
+    value: "diagonal_reverse_spaced",
+    label: "Hachures diagonales inversees espacees",
+  },
   { value: "crosshatch", label: "Hachures croisees" },
+  { value: "crosshatch_spaced", label: "Hachures croisees espacees" },
   { value: "horizontal", label: "Lignes horizontales" },
+  { value: "horizontal_spaced", label: "Lignes horizontales espacees" },
   { value: "vertical", label: "Lignes verticales" },
+  { value: "vertical_spaced", label: "Lignes verticales espacees" },
   { value: "dots", label: "Points" },
+  { value: "dots_spaced", label: "Points espaces" },
   { value: "grid", label: "Grille" },
+  { value: "grid_spaced", label: "Grille espacee" },
 ];
 
 export const REFERENCE_TECHNICAL_FIELDS = new Set([
@@ -288,40 +298,54 @@ export function getPatternCss(
   patternType: MapPatternType | null,
   patternColor: string,
 ) {
+  const isSpaced = patternType?.endsWith("_spaced") ?? false;
+  const lineStart = isSpaced ? "16px" : "8px";
+  const lineEnd = isSpaced ? "18px" : "10px";
+  const dotPosition = isSpaced ? "5px 5px" : "3px 3px";
+  const dotRadius = isSpaced ? "1.4px" : "1.6px";
+  const dotTransparent = isSpaced ? "1.6px" : "1.8px";
+
   switch (patternType) {
     case "diagonal":
+    case "diagonal_spaced":
       return {
-        backgroundImage: `repeating-linear-gradient(135deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        backgroundImage: `repeating-linear-gradient(135deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
       };
     case "diagonal_reverse":
+    case "diagonal_reverse_spaced":
       return {
-        backgroundImage: `repeating-linear-gradient(45deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        backgroundImage: `repeating-linear-gradient(45deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
       };
     case "crosshatch":
+    case "crosshatch_spaced":
       return {
         backgroundImage: [
-          `repeating-linear-gradient(135deg, transparent 0 8px, ${patternColor} 8px 10px)`,
-          `repeating-linear-gradient(45deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+          `repeating-linear-gradient(135deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
+          `repeating-linear-gradient(45deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
         ].join(", "),
       };
     case "horizontal":
+    case "horizontal_spaced":
       return {
-        backgroundImage: `repeating-linear-gradient(0deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        backgroundImage: `repeating-linear-gradient(0deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
       };
     case "vertical":
+    case "vertical_spaced":
       return {
-        backgroundImage: `repeating-linear-gradient(90deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+        backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
       };
     case "dots":
+    case "dots_spaced":
       return {
-        backgroundImage: `radial-gradient(circle at 3px 3px, ${patternColor} 0 1.6px, transparent 1.8px)`,
-        backgroundSize: "10px 10px",
+        backgroundImage: `radial-gradient(circle at ${dotPosition}, ${patternColor} 0 ${dotRadius}, transparent ${dotTransparent})`,
+        backgroundSize: isSpaced ? "18px 18px" : "10px 10px",
       };
     case "grid":
+    case "grid_spaced":
       return {
         backgroundImage: [
-          `repeating-linear-gradient(0deg, transparent 0 8px, ${patternColor} 8px 10px)`,
-          `repeating-linear-gradient(90deg, transparent 0 8px, ${patternColor} 8px 10px)`,
+          `repeating-linear-gradient(0deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
+          `repeating-linear-gradient(90deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
         ].join(", "),
       };
     default:

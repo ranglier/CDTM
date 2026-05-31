@@ -1,6 +1,6 @@
 import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
-import Style from "ol/style/Style";
+import Style, { type RenderFunction } from "ol/style/Style";
 
 import {
   normalizeHexColor,
@@ -31,11 +31,14 @@ const DEFAULT_FILL = "rgba(0, 0, 0, 0)";
 const DEFAULT_STROKE = "#000000";
 const DEFAULT_PATTERN_COLOR = "#000000";
 const DEFAULT_STROKE_WIDTH = 1.2;
-const PATTERN_TILE_SIZE = 12;
-const PATTERN_STEP = 6;
+const HILL_PATTERN_TYPE: MapPatternType = "dots_spaced";
+const HILL_PATTERN_COLOR = "rgba(40, 30, 14, 0.46)";
+const PATTERN_STEP = 12;
+const SPACED_PATTERN_STEP = 22;
+const PATTERN_LINE_WIDTH = 1.25;
 
 const styleCache = new Map<string, Style>();
-const patternCache = new Map<string, CanvasPattern | null>();
+const patternOverlayCache = new Map<string, Style>();
 
 function getStyleForTarget(
   styles: PublicMapStyles,
@@ -84,143 +87,365 @@ function resolveBaseStyle(
   }
 }
 
-function drawDiagonalPattern(
-  context: CanvasRenderingContext2D,
-  reverse = false,
-) {
-  for (
-    let offset = -PATTERN_TILE_SIZE;
-    offset <= PATTERN_TILE_SIZE * 2;
-    offset += PATTERN_STEP
-  ) {
-    if (reverse) {
-      context.moveTo(offset, 0);
-      context.lineTo(offset + PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
-    } else {
-      context.moveTo(offset, PATTERN_TILE_SIZE);
-      context.lineTo(offset + PATTERN_TILE_SIZE, 0);
-    }
-  }
-}
-
-function drawHorizontalPattern(context: CanvasRenderingContext2D) {
-  for (let y = 2; y < PATTERN_TILE_SIZE; y += PATTERN_STEP) {
-    context.moveTo(0, y);
-    context.lineTo(PATTERN_TILE_SIZE, y);
-  }
-}
-
-function drawVerticalPattern(context: CanvasRenderingContext2D) {
-  for (let x = 2; x < PATTERN_TILE_SIZE; x += PATTERN_STEP) {
-    context.moveTo(x, 0);
-    context.lineTo(x, PATTERN_TILE_SIZE);
-  }
-}
-
-function createCanvasPattern(
-  fill: string | null,
-  patternType: MapPatternType | null,
-  patternColor: string | null,
-): CanvasPattern | null {
-  if (!patternType || typeof document === "undefined") {
-    return null;
-  }
-
-  const normalizedFill = normalizeHexColor(fill);
-  const normalizedPatternColor =
-    normalizeHexColor(patternColor) ?? DEFAULT_PATTERN_COLOR;
-  const cacheKey = `${normalizedFill ?? "transparent"}|${patternType}|${normalizedPatternColor}`;
-  const cached = patternCache.get(cacheKey);
-
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = PATTERN_TILE_SIZE;
-  canvas.height = PATTERN_TILE_SIZE;
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    patternCache.set(cacheKey, null);
-    return null;
-  }
-
-  context.clearRect(0, 0, PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
-
-  if (normalizedFill) {
-    context.fillStyle = normalizedFill;
-    context.fillRect(0, 0, PATTERN_TILE_SIZE, PATTERN_TILE_SIZE);
-  }
-
-  context.strokeStyle = normalizedPatternColor;
-  context.fillStyle = normalizedPatternColor;
-  context.lineWidth = 1.25;
-  context.beginPath();
-
-  switch (patternType) {
-    case "diagonal":
-      drawDiagonalPattern(context, false);
-      context.stroke();
-      break;
-    case "diagonal_reverse":
-      drawDiagonalPattern(context, true);
-      context.stroke();
-      break;
-    case "crosshatch":
-      drawDiagonalPattern(context, false);
-      drawDiagonalPattern(context, true);
-      context.stroke();
-      break;
-    case "horizontal":
-      drawHorizontalPattern(context);
-      context.stroke();
-      break;
-    case "vertical":
-      drawVerticalPattern(context);
-      context.stroke();
-      break;
-    case "grid":
-      drawHorizontalPattern(context);
-      drawVerticalPattern(context);
-      context.stroke();
-      break;
-    case "dots":
-      context.closePath();
-      for (let x = 3; x < PATTERN_TILE_SIZE; x += PATTERN_STEP) {
-        for (let y = 3; y < PATTERN_TILE_SIZE; y += PATTERN_STEP) {
-          context.beginPath();
-          context.arc(x, y, 1.2, 0, Math.PI * 2);
-          context.fill();
-        }
-      }
-      break;
-  }
-
-  const pattern = context.createPattern(canvas, "repeat");
-  patternCache.set(cacheKey, pattern);
-  return pattern;
-}
-
 function buildBaseFill(
   _displayMode: MapDisplayMode,
   style: ResolvedStyle | null,
-): string | CanvasPattern {
+): string {
   if (!style) {
     return DEFAULT_FILL;
   }
 
-  const pattern = createCanvasPattern(
-    style.fill,
-    style.pattern_type,
-    style.pattern_color,
-  );
+  return style.fill ?? DEFAULT_FILL;
+}
 
-  if (pattern) {
-    return pattern;
+type PatternKind =
+  | "diagonal"
+  | "diagonal_reverse"
+  | "crosshatch"
+  | "horizontal"
+  | "vertical"
+  | "dots"
+  | "grid";
+
+type PatternSpec = {
+  kind: PatternKind;
+  step: number;
+  lineWidth: number;
+  dotRadius: number;
+};
+
+type PixelExtent = [number, number, number, number];
+type PixelAnchor = { x: number; y: number };
+
+function getPatternSpec(patternType: MapPatternType): PatternSpec {
+  const spaced = patternType.endsWith("_spaced");
+  const step = spaced ? SPACED_PATTERN_STEP : PATTERN_STEP;
+  const lineWidth = spaced ? 1.15 : PATTERN_LINE_WIDTH;
+  const dotRadius = spaced ? 1.15 : 1.3;
+
+  switch (patternType) {
+    case "diagonal":
+    case "diagonal_spaced":
+      return { kind: "diagonal", step, lineWidth, dotRadius };
+    case "diagonal_reverse":
+    case "diagonal_reverse_spaced":
+      return { kind: "diagonal_reverse", step, lineWidth, dotRadius };
+    case "crosshatch":
+    case "crosshatch_spaced":
+      return { kind: "crosshatch", step, lineWidth, dotRadius };
+    case "horizontal":
+    case "horizontal_spaced":
+      return { kind: "horizontal", step, lineWidth, dotRadius };
+    case "vertical":
+    case "vertical_spaced":
+      return { kind: "vertical", step, lineWidth, dotRadius };
+    case "dots":
+    case "dots_spaced":
+      return { kind: "dots", step, lineWidth, dotRadius };
+    case "grid":
+    case "grid_spaced":
+      return { kind: "grid", step, lineWidth, dotRadius };
+  }
+}
+
+function isCoordinate(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    typeof value[0] === "number" &&
+    typeof value[1] === "number"
+  );
+}
+
+function flattenCoordinates(value: unknown, output: Array<[number, number]>) {
+  if (isCoordinate(value)) {
+    output.push(value);
+    return;
   }
 
-  return style.fill ?? DEFAULT_FILL;
+  if (!Array.isArray(value)) {
+    return;
+  }
+
+  for (const item of value) {
+    flattenCoordinates(item, output);
+  }
+}
+
+function getPixelExtent(coordinates: unknown): PixelExtent | null {
+  const flattened: Array<[number, number]> = [];
+  flattenCoordinates(coordinates, flattened);
+
+  if (flattened.length === 0) {
+    return null;
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const [x, y] of flattened) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  return [minX, minY, maxX, maxY];
+}
+
+function appendRingPath(
+  context: CanvasRenderingContext2D,
+  ring: Array<[number, number]>,
+) {
+  if (ring.length === 0) {
+    return;
+  }
+
+  context.moveTo(ring[0][0], ring[0][1]);
+
+  for (let index = 1; index < ring.length; index += 1) {
+    context.lineTo(ring[index][0], ring[index][1]);
+  }
+
+  context.closePath();
+}
+
+function appendGeometryPath(
+  context: CanvasRenderingContext2D,
+  coordinates: unknown,
+) {
+  if (!Array.isArray(coordinates)) {
+    return;
+  }
+
+  if (coordinates.every(isCoordinate)) {
+    appendRingPath(context, coordinates);
+    return;
+  }
+
+  for (const item of coordinates) {
+    appendGeometryPath(context, item);
+  }
+}
+
+function positiveModulo(value: number, modulo: number): number {
+  return ((value % modulo) + modulo) % modulo;
+}
+
+function getFirstAlignedPosition(
+  min: number,
+  anchor: number,
+  step: number,
+): number {
+  return min - positiveModulo(min - anchor, step);
+}
+
+function getPatternAnchor(
+  pixelCoordinates: unknown,
+  worldCoordinates: unknown,
+  resolution: number,
+): PixelAnchor {
+  const pixels: Array<[number, number]> = [];
+  const worlds: Array<[number, number]> = [];
+  flattenCoordinates(pixelCoordinates, pixels);
+  flattenCoordinates(worldCoordinates, worlds);
+
+  const firstPixel = pixels[0];
+  const firstWorld = worlds[0];
+
+  if (!firstPixel || !firstWorld) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: firstPixel[0] - firstWorld[0] / resolution,
+    y: firstPixel[1] + firstWorld[1] / resolution,
+  };
+}
+
+function drawHorizontalLines(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  step: number,
+) {
+  const [minX, minY, maxX, maxY] = extent;
+  const startY = getFirstAlignedPosition(minY - step, anchor.y, step);
+
+  for (let y = startY; y <= maxY + step; y += step) {
+    context.moveTo(minX - step, y);
+    context.lineTo(maxX + step, y);
+  }
+}
+
+function drawVerticalLines(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  step: number,
+) {
+  const [minX, minY, maxX, maxY] = extent;
+  const startX = getFirstAlignedPosition(minX - step, anchor.x, step);
+
+  for (let x = startX; x <= maxX + step; x += step) {
+    context.moveTo(x, minY - step);
+    context.lineTo(x, maxY + step);
+  }
+}
+
+function drawDiagonalLines(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  step: number,
+  reverse = false,
+) {
+  const [minX, minY, maxX, maxY] = extent;
+  const padding = Math.max(maxX - minX, maxY - minY) + step;
+
+  if (reverse) {
+    const minConstant = minY - maxX - padding;
+    const maxConstant = maxY - minX + padding;
+    const anchorConstant = anchor.y - anchor.x;
+    const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+
+    for (let constant = start; constant <= maxConstant; constant += step) {
+      context.moveTo(minX - padding, minX - padding + constant);
+      context.lineTo(maxX + padding, maxX + padding + constant);
+    }
+
+    return;
+  }
+
+  const minConstant = minX + minY - padding;
+  const maxConstant = maxX + maxY + padding;
+  const anchorConstant = anchor.x + anchor.y;
+  const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+
+  for (let constant = start; constant <= maxConstant; constant += step) {
+    context.moveTo(minX - padding, constant - (minX - padding));
+    context.lineTo(maxX + padding, constant - (maxX + padding));
+  }
+}
+
+function drawDots(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  step: number,
+  radius: number,
+) {
+  const [minX, minY, maxX, maxY] = extent;
+  const startX = getFirstAlignedPosition(minX - step, anchor.x, step);
+  const startY = getFirstAlignedPosition(minY - step, anchor.y, step);
+
+  for (let x = startX; x <= maxX + step; x += step) {
+    for (let y = startY; y <= maxY + step; y += step) {
+      context.beginPath();
+      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+}
+
+function drawAnchoredPattern(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  patternType: MapPatternType,
+  patternColor: string,
+) {
+  const spec = getPatternSpec(patternType);
+
+  context.strokeStyle = patternColor;
+  context.fillStyle = patternColor;
+  context.lineWidth = spec.lineWidth;
+  context.lineCap = "round";
+
+  if (spec.kind === "dots") {
+    drawDots(context, extent, anchor, spec.step, spec.dotRadius);
+    return;
+  }
+
+  context.beginPath();
+
+  switch (spec.kind) {
+    case "diagonal":
+      drawDiagonalLines(context, extent, anchor, spec.step, false);
+      break;
+    case "diagonal_reverse":
+      drawDiagonalLines(context, extent, anchor, spec.step, true);
+      break;
+    case "crosshatch":
+      drawDiagonalLines(context, extent, anchor, spec.step, false);
+      drawDiagonalLines(context, extent, anchor, spec.step, true);
+      break;
+    case "horizontal":
+      drawHorizontalLines(context, extent, anchor, spec.step);
+      break;
+    case "vertical":
+      drawVerticalLines(context, extent, anchor, spec.step);
+      break;
+    case "grid":
+      drawHorizontalLines(context, extent, anchor, spec.step);
+      drawVerticalLines(context, extent, anchor, spec.step);
+      break;
+  }
+
+  context.stroke();
+}
+
+function getPatternOverlayStyle(
+  patternType: MapPatternType,
+  patternColor: string,
+  zIndex: number,
+): Style {
+  const cacheKey = `${patternType}|${patternColor}|${zIndex}`;
+  const cached = patternOverlayCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const renderer: RenderFunction = (coordinates, state) => {
+    const pixelExtent = getPixelExtent(coordinates);
+    const safeResolution =
+      Number.isFinite(state.resolution) && state.resolution > 0
+        ? state.resolution
+        : 1;
+
+    if (!pixelExtent) {
+      return;
+    }
+
+    const worldCoordinates = state.geometry.getCoordinates();
+    const anchor = getPatternAnchor(
+      coordinates,
+      worldCoordinates,
+      safeResolution,
+    );
+
+    state.context.save();
+    state.context.beginPath();
+    appendGeometryPath(state.context, coordinates);
+    state.context.clip("evenodd");
+    drawAnchoredPattern(
+      state.context,
+      pixelExtent,
+      anchor,
+      patternType,
+      patternColor,
+    );
+    state.context.restore();
+  };
+
+  const style = new Style({
+    renderer,
+    zIndex,
+  });
+  patternOverlayCache.set(cacheKey, style);
+  return style;
 }
 
 function buildCacheKey(
@@ -249,7 +474,7 @@ export function getCaseStyle({
   displayMode,
   properties,
   styles,
-}: CaseStyleOptions): Style {
+}: CaseStyleOptions): Style | Style[] {
   const resolved = resolveBaseStyle(displayMode, properties, styles);
   const isUnstyled = resolved === null;
   const baseStrokeColor = resolved?.stroke ?? DEFAULT_STROKE;
@@ -276,7 +501,7 @@ export function getCaseStyle({
           : 1.9
         : DEFAULT_STROKE_WIDTH;
 
-  const fillColorWithSelection: string | CanvasPattern =
+  const fillColorWithSelection: string =
     selectionState === "active" && isUnstyled
       ? "rgba(220, 193, 130, 0.24)"
       : selectionState === "selected" && isUnstyled
@@ -296,7 +521,8 @@ export function getCaseStyle({
   const cached = styleCache.get(cacheKey);
 
   if (cached) {
-    return cached;
+    const overlayStyles = getCaseOverlayStyles(resolved, properties, zIndex);
+    return overlayStyles.length > 0 ? [cached, ...overlayStyles] : cached;
   }
 
   const style = new Style({
@@ -311,5 +537,36 @@ export function getCaseStyle({
   });
 
   styleCache.set(cacheKey, style);
-  return style;
+  const overlayStyles = getCaseOverlayStyles(resolved, properties, zIndex);
+  return overlayStyles.length > 0 ? [style, ...overlayStyles] : style;
+}
+
+function getCaseOverlayStyles(
+  resolved: ResolvedStyle | null,
+  properties: StableCaseProperties | null,
+  baseZIndex: number,
+): Style[] {
+  const overlays: Style[] = [];
+
+  if (resolved?.pattern_type) {
+    overlays.push(
+      getPatternOverlayStyle(
+        resolved.pattern_type,
+        resolved.pattern_color ?? DEFAULT_PATTERN_COLOR,
+        baseZIndex + 0.1,
+      ),
+    );
+  }
+
+  if (properties?.colline === true) {
+    overlays.push(
+      getPatternOverlayStyle(
+        HILL_PATTERN_TYPE,
+        HILL_PATTERN_COLOR,
+        baseZIndex + 0.2,
+      ),
+    );
+  }
+
+  return overlays;
 }

@@ -116,6 +116,8 @@ const archivedUniqueStyle = new Style({
 });
 
 const iconStyleCache = new Map<string, Style[]>();
+const MIN_ICON_SCALE = 0.28;
+const MAX_ICON_SCALE = 1;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -124,7 +126,11 @@ function clamp(value: number, min: number, max: number): number {
 function getIconScaleForResolution(resolution: number): number {
   const safeResolution =
     Number.isFinite(resolution) && resolution > 0 ? resolution : 1;
-  return clamp(1 / Math.sqrt(Math.max(safeResolution, 1)), 0.4, 1);
+  return clamp(
+    1 / Math.sqrt(Math.max(safeResolution, 1)),
+    MIN_ICON_SCALE,
+    MAX_ICON_SCALE,
+  );
 }
 
 function getScaleBucket(scale: number): number {

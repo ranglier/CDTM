@@ -24,12 +24,19 @@ export type MapStyleTargetType =
 
 const MAP_PATTERN_TYPES = [
   "diagonal",
+  "diagonal_spaced",
   "diagonal_reverse",
+  "diagonal_reverse_spaced",
   "crosshatch",
+  "crosshatch_spaced",
   "horizontal",
+  "horizontal_spaced",
   "vertical",
+  "vertical_spaced",
   "dots",
+  "dots_spaced",
   "grid",
+  "grid_spaced",
 ] as const;
 
 export type MapPatternType = (typeof MAP_PATTERN_TYPES)[number];
