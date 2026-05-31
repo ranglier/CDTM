@@ -2,25 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  createLoggedOutSession,
+  mergePublicCasesIntoStableCases,
+  resolveCaseSearchMatch,
+} from "@/admin/case-editing";
+import type {
+  AdminCaseRecord,
+  AdminSession,
+  PublicCaseIndexResponse,
+  PublicCaseProperties,
+} from "@/admin/types";
 import { AdminLoginDialog } from "@/components/admin/admin-login-dialog";
 import { AppShell } from "@/components/layout/app-shell";
 import { SiteHeader } from "@/components/layout/site-header";
 import { CaseInfoPanel } from "@/components/map/case-info-panel";
 import { CasesMap } from "@/components/map/cases-map";
-import {
-  createEmptyAdminBulkEditDraft,
-  createEmptyAdminCaseDraft,
-  toAdminCaseDraft,
-  type AdminBulkEditDraft,
-  type AdminBulkPatch,
-  type AdminBulkUpdateResult,
-  type AdminCaseDraft,
-  type AdminCaseRecord,
-  type AdminSession,
-  type PublicCaseIndexResponse,
-  type PublicCaseProperties,
-} from "@/admin/types";
 import { loadJsonData } from "@/data/loaders";
+import { getRegistryCaseId } from "@/map/case-data";
 import {
   CASES_DATA_URL,
   type CaseSelectionIntent,
@@ -38,355 +37,6 @@ type LoginPayload = {
   username: string;
   password: string;
 };
-
-type AdminPanelMode = "read" | "edit";
-type StaticAdminDraftSection = Exclude<keyof AdminCaseDraft, "dynamic">;
-
-function resolveCaseSearchMatch(
-  stableCases: StableCaseProperties[],
-  rawQuery: string,
-): StableCaseProperties | null {
-  const query = rawQuery.trim().toLowerCase();
-
-  if (query.length === 0) {
-    return null;
-  }
-
-  const exactMatch =
-    stableCases.find((stableCase) => stableCase.id_case.toLowerCase() === query) ?? null;
-
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  const prefixMatches = stableCases.filter((stableCase) =>
-    stableCase.id_case.toLowerCase().startsWith(query),
-  );
-
-  return prefixMatches.length === 1 ? prefixMatches[0] : null;
-}
-
-function createLoggedOutSession(): AdminSession {
-  return {
-    authenticated: false,
-    username: null,
-    role: null,
-    is_tech_admin: false,
-  };
-}
-
-function getDraftSnapshot(draft: AdminCaseDraft): string {
-  return JSON.stringify(draft);
-}
-
-function normalizeDraftValue(value: string | null | undefined): string {
-  return typeof value === "string" ? value : "";
-}
-
-function normalizeDraftBooleanValue(value: boolean | null | undefined): string {
-  if (value === true) {
-    return "true";
-  }
-
-  if (value === false) {
-    return "false";
-  }
-
-  return "";
-}
-
-function parseDraftBooleanValue(value: string): boolean | null {
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return null;
-}
-
-function getRegistryCaseId(stableCase: StableCaseProperties): string {
-  return stableCase.registry_id_case ?? stableCase.id_case;
-}
-
-function mergeStableCases(
-  baseCases: StableCaseProperties[],
-  publicCases: PublicCaseProperties[],
-): StableCaseProperties[] {
-  const publicCasesByRegistryId = new Map(
-    publicCases.map((publicCase) => [publicCase.registry_id_case, publicCase]),
-  );
-
-  return baseCases.map((stableCase) => {
-    const registryId = getRegistryCaseId(stableCase);
-    const publicCase = publicCasesByRegistryId.get(registryId);
-
-    if (!publicCase) {
-      return stableCase;
-    }
-
-    return {
-      registry_id_case: registryId,
-      id_case: publicCase.id_case,
-      region: publicCase.region,
-      sous_region: publicCase.sous_region,
-      cote: publicCase.cote,
-      lac: publicCase.lac,
-      fluvial: publicCase.fluvial,
-      terrain_cat: publicCase.terrain_cat,
-      terrain_type: publicCase.terrain_type,
-      colline: publicCase.colline,
-      relief: publicCase.relief,
-      peuple: publicCase.peuple,
-      faction: publicCase.faction,
-      controleur: publicCase.controleur,
-      controle_type: publicCase.controle_type,
-    };
-  });
-}
-
-function applyPersistedRecordToStableCase(
-  stableCase: StableCaseProperties,
-  record: AdminCaseRecord,
-): StableCaseProperties {
-  return {
-    registry_id_case: getRegistryCaseId(stableCase),
-    id_case: record.public.id_case,
-    region: record.public.region,
-    sous_region: record.public.sous_region,
-    cote: record.public.cote,
-    lac: record.public.lac,
-    fluvial: record.public.fluvial,
-    terrain_cat: record.public.terrain_cat,
-    terrain_type: record.public.terrain_type,
-    colline: record.public.colline,
-    relief: record.public.relief,
-    peuple: record.public.peuple,
-    faction: record.public.faction,
-    controleur: record.public.controleur,
-    controle_type: record.public.controle_type,
-  };
-}
-
-function mergePersistedRecordsIntoStableCases(
-  stableCases: StableCaseProperties[],
-  records: AdminCaseRecord[],
-): StableCaseProperties[] {
-  const recordsByRegistryId = new Map(records.map((record) => [record.id_case, record]));
-
-  return stableCases.map((stableCase) => {
-    const record = recordsByRegistryId.get(getRegistryCaseId(stableCase));
-    return record ? applyPersistedRecordToStableCase(stableCase, record) : stableCase;
-  });
-}
-
-function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
-  return [
-    draft.public.region,
-    draft.public.sous_region,
-    draft.public.cote,
-    draft.public.lac,
-    draft.public.fluvial,
-    draft.terrain.terrain_cat,
-    draft.terrain.terrain_type,
-    draft.terrain.terrain_secondaire,
-    draft.terrain.colline,
-    draft.terrain.relief,
-    draft.control.peuple,
-    draft.control.faction,
-    draft.control.controleur,
-    draft.control.controle_type,
-  ].some((fieldState) => fieldState.touched) || draft.bonus_contextuels.touched;
-}
-
-function buildBulkFieldState(values: Array<string | null | undefined>) {
-  const normalizedValues = values.map((value) => normalizeDraftValue(value).trim());
-  const uniqueValues = Array.from(new Set(normalizedValues));
-
-  return {
-    value: uniqueValues.length === 1 ? uniqueValues[0] : "",
-    touched: false,
-    mixed: uniqueValues.length > 1,
-  };
-}
-
-function normalizeSlugList(values: string[]): string[] {
-  return Array.from(
-    new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
-  ).sort();
-}
-
-function getSlugListKey(values: string[]): string {
-  return normalizeSlugList(values).join("\u0000");
-}
-
-function buildBulkListState(values: string[][]) {
-  const normalizedValues = values.map(normalizeSlugList);
-  const uniqueKeys = Array.from(new Set(normalizedValues.map(getSlugListKey)));
-
-  return {
-    value: uniqueKeys.length === 1 ? normalizedValues[0] : [],
-    touched: false,
-    mixed: uniqueKeys.length > 1,
-  };
-}
-
-function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
-  if (records.length === 0) {
-    return createEmptyAdminBulkEditDraft();
-  }
-
-  return {
-    public: {
-      region: buildBulkFieldState(records.map((record) => record.public.region)),
-      sous_region: buildBulkFieldState(records.map((record) => record.public.sous_region)),
-      cote: buildBulkFieldState(records.map((record) => normalizeDraftBooleanValue(record.public.cote))),
-      lac: buildBulkFieldState(
-        records.map((record) => normalizeDraftBooleanValue(record.public.lac)),
-      ),
-      fluvial: buildBulkFieldState(
-        records.map((record) => normalizeDraftBooleanValue(record.public.fluvial)),
-      ),
-    },
-    terrain: {
-      terrain_cat: buildBulkFieldState(records.map((record) => record.terrain.terrain_cat)),
-      terrain_type: buildBulkFieldState(records.map((record) => record.terrain.terrain_type)),
-      terrain_secondaire: buildBulkFieldState(records.map((record) => record.terrain.terrain_secondaire)),
-      colline: buildBulkFieldState(records.map((record) => normalizeDraftBooleanValue(record.terrain.colline))),
-      relief: buildBulkFieldState(records.map((record) => record.terrain.relief)),
-    },
-    control: {
-      peuple: buildBulkFieldState(records.map((record) => record.control.peuple)),
-      faction: buildBulkFieldState(records.map((record) => record.control.faction)),
-      controleur: buildBulkFieldState(records.map((record) => record.control.controleur)),
-      controle_type: buildBulkFieldState(records.map((record) => record.control.controle_type)),
-    },
-    bonus_contextuels: buildBulkListState(
-      records.map((record) => record.bonus_contextuels.map((bonus) => bonus.slug)),
-    ),
-  };
-}
-
-function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
-  const patch: AdminBulkPatch = {};
-
-  if (
-    draft.public.region.touched ||
-    draft.public.sous_region.touched ||
-    draft.public.cote.touched ||
-    draft.public.lac.touched ||
-    draft.public.fluvial.touched
-  ) {
-    patch.public = {};
-
-    if (draft.public.region.touched) {
-      patch.public.region =
-        draft.public.region.value.trim().length > 0 ? draft.public.region.value.trim() : null;
-    }
-
-    if (draft.public.sous_region.touched) {
-      patch.public.sous_region =
-        draft.public.sous_region.value.trim().length > 0
-          ? draft.public.sous_region.value.trim()
-          : null;
-    }
-
-    if (draft.public.cote.touched) {
-      patch.public.cote = parseDraftBooleanValue(draft.public.cote.value);
-    }
-
-    if (draft.public.lac.touched) {
-      patch.public.lac = parseDraftBooleanValue(draft.public.lac.value);
-    }
-
-    if (draft.public.fluvial.touched) {
-      patch.public.fluvial = parseDraftBooleanValue(
-        draft.public.fluvial.value,
-      );
-    }
-  }
-
-  if (
-    draft.terrain.terrain_cat.touched ||
-    draft.terrain.terrain_type.touched ||
-    draft.terrain.terrain_secondaire.touched ||
-    draft.terrain.colline.touched ||
-    draft.terrain.relief.touched
-  ) {
-    patch.terrain = {};
-
-    if (draft.terrain.terrain_cat.touched) {
-      patch.terrain.terrain_cat =
-        draft.terrain.terrain_cat.value.trim().length > 0
-          ? draft.terrain.terrain_cat.value.trim()
-          : null;
-    }
-
-    if (draft.terrain.terrain_type.touched) {
-      patch.terrain.terrain_type =
-        draft.terrain.terrain_type.value.trim().length > 0
-          ? draft.terrain.terrain_type.value.trim()
-          : null;
-    }
-
-    if (draft.terrain.terrain_secondaire.touched) {
-      patch.terrain.terrain_secondaire =
-        draft.terrain.terrain_secondaire.value.trim().length > 0
-          ? draft.terrain.terrain_secondaire.value.trim()
-          : null;
-    }
-
-    if (draft.terrain.colline.touched) {
-      patch.terrain.colline = parseDraftBooleanValue(draft.terrain.colline.value);
-    }
-
-    if (draft.terrain.relief.touched) {
-      patch.terrain.relief =
-        draft.terrain.relief.value.trim().length > 0 ? draft.terrain.relief.value.trim() : null;
-    }
-  }
-
-  if (
-    draft.control.peuple.touched ||
-    draft.control.faction.touched ||
-    draft.control.controleur.touched ||
-    draft.control.controle_type.touched
-  ) {
-    patch.control = {};
-
-    if (draft.control.peuple.touched) {
-      patch.control.peuple =
-        draft.control.peuple.value.trim().length > 0 ? draft.control.peuple.value.trim() : null;
-    }
-
-    if (draft.control.faction.touched) {
-      patch.control.faction =
-        draft.control.faction.value.trim().length > 0 ? draft.control.faction.value.trim() : null;
-    }
-
-    if (draft.control.controleur.touched) {
-      patch.control.controleur =
-        draft.control.controleur.value.trim().length > 0
-          ? draft.control.controleur.value.trim()
-          : null;
-    }
-
-    if (draft.control.controle_type.touched) {
-      patch.control.controle_type =
-        draft.control.controle_type.value.trim().length > 0
-          ? draft.control.controle_type.value.trim()
-          : null;
-    }
-  }
-
-  if (draft.bonus_contextuels.touched) {
-    patch.bonus_contextuels = normalizeSlugList(draft.bonus_contextuels.value);
-  }
-
-  return patch;
-}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -414,35 +64,58 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function buildEditorHref(
+  activeCaseId: string | null,
+  selectedCaseIds: string[],
+): string | null {
+  if (selectedCaseIds.length === 0) {
+    return null;
+  }
+
+  const params = new URLSearchParams();
+
+  if (selectedCaseIds.length === 1) {
+    params.set("case", activeCaseId ?? selectedCaseIds[0]);
+  } else {
+    params.set("cases", selectedCaseIds.join(","));
+
+    if (activeCaseId) {
+      params.set("case", activeCaseId);
+    }
+  }
+
+  return `/editeur?${params.toString()}`;
+}
+
 export default function HomePage() {
   const [totalCases, setTotalCases] = useState(0);
   const [casesVisible, setCasesVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
-  const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(createEmptyPublicMapStyles());
-  const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>("faction");
+  const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(
+    createEmptyPublicMapStyles(),
+  );
+  const [mapDisplayMode, setMapDisplayMode] =
+    useState<MapDisplayMode>("faction");
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
   const [focusCaseId, setFocusCaseId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const [adminSession, setAdminSession] = useState<AdminSession>(createLoggedOutSession());
+  const [adminSession, setAdminSession] = useState<AdminSession>(
+    createLoggedOutSession(),
+  );
   const [adminModeEnabled, setAdminModeEnabled] = useState(false);
-  const [adminPanelMode, setAdminPanelMode] = useState<AdminPanelMode>("read");
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginPending, setLoginPending] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [adminRecordsById, setAdminRecordsById] = useState<Record<string, AdminCaseRecord>>({});
-  const [singleDraft, setSingleDraft] = useState<AdminCaseDraft>(createEmptyAdminCaseDraft());
-  const [singleSnapshot, setSingleSnapshot] = useState(
-    getDraftSnapshot(createEmptyAdminCaseDraft()),
-  );
-  const [bulkDraft, setBulkDraft] = useState<AdminBulkEditDraft>(createEmptyAdminBulkEditDraft());
+  const [adminRecordsById, setAdminRecordsById] = useState<
+    Record<string, AdminCaseRecord>
+  >({});
   const [adminLoading, setAdminLoading] = useState(false);
-  const [adminSaving, setAdminSaving] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
 
   const stableCasesById = useMemo(
@@ -456,9 +129,12 @@ export default function HomePage() {
       ) as Record<string, StableCaseProperties>,
     [stableCases],
   );
-  const availableCaseIds = useMemo(() => stableCases.map((item) => item.id_case), [stableCases]);
+  const availableCaseIds = useMemo(
+    () => stableCases.map((item) => item.id_case),
+    [stableCases],
+  );
   const activeCase = useMemo(
-    () => (activeCaseId ? stableCasesById.get(activeCaseId) ?? null : null),
+    () => (activeCaseId ? (stableCasesById.get(activeCaseId) ?? null) : null),
     [activeCaseId, stableCasesById],
   );
   const selectedCases = useMemo(
@@ -476,43 +152,16 @@ export default function HomePage() {
     [adminRecordsById, selectedCaseIds],
   );
   const activeAdminRecord = useMemo(
-    () => (activeCaseId ? adminRecordsById[activeCaseId] ?? null : null),
+    () => (activeCaseId ? (adminRecordsById[activeCaseId] ?? null) : null),
     [activeCaseId, adminRecordsById],
   );
-  const handleDisplayModeChange = useCallback((mode: unknown) => {
-    setMapDisplayMode(normalizeMapDisplayMode(mode));
-  }, []);
-  const isMultiSelection = selectedCaseIds.length > 1;
-  const adminDirty =
-    adminPanelMode === "edit"
-      ? isMultiSelection
-        ? hasBulkDraftChanges(bulkDraft)
-        : getDraftSnapshot(singleDraft) !== singleSnapshot
-      : false;
-
-  const resetSingleAdminEditor = useCallback(
-    (record: AdminCaseRecord | null, stableCase: StableCaseProperties | null) => {
-      const nextDraft = toAdminCaseDraft(record);
-
-      if (stableCase) {
-        nextDraft.public = {
-          id_case: stableCase.id_case,
-          region: stableCase.region ?? "",
-          sous_region: stableCase.sous_region ?? "",
-          cote: normalizeDraftBooleanValue(stableCase.cote),
-          lac: normalizeDraftBooleanValue(stableCase.lac),
-          fluvial: normalizeDraftBooleanValue(stableCase.fluvial),
-        };
-      }
-
-    setSingleDraft(nextDraft);
-    setSingleSnapshot(getDraftSnapshot(nextDraft));
-    },
-    [],
+  const editorHref = useMemo(
+    () => buildEditorHref(activeCaseId, selectedCaseIds),
+    [activeCaseId, selectedCaseIds],
   );
 
-  const resetBulkAdminEditor = useCallback((records: AdminCaseRecord[]) => {
-    setBulkDraft(buildBulkEditDraft(records));
+  const handleDisplayModeChange = useCallback((mode: unknown) => {
+    setMapDisplayMode(normalizeMapDisplayMode(mode));
   }, []);
 
   const applySelectionState = useCallback(
@@ -521,67 +170,30 @@ export default function HomePage() {
       setSelectedCaseIds(nextSelectedCaseIds);
       setSearchError(null);
       setAdminError(null);
-      setAdminPanelMode("read");
     },
     [],
   );
 
-  const confirmDiscardChanges = useCallback(
-    (message: string) => {
-      if (adminPanelMode !== "edit" || !adminDirty) {
-        return true;
-      }
-
-      return window.confirm(message);
+  const fetchAdminRecords = useCallback(
+    async (idCases: string[]): Promise<AdminCaseRecord[]> => {
+      return Promise.all(
+        idCases.map((idCase) =>
+          fetchJson<AdminCaseRecord>(`/api/admin/cases/${idCase}`),
+        ),
+      );
     },
-    [adminDirty, adminPanelMode],
-  );
-
-  const fetchAdminRecords = useCallback(async (idCases: string[]): Promise<AdminCaseRecord[]> => {
-    return Promise.all(
-      idCases.map((idCase) => fetchJson<AdminCaseRecord>(`/api/admin/cases/${idCase}`)),
-    );
-  }, []);
-
-  const refreshAdminRecords = useCallback(
-    async (idCases: string[]) => {
-      const records = await fetchAdminRecords(idCases);
-
-      setAdminRecordsById((current) => {
-        const next = { ...current };
-
-        for (const record of records) {
-          next[record.id_case] = record;
-        }
-
-        return next;
-      });
-
-      return records;
-    },
-    [fetchAdminRecords],
+    [],
   );
 
   const handleCasesVisibilityChange = useCallback(
     (visible: boolean) => {
-      if (
-        !visible &&
-        !confirmDiscardChanges(
-          "Masquer les cases fermera la selection courante et abandonnera le brouillon non enregistre. Continuer ?",
-        )
-      ) {
-        return;
-      }
-
       setCasesVisible(visible);
 
       if (!visible) {
         applySelectionState(null, []);
-        resetSingleAdminEditor(null, null);
-        resetBulkAdminEditor([]);
       }
     },
-    [applySelectionState, confirmDiscardChanges, resetBulkAdminEditor, resetSingleAdminEditor],
+    [applySelectionState],
   );
 
   const handleCaseSelectionChange = useCallback(
@@ -590,31 +202,6 @@ export default function HomePage() {
       intent: CaseSelectionIntent,
     ) => {
       const nextCaseId = selectedCase ? getRegistryCaseId(selectedCase) : null;
-
-      if (
-        intent === "replace" &&
-        ((nextCaseId === null && selectedCaseIds.length === 0 && activeCaseId === null) ||
-          (nextCaseId !== null &&
-            activeCaseId === nextCaseId &&
-            selectedCaseIds.length === 1 &&
-            selectedCaseIds[0] === nextCaseId))
-      ) {
-        return;
-      }
-
-      const selectionWillChange =
-        intent === "replace"
-          ? nextCaseId !== activeCaseId || selectedCaseIds.length > (nextCaseId ? 1 : 0)
-          : Boolean(nextCaseId);
-
-      if (
-        selectionWillChange &&
-        !confirmDiscardChanges(
-          "Changer de selection abandonnera le brouillon non enregistre. Continuer ?",
-        )
-      ) {
-        return;
-      }
 
       if (intent === "replace") {
         applySelectionState(nextCaseId, nextCaseId ? [nextCaseId] : []);
@@ -632,19 +219,18 @@ export default function HomePage() {
           : [...current, nextCaseId];
         const nextActiveCaseId = alreadySelected
           ? activeCaseId === nextCaseId
-            ? nextSelectedCaseIds.at(-1) ?? null
+            ? (nextSelectedCaseIds.at(-1) ?? null)
             : activeCaseId
           : nextCaseId;
 
         setActiveCaseId(nextActiveCaseId);
         setSearchError(null);
         setAdminError(null);
-        setAdminPanelMode("read");
 
         return nextSelectedCaseIds;
       });
     },
-    [activeCaseId, applySelectionState, confirmDiscardChanges, selectedCaseIds],
+    [activeCaseId, applySelectionState],
   );
 
   const focusOnCase = useCallback(
@@ -656,22 +242,16 @@ export default function HomePage() {
         return;
       }
 
-      if (
-        !confirmDiscardChanges(
-          "Changer de selection abandonnera le brouillon non enregistre. Continuer ?",
-        )
-      ) {
-        return;
-      }
+      const registryId = getRegistryCaseId(stableCase);
 
       setCasesVisible(true);
       setPanelVisible(true);
       setSearchValue(stableCase.id_case);
-      setFocusCaseId(getRegistryCaseId(stableCase));
+      setFocusCaseId(registryId);
       setFocusRequest((value) => value + 1);
-      applySelectionState(getRegistryCaseId(stableCase), [getRegistryCaseId(stableCase)]);
+      applySelectionState(registryId, [registryId]);
     },
-    [applySelectionState, confirmDiscardChanges, stableCases],
+    [applySelectionState, stableCases],
   );
 
   const handleLoginSubmit = useCallback(async (payload: LoginPayload) => {
@@ -690,21 +270,15 @@ export default function HomePage() {
       setLoginUsername("");
       setLoginPassword("");
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "Connexion impossible.");
+      setLoginError(
+        error instanceof Error ? error.message : "Connexion impossible.",
+      );
     } finally {
       setLoginPending(false);
     }
   }, []);
 
   const handleLogout = useCallback(async () => {
-    if (
-      !confirmDiscardChanges(
-        "Se deconnecter abandonnera le brouillon non enregistre. Continuer ?",
-      )
-    ) {
-      return;
-    }
-
     try {
       const session = await fetchJson<AdminSession>("/api/admin/session", {
         method: "DELETE",
@@ -716,12 +290,10 @@ export default function HomePage() {
       setAdminSession(createLoggedOutSession());
     } finally {
       setAdminModeEnabled(false);
-      setAdminPanelMode("read");
       setAdminError(null);
-      resetSingleAdminEditor(null, null);
-      resetBulkAdminEditor([]);
+      setAdminRecordsById({});
     }
-  }, [confirmDiscardChanges, resetBulkAdminEditor, resetSingleAdminEditor]);
+  }, []);
 
   const handleAdminModeAction = useCallback(() => {
     if (!adminSession.authenticated) {
@@ -730,243 +302,13 @@ export default function HomePage() {
       return;
     }
 
-    if (
-      !confirmDiscardChanges(
-        "Quitter le mode admin abandonnera le brouillon non enregistre. Continuer ?",
-      )
-    ) {
-      return;
-    }
-
     setAdminModeEnabled((value) => !value);
     setAdminError(null);
-    setAdminPanelMode("read");
-  }, [adminSession.authenticated, confirmDiscardChanges]);
+  }, [adminSession.authenticated]);
 
   const handleSearchSubmit = useCallback(() => {
     focusOnCase(searchValue.trim());
   }, [focusOnCase, searchValue]);
-
-  const handleSingleAdminFieldChange = useCallback(
-    (section: StaticAdminDraftSection, field: string, value: string) => {
-      setSingleDraft((current) => {
-        const nextDraft = {
-          ...current,
-          [section]: {
-            ...current[section],
-            [field]: value,
-          },
-        } as AdminCaseDraft;
-
-        if (section === "terrain" && field === "terrain_cat") {
-          nextDraft.terrain = {
-            ...nextDraft.terrain,
-            terrain_type: "",
-          };
-        }
-
-        return nextDraft;
-      });
-    },
-    [],
-  );
-
-  const handleDynamicAdminFieldChange = useCallback(
-    (tableKey: string, field: string, value: string) => {
-      setSingleDraft((current) => ({
-        ...current,
-        dynamic: {
-          ...current.dynamic,
-          [tableKey]: {
-            ...(current.dynamic[tableKey] ?? {}),
-            [field]: value,
-          },
-        },
-      }));
-    },
-    [],
-  );
-
-  const handleSingleBonusContextuelsChange = useCallback((bonusSlugs: string[]) => {
-    setSingleDraft((current) => ({
-      ...current,
-      bonus_contextuels: normalizeSlugList(bonusSlugs),
-    }));
-  }, []);
-
-  const handleBulkAdminFieldChange = useCallback(
-    (
-      section: keyof AdminBulkEditDraft,
-      field: string,
-      value: string,
-    ) => {
-      setBulkDraft((current) => {
-        const nextDraft = {
-          ...current,
-          [section]: {
-            ...current[section],
-            [field]: {
-              ...(current[section] as Record<string, { value: string; touched: boolean; mixed: boolean }>)[field],
-              value,
-              touched: true,
-              mixed: false,
-            },
-          },
-        } as AdminBulkEditDraft;
-
-        if (section === "terrain" && field === "terrain_cat") {
-          nextDraft.terrain.terrain_type = {
-            ...nextDraft.terrain.terrain_type,
-            value: "",
-            touched: true,
-            mixed: false,
-          };
-        }
-
-        if (section === "terrain" && field === "terrain_type" && !nextDraft.terrain.terrain_cat.touched) {
-          nextDraft.terrain.terrain_cat = {
-            ...nextDraft.terrain.terrain_cat,
-            touched: true,
-            mixed: false,
-          };
-        }
-
-        return nextDraft;
-      });
-    },
-    [],
-  );
-
-  const handleBulkBonusContextuelsChange = useCallback((bonusSlugs: string[]) => {
-    setBulkDraft((current) => ({
-      ...current,
-      bonus_contextuels: {
-        value: normalizeSlugList(bonusSlugs),
-        touched: true,
-        mixed: false,
-      },
-    }));
-  }, []);
-
-  const handleEnterEditMode = useCallback(() => {
-    if (!adminModeEnabled || !adminSession.authenticated) {
-      setLoginError(null);
-      setLoginOpen(true);
-      return;
-    }
-
-    if (isMultiSelection && selectedAdminRecords.length !== selectedCaseIds.length) {
-      return;
-    }
-
-    if (!isMultiSelection && !activeAdminRecord) {
-      return;
-    }
-
-    if (isMultiSelection) {
-      resetBulkAdminEditor(selectedAdminRecords);
-    } else {
-      resetSingleAdminEditor(activeAdminRecord, activeCase);
-    }
-
-    setAdminError(null);
-    setAdminPanelMode("edit");
-  }, [
-    activeCase,
-    activeAdminRecord,
-    adminModeEnabled,
-    adminSession.authenticated,
-    selectedCaseIds.length,
-    isMultiSelection,
-    resetBulkAdminEditor,
-    resetSingleAdminEditor,
-    selectedAdminRecords,
-  ]);
-
-  const handleCancelEdit = useCallback(() => {
-    if (isMultiSelection) {
-      resetBulkAdminEditor(selectedAdminRecords);
-    } else {
-      resetSingleAdminEditor(activeAdminRecord, activeCase);
-    }
-
-    setAdminError(null);
-    setAdminPanelMode("read");
-  }, [
-    activeAdminRecord,
-    activeCase,
-    isMultiSelection,
-    resetBulkAdminEditor,
-    resetSingleAdminEditor,
-    selectedAdminRecords,
-  ]);
-
-  const handleAdminSave = useCallback(async () => {
-    if (!adminSession.authenticated || selectedCaseIds.length === 0) {
-      return;
-    }
-
-    setAdminSaving(true);
-    setAdminError(null);
-
-    try {
-      if (isMultiSelection) {
-        const patch = buildBulkPatch(bulkDraft);
-
-        await fetchJson<AdminBulkUpdateResult>("/api/admin/cases/bulk", {
-          method: "PATCH",
-          body: JSON.stringify({
-            id_cases: selectedCaseIds,
-            patch,
-          }),
-        });
-
-        const refreshedRecords = await refreshAdminRecords(selectedCaseIds);
-        setStableCases((current) => mergePersistedRecordsIntoStableCases(current, refreshedRecords));
-
-        resetBulkAdminEditor(refreshedRecords);
-      } else {
-        const currentCaseId = activeCaseId;
-
-        if (!currentCaseId) {
-          return;
-        }
-
-        const record = await fetchJson<AdminCaseRecord>(`/api/admin/cases/${currentCaseId}`, {
-          method: "PUT",
-          body: JSON.stringify(singleDraft),
-        });
-
-        setAdminRecordsById((current) => ({
-          ...current,
-          [record.id_case]: record,
-        }));
-        setStableCases((current) => mergePersistedRecordsIntoStableCases(current, [record]));
-        setSearchValue(record.public.id_case);
-        resetSingleAdminEditor(
-          record,
-          activeCase ? applyPersistedRecordToStableCase(activeCase, record) : record.public,
-        );
-      }
-
-      setAdminPanelMode("read");
-    } catch (error) {
-      setAdminError(error instanceof Error ? error.message : "Enregistrement impossible.");
-    } finally {
-      setAdminSaving(false);
-    }
-  }, [
-    activeCase,
-    activeCaseId,
-    adminSession.authenticated,
-    bulkDraft,
-    isMultiSelection,
-    refreshAdminRecords,
-    resetBulkAdminEditor,
-    resetSingleAdminEditor,
-    selectedCaseIds,
-    singleDraft,
-  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -975,14 +317,18 @@ export default function HomePage() {
       try {
         const [collection, publicCases] = await Promise.all([
           loadJsonData<StableCaseFeatureCollection>(CASES_DATA_URL),
-          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(() => ({
-            cases: [] as PublicCaseProperties[],
-            styles: createEmptyPublicMapStyles(),
-          })),
+          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(
+            () => ({
+              cases: [] as PublicCaseProperties[],
+              styles: createEmptyPublicMapStyles(),
+            }),
+          ),
         ]);
 
         if (!isStableCaseFeatureCollection(collection)) {
-          throw new Error("Le GeoJSON des cases ne respecte pas le contrat attendu.");
+          throw new Error(
+            "Le GeoJSON des cases ne respecte pas le contrat attendu.",
+          );
         }
 
         if (!cancelled) {
@@ -993,9 +339,14 @@ export default function HomePage() {
                 registry_id_case: feature.properties.id_case,
               }),
             )
-            .filter((stableCase): stableCase is StableCaseProperties => stableCase !== null);
+            .filter(
+              (stableCase): stableCase is StableCaseProperties =>
+                stableCase !== null,
+            );
 
-          setStableCases(mergeStableCases(baseCases, publicCases.cases));
+          setStableCases(
+            mergePublicCasesIntoStableCases(baseCases, publicCases.cases),
+          );
           setPublicMapStyles(publicCases.styles);
         }
       } catch (error) {
@@ -1047,11 +398,17 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!adminModeEnabled || !adminSession.authenticated || selectedCaseIds.length === 0) {
+    if (
+      !adminModeEnabled ||
+      !adminSession.authenticated ||
+      selectedCaseIds.length === 0
+    ) {
       return;
     }
 
-    const idsToLoad = selectedCaseIds.filter((idCase) => !adminRecordsById[idCase]);
+    const idsToLoad = selectedCaseIds.filter(
+      (idCase) => !adminRecordsById[idCase],
+    );
 
     if (idsToLoad.length === 0) {
       return;
@@ -1080,7 +437,9 @@ export default function HomePage() {
       } catch (error) {
         if (!cancelled) {
           const message =
-            error instanceof Error ? error.message : "Chargement admin impossible.";
+            error instanceof Error
+              ? error.message
+              : "Chargement admin impossible.";
 
           setAdminError(message);
 
@@ -1116,7 +475,7 @@ export default function HomePage() {
         adminModeEnabled={adminModeEnabled}
         navigationItems={[
           { href: "#carte", label: "Carte", current: true },
-          ...(adminSession.is_tech_admin
+          ...(adminSession.authenticated
             ? [{ href: "/editeur", label: "Editeur" }]
             : []),
           ...(adminSession.is_tech_admin
@@ -1160,15 +519,11 @@ export default function HomePage() {
             totalCases={totalCases}
             casesVisible={casesVisible}
             adminModeEnabled={adminModeEnabled}
-            adminPanelMode={adminPanelMode}
             activeAdminRecord={activeAdminRecord}
             selectedAdminRecords={selectedAdminRecords}
-            singleDraft={singleDraft}
-            bulkDraft={bulkDraft}
             adminLoading={adminLoading}
-            adminSaving={adminSaving}
             adminError={adminError}
-            adminDirty={adminDirty}
+            editorHref={editorHref}
             searchValue={searchValue}
             searchError={searchError}
             availableCaseIds={availableCaseIds}
@@ -1177,14 +532,6 @@ export default function HomePage() {
               setSearchError(null);
             }}
             onSearchSubmit={handleSearchSubmit}
-            onSingleFieldChange={handleSingleAdminFieldChange}
-            onSingleBonusContextuelsChange={handleSingleBonusContextuelsChange}
-            onDynamicFieldChange={handleDynamicAdminFieldChange}
-            onBulkFieldChange={handleBulkAdminFieldChange}
-            onBulkBonusContextuelsChange={handleBulkBonusContextuelsChange}
-            onEnterEditMode={handleEnterEditMode}
-            onCancelEdit={handleCancelEdit}
-            onSave={handleAdminSave}
           />
         ) : null}
       </section>

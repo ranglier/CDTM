@@ -1,21 +1,11 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
 
-import type {
-  AdminBlockMeta,
-  AdminBonusContextuel,
-  AdminBulkEditDraft,
-  AdminCaseDraft,
-  AdminCaseRecord,
-  AdminDynamicSectionRecord,
-} from "@/admin/types";
+import type { AdminCaseRecord } from "@/admin/types";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { SlotCalculationResult } from "@/map/rules";
 import type { StableCaseProperties } from "@/map/types";
-
-type AdminPanelMode = "read" | "edit";
-type StaticAdminDraftSection = "public" | "terrain" | "control";
 
 type CaseInfoPanelProps = {
   activeCase: StableCaseProperties | null;
@@ -24,50 +14,29 @@ type CaseInfoPanelProps = {
   totalCases?: number;
   casesVisible: boolean;
   adminModeEnabled: boolean;
-  adminPanelMode: AdminPanelMode;
   activeAdminRecord: AdminCaseRecord | null;
   selectedAdminRecords: AdminCaseRecord[];
-  singleDraft: AdminCaseDraft;
-  bulkDraft: AdminBulkEditDraft;
   adminLoading: boolean;
-  adminSaving: boolean;
   adminError: string | null;
-  adminDirty: boolean;
+  editorHref?: string | null;
   searchValue: string;
   searchError: string | null;
   availableCaseIds: string[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
-  onSingleFieldChange: (section: StaticAdminDraftSection, field: string, value: string) => void;
-  onSingleBonusContextuelsChange: (bonusSlugs: string[]) => void;
-  onDynamicFieldChange: (tableKey: string, field: string, value: string) => void;
-  onBulkFieldChange: (section: keyof AdminBulkEditDraft, field: string, value: string) => void;
-  onBulkBonusContextuelsChange: (bonusSlugs: string[]) => void;
-  onEnterEditMode: () => void;
-  onCancelEdit: () => void;
-  onSave: () => void;
-};
-
-type BulkFieldState = {
-  value: string;
-  touched: boolean;
-  mixed: boolean;
 };
 
 const fieldClassName =
   "w-full rounded-[16px] border border-border/80 bg-background/55 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60";
 
-const booleanOptions = [
-  { label: "Non renseigne", value: "" },
-  { label: "Oui", value: "true" },
-  { label: "Non", value: "false" },
-] as const;
-
 function summarizeStrings(values: Array<string | null | undefined>): string {
   const normalizedValues = values.map((value) => (value ?? "").trim());
   const uniqueValues = Array.from(new Set(normalizedValues));
 
-  if (uniqueValues.length === 0 || (uniqueValues.length === 1 && uniqueValues[0] === "")) {
+  if (
+    uniqueValues.length === 0 ||
+    (uniqueValues.length === 1 && uniqueValues[0] === "")
+  ) {
     return "Non renseigne";
   }
 
@@ -85,11 +54,18 @@ function summarizeBooleans(values: Array<boolean | null | undefined>): string {
 
 function summarizeStringLists(values: string[][]): string {
   const normalizedValues = values.map((list) =>
-    Array.from(new Set(list.map((value) => value.trim()).filter(Boolean))).sort(),
+    Array.from(
+      new Set(list.map((value) => value.trim()).filter(Boolean)),
+    ).sort(),
   );
-  const uniqueValues = Array.from(new Set(normalizedValues.map((list) => list.join(", "))));
+  const uniqueValues = Array.from(
+    new Set(normalizedValues.map((list) => list.join(", "))),
+  );
 
-  if (uniqueValues.length === 0 || (uniqueValues.length === 1 && uniqueValues[0] === "")) {
+  if (
+    uniqueValues.length === 0 ||
+    (uniqueValues.length === 1 && uniqueValues[0] === "")
+  ) {
     return "Non renseigne";
   }
 
@@ -101,81 +77,47 @@ function isDisplayValueEmpty(value: string): boolean {
   return normalized.length === 0 || normalized === "non renseigne";
 }
 
-function formatMeta(meta: AdminBlockMeta | null | undefined): string {
-  if (!meta?.updated_at) {
-    return "Aucune sauvegarde";
-  }
-
-  const updatedAt = new Date(meta.updated_at).toLocaleString("fr-FR");
-  return meta.updated_by ? `${updatedAt} par ${meta.updated_by}` : updatedAt;
-}
-
-function summarizeMeta(metas: AdminBlockMeta[]): string {
-  if (metas.length === 0) {
-    return "Aucune sauvegarde";
-  }
-
-  const normalized = metas.map((meta) => `${meta.updated_at ?? ""}|${meta.updated_by ?? ""}`);
-  const uniqueValues = Array.from(new Set(normalized));
-
-  return uniqueValues.length === 1 ? formatMeta(metas[0]) : "Sauvegardes variables";
-}
-
-function getTerrainTypeOptions(record: AdminCaseRecord | null, category: string | null | undefined): string[] {
-  if (!record || !category) {
-    return [];
-  }
-
-  return (record.reference_data.terrain_types_by_category[category] ?? []).map((option) => option.value);
-}
-
-function renderBulkHelper(field: BulkFieldState): string | undefined {
-  if (field.touched) {
-    return "Cette valeur sera appliquee a toute la selection.";
-  }
-
-  if (field.mixed) {
-    return "Valeur differente selon la selection.";
-  }
-
-  return undefined;
-}
-
-function renderBulkListHelper(field: { touched: boolean; mixed: boolean }): string | undefined {
-  if (field.touched) {
-    return "Cette liste remplacera les bonus de toute la selection.";
-  }
-
-  if (field.mixed) {
-    return "Bonus differents selon la selection.";
-  }
-
-  return undefined;
-}
-
-function formatBonusOption(option: AdminBonusContextuel): string {
-  const signedValue = option.valeur > 0 ? `+${option.valeur}` : String(option.valeur);
-  return `${option.label} (${signedValue})`;
-}
-
 function formatSignedNumber(value: number): string {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function getSlotCalculationRows(calculation: SlotCalculationResult): Array<{ label: string; value: string }> {
+function getSlotCalculationRows(
+  calculation: SlotCalculationResult,
+): Array<{ label: string; value: string }> {
   if (!calculation.available) {
     return [{ label: "Etat", value: calculation.reason }];
   }
 
   return [
-    { label: "emplacements_base", value: String(calculation.emplacements_base) },
-    { label: "malus_colline", value: formatSignedNumber(calculation.malus_colline) },
-    { label: "modificateur_peuple", value: formatSignedNumber(calculation.modificateur_peuple) },
-    { label: "bonus_contextuel", value: formatSignedNumber(calculation.bonus_contextuel) },
-    { label: "emplacements_bruts", value: String(calculation.emplacements_bruts) },
+    {
+      label: "emplacements_base",
+      value: String(calculation.emplacements_base),
+    },
+    {
+      label: "malus_colline",
+      value: formatSignedNumber(calculation.malus_colline),
+    },
+    {
+      label: "modificateur_peuple",
+      value: formatSignedNumber(calculation.modificateur_peuple),
+    },
+    {
+      label: "bonus_contextuel",
+      value: formatSignedNumber(calculation.bonus_contextuel),
+    },
+    {
+      label: "emplacements_bruts",
+      value: String(calculation.emplacements_bruts),
+    },
     { label: "emplacements_max", value: String(calculation.emplacements_max) },
-    { label: "emplacements_utilises", value: String(calculation.emplacements_utilises) },
-    { label: "emplacements_restants", value: String(calculation.emplacements_restants) },
+    {
+      label: "emplacements_utilises",
+      value: String(calculation.emplacements_utilises),
+    },
+    {
+      label: "emplacements_restants",
+      value: String(calculation.emplacements_restants),
+    },
   ];
 }
 
@@ -200,7 +142,9 @@ function CompactInfoList({
   const visibleRows = rows.filter((row) => !isDisplayValueEmpty(row.value));
 
   if (visibleRows.length === 0) {
-    return <p className="text-sm leading-6 text-muted-foreground">{emptyMessage}</p>;
+    return (
+      <p className="text-sm leading-6 text-muted-foreground">{emptyMessage}</p>
+    );
   }
 
   return (
@@ -212,7 +156,11 @@ function CompactInfoList({
   );
 }
 
-function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationResult }) {
+function SlotCalculationDetails({
+  calculation,
+}: {
+  calculation: SlotCalculationResult;
+}) {
   const rows = getSlotCalculationRows(calculation);
 
   return (
@@ -223,7 +171,8 @@ function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationR
       <div className="mt-4 space-y-4">
         {calculation.available && calculation.depassement ? (
           <p className="rounded-[14px] border border-destructive/50 bg-destructive/12 px-3 py-2 text-sm text-destructive">
-            Depassement detecte : les emplacements utilises excedent le maximum calcule.
+            Depassement detecte : les emplacements utilises excedent le maximum
+            calcule.
           </p>
         ) : null}
         <CompactInfoList rows={rows} emptyMessage="Calcul indisponible." />
@@ -232,7 +181,9 @@ function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationR
             Modificateurs appliques
           </p>
           {calculation.modifiers.length === 0 ? (
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">Aucun modificateur applique.</p>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Aucun modificateur applique.
+            </p>
           ) : (
             <div className="mt-3 rounded-[14px] border border-border/50 bg-background/30">
               {calculation.modifiers.map((modifier, index) => (
@@ -241,7 +192,9 @@ function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationR
                   className="flex items-start justify-between gap-4 border-b border-border/45 px-3 py-2.5 last:border-b-0"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{modifier.label}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {modifier.label}
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {modifier.type_declencheur ?? modifier.source}
                     </p>
@@ -259,154 +212,54 @@ function SlotCalculationDetails({ calculation }: { calculation: SlotCalculationR
   );
 }
 
-function SectionTitle({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <h3 className="text-xl font-semibold text-foreground">{title}</h3>
-      {meta ? (
-        <p className="text-right text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          {meta}
-        </p>
-      ) : null}
-    </div>
-  );
+function SectionTitle({ title }: { title: string }) {
+  return <h3 className="text-xl font-semibold text-foreground">{title}</h3>;
 }
 
-function FormRow({ label, children, helper, mixed = false }: { label: string; children: ReactNode; helper?: string; mixed?: boolean }) {
-  return (
-    <div className="border-b border-border/50 py-3 first:pt-0 last:border-b-0 last:pb-0">
-      <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start">
-        <div className="flex items-center gap-2 sm:pt-2">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-          {mixed ? (
-            <span className="rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-primary">
-              Etat mixte
-            </span>
-          ) : null}
-        </div>
-        <div className="min-w-0">
-          {children}
-          {helper ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{helper}</p> : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SelectField({ value, options, onChange, disabled = false }: { value: string; options: readonly string[]; onChange: (value: string) => void; disabled?: boolean }) {
-  return (
-    <select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
-      <option value="">Non renseigne</option>
-      {options.map((option) => (
-        <option key={option} value={option}>{option}</option>
-      ))}
-    </select>
-  );
-}
-
-function BooleanField({ value, onChange, disabled = false }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
-  return (
-    <select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
-      {booleanOptions.map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
-      ))}
-    </select>
-  );
-}
-
-function CheckboxListField({
-  options,
-  value,
-  onChange,
-  disabled = false,
+function AdminSearchBox({
+  searchValue,
+  searchError,
+  availableCaseIds,
+  onSearchValueChange,
+  onSearchSubmit,
 }: {
-  options: readonly AdminBonusContextuel[];
-  value: readonly string[];
-  onChange: (value: string[]) => void;
-  disabled?: boolean;
+  searchValue: string;
+  searchError: string | null;
+  availableCaseIds: string[];
+  onSearchValueChange: (value: string) => void;
+  onSearchSubmit: () => void;
 }) {
-  const selected = new Set(value);
-
-  if (options.length === 0) {
-    return <p className="text-sm leading-6 text-muted-foreground">Aucun bonus contextuel disponible.</p>;
-  }
-
-  return (
-    <div className="space-y-2">
-      {options.map((option) => {
-        const checked = selected.has(option.slug);
-
-        return (
-          <label key={option.slug} className="flex items-start gap-3 rounded-[12px] border border-border/60 bg-background/35 px-3 py-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 accent-primary"
-              checked={checked}
-              disabled={disabled}
-              onChange={(event) => {
-                if (event.target.checked) {
-                  onChange([...value, option.slug]);
-                } else {
-                  onChange(value.filter((slug) => slug !== option.slug));
-                }
-              }}
-            />
-            <span>
-              <span className="font-medium">{formatBonusOption(option)}</span>
-              {option.description ? (
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
-              ) : null}
-            </span>
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-function DynamicFieldInput({ section, fieldKey, disabled, draft, onDynamicFieldChange }: { section: AdminDynamicSectionRecord; fieldKey: string; disabled: boolean; draft: AdminCaseDraft; onDynamicFieldChange: (tableKey: string, field: string, value: string) => void; }) {
-  const field = section.fields.find((item) => item.field_key === fieldKey);
-
-  if (!field) {
-    return null;
-  }
-
-  const value = draft.dynamic[section.table_key]?.[field.field_key] ?? "";
-
-  if (field.field_type === "boolean") {
-    return <BooleanField value={value} onChange={(nextValue) => onDynamicFieldChange(section.table_key, field.field_key, nextValue)} disabled={disabled} />;
-  }
-
-  if (field.field_type === "reference") {
-    return (
-      <select className={fieldClassName} value={value} onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)} disabled={disabled}>
-        <option value="">Non renseigne</option>
-        {field.reference_options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    );
-  }
-
-  if (field.field_type === "textarea") {
-    return <textarea className={`${fieldClassName} min-h-24 resize-y`} value={value} onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)} disabled={disabled} />;
-  }
-
-  return <input className={fieldClassName} type={field.field_type === "integer" ? "number" : "text"} value={value} onChange={(event) => onDynamicFieldChange(section.table_key, field.field_key, event.target.value)} disabled={disabled} />;
-}
-
-function AdminSearchBox({ searchValue, searchError, availableCaseIds, onSearchValueChange, onSearchSubmit }: { searchValue: string; searchError: string | null; availableCaseIds: string[]; onSearchValueChange: (value: string) => void; onSearchSubmit: () => void; }) {
   return (
     <div className="rounded-[22px] border border-primary/20 bg-primary/8 p-4">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Recherche</p>
-      <form className="mt-3 flex flex-col gap-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); onSearchSubmit(); }}>
-        <input list="case-id-list" className={fieldClassName} placeholder="Aller a une case" value={searchValue} onChange={(event) => onSearchValueChange(event.target.value)} />
+      <p className="text-[11px] uppercase tracking-[0.18em] text-primary">
+        Recherche
+      </p>
+      <form
+        className="mt-3 flex flex-col gap-3 sm:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearchSubmit();
+        }}
+      >
+        <input
+          list="case-id-list"
+          className={fieldClassName}
+          placeholder="Aller a une case"
+          value={searchValue}
+          onChange={(event) => onSearchValueChange(event.target.value)}
+        />
         <datalist id="case-id-list">
-          {availableCaseIds.map((caseId) => <option key={caseId} value={caseId} />)}
+          {availableCaseIds.map((caseId) => (
+            <option key={caseId} value={caseId} />
+          ))}
         </datalist>
-        <Button type="submit" variant="outline">Rechercher</Button>
+        <Button type="submit" variant="outline">
+          Rechercher
+        </Button>
       </form>
-      {searchError ? <p className="mt-3 text-sm text-destructive">{searchError}</p> : null}
+      {searchError ? (
+        <p className="mt-3 text-sm text-destructive">{searchError}</p>
+      ) : null}
     </div>
   );
 }
@@ -419,52 +272,27 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     totalCases = 0,
     casesVisible,
     adminModeEnabled,
-    adminPanelMode,
     activeAdminRecord,
     selectedAdminRecords,
-    singleDraft,
-    bulkDraft,
     adminLoading,
-    adminSaving,
     adminError,
-    adminDirty,
+    editorHref,
     searchValue,
     searchError,
     availableCaseIds,
     onSearchValueChange,
     onSearchSubmit,
-    onSingleFieldChange,
-    onSingleBonusContextuelsChange,
-    onDynamicFieldChange,
-    onBulkFieldChange,
-    onBulkBonusContextuelsChange,
-    onEnterEditMode,
-    onCancelEdit,
-    onSave,
   } = props;
 
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
-  const terrainCategoryOptions = activeAdminRecord?.reference_data.terrain_categories.map((option) => option.value) ?? [];
-  const bulkTerrainCategory = bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched ? "" : bulkDraft.terrain.terrain_cat.value;
-  const singleTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, singleDraft.terrain.terrain_cat);
-  const bulkTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, bulkTerrainCategory);
-  const bonusContextuelOptions = activeAdminRecord?.reference_data.bonus_contextuel_options ?? [];
-  const selectedBonusContextuels = isMultiSelection
-    ? bulkDraft.bonus_contextuels.value
-    : singleDraft.bonus_contextuels ?? [];
-  const peupleOptions = activeAdminRecord?.reference_data.peuple_options.map((option) => option.value) ?? [];
-  const factionOptions = activeAdminRecord?.reference_data.faction_options.map((option) => option.value) ?? [];
-  const controllerOptions = activeAdminRecord?.reference_data.controller_options.map((option) => option.value) ?? [];
-  const controlTypeOptions = activeAdminRecord?.reference_data.control_type_options.map((option) => option.value) ?? [];
-  const publicMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.public.meta)) : formatMeta(activeAdminRecord?.public.meta);
-  const terrainMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.terrain.meta)) : formatMeta(activeAdminRecord?.terrain.meta);
-  const controlMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta)) : formatMeta(activeAdminRecord?.control.meta);
-  const dynamicSections = !isMultiSelection ? activeAdminRecord?.dynamic_sections ?? [] : [];
+  const dynamicSections = !isMultiSelection
+    ? (activeAdminRecord?.dynamic_sections ?? [])
+    : [];
   const slotDetails =
-    adminModeEnabled && !isMultiSelection && activeAdminRecord
-      ? <SlotCalculationDetails calculation={activeAdminRecord.emplacements} />
-      : null;
+    adminModeEnabled && !isMultiSelection && activeAdminRecord ? (
+      <SlotCalculationDetails calculation={activeAdminRecord.emplacements} />
+    ) : null;
   const slotSummary =
     !isMultiSelection && activeAdminRecord
       ? activeAdminRecord.emplacements.available
@@ -483,32 +311,67 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     },
   ];
   const localizationRows = [
-    { label: "Region", value: summarizeStrings(selectedCases.map((item) => item.region)) },
-    { label: "Sous-region", value: summarizeStrings(selectedCases.map((item) => item.sous_region)) },
-    { label: "Cote", value: summarizeBooleans(selectedCases.map((item) => item.cote)) },
-    { label: "Lac", value: summarizeBooleans(selectedCases.map((item) => item.lac)) },
+    {
+      label: "Region",
+      value: summarizeStrings(selectedCases.map((item) => item.region)),
+    },
+    {
+      label: "Sous-region",
+      value: summarizeStrings(selectedCases.map((item) => item.sous_region)),
+    },
+    {
+      label: "Cote",
+      value: summarizeBooleans(selectedCases.map((item) => item.cote)),
+    },
+    {
+      label: "Lac",
+      value: summarizeBooleans(selectedCases.map((item) => item.lac)),
+    },
     {
       label: "Fluvial",
       value: summarizeBooleans(selectedCases.map((item) => item.fluvial)),
     },
   ];
   const terrainRows = [
-    { label: "Categorie", value: summarizeStrings(selectedCases.map((item) => item.terrain_cat)) },
-    { label: "Type", value: summarizeStrings(selectedCases.map((item) => item.terrain_type)) },
-    { label: "Colline", value: summarizeBooleans(selectedCases.map((item) => item.colline)) },
+    {
+      label: "Categorie",
+      value: summarizeStrings(selectedCases.map((item) => item.terrain_cat)),
+    },
+    {
+      label: "Type",
+      value: summarizeStrings(selectedCases.map((item) => item.terrain_type)),
+    },
+    {
+      label: "Colline",
+      value: summarizeBooleans(selectedCases.map((item) => item.colline)),
+    },
     { label: "Emplacements", value: slotSummary },
   ];
   const controlRows = [
-    { label: "Peuple", value: summarizeStrings(selectedCases.map((item) => item.peuple)) },
-    { label: "Faction", value: summarizeStrings(selectedCases.map((item) => item.faction)) },
-    { label: "Controleur", value: summarizeStrings(selectedCases.map((item) => item.controleur)) },
-    { label: "Type de controle", value: summarizeStrings(selectedCases.map((item) => item.controle_type)) },
+    {
+      label: "Peuple",
+      value: summarizeStrings(selectedCases.map((item) => item.peuple)),
+    },
+    {
+      label: "Faction",
+      value: summarizeStrings(selectedCases.map((item) => item.faction)),
+    },
+    {
+      label: "Controleur",
+      value: summarizeStrings(selectedCases.map((item) => item.controleur)),
+    },
+    {
+      label: "Type de controle",
+      value: summarizeStrings(selectedCases.map((item) => item.controle_type)),
+    },
   ];
   const bonusRows = [
     {
       label: "Bonus contextuels",
       value: summarizeStringLists(
-        selectedAdminRecords.map((record) => record.bonus_contextuels.map((bonus) => bonus.label)),
+        selectedAdminRecords.map((record) =>
+          record.bonus_contextuels.map((bonus) => bonus.label),
+        ),
       ),
     },
   ];
@@ -541,24 +404,44 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
       <SectionPanel className="flex h-full flex-col">
         <div className="flex flex-1 flex-col p-5 sm:p-6">
           <header className="space-y-4">
-            <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">Informations de case</h2>
-            {adminModeEnabled ? <AdminSearchBox searchValue={searchValue} searchError={searchError} availableCaseIds={availableCaseIds} onSearchValueChange={onSearchValueChange} onSearchSubmit={onSearchSubmit} /> : null}
-            {adminModeEnabled && hasSelection && adminPanelMode === "read" ? (
+            <h2 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
+              Informations de case
+            </h2>
+            {adminModeEnabled ? (
+              <AdminSearchBox
+                searchValue={searchValue}
+                searchError={searchError}
+                availableCaseIds={availableCaseIds}
+                onSearchValueChange={onSearchValueChange}
+                onSearchSubmit={onSearchSubmit}
+              />
+            ) : null}
+            {adminModeEnabled && hasSelection ? (
               <div className="rounded-[22px] border border-primary/25 bg-primary/8 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary">Edition</p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {adminLoading
-                        ? "Chargement des donnees admin..."
-                        : "Ouvre directement le formulaire de modification de la selection."}
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-primary">
+                      Edition
                     </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Les modifications de cases sont centralisees dans
+                      l&apos;editeur.
+                    </p>
+                    {adminLoading ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Chargement des donnees admin...
+                      </p>
+                    ) : null}
                   </div>
-                  <Button type="button" onClick={onEnterEditMode} disabled={adminLoading || !hasSelection}>
-                    Modifier
-                  </Button>
+                  {editorHref ? (
+                    <Button asChild>
+                      <Link href={editorHref}>Ouvrir dans l&apos;editeur</Link>
+                    </Button>
+                  ) : null}
                 </div>
-                {adminError ? <p className="mt-3 text-sm text-destructive">{adminError}</p> : null}
+                {adminError ? (
+                  <p className="mt-3 text-sm text-destructive">{adminError}</p>
+                ) : null}
               </div>
             ) : null}
           </header>
@@ -567,151 +450,53 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
 
           {!casesVisible ? (
             <div className="rounded-[24px] border border-border/70 bg-background/40 p-5 text-sm leading-7 text-muted-foreground">
-              <p className="font-medium text-foreground">La couche des cases est masquee.</p>
-              <p>Reactive les contours pour cliquer sur une case et consulter ses informations.</p>
+              <p className="font-medium text-foreground">
+                La couche des cases est masquee.
+              </p>
+              <p>
+                Reactive les contours pour cliquer sur une case et consulter ses
+                informations.
+              </p>
             </div>
           ) : !hasSelection ? (
             <div className="rounded-[24px] border border-border/70 bg-background/40 p-5 text-sm leading-7 text-muted-foreground">
-              <p className="font-medium text-foreground">Aucune case selectionnee.</p>
+              <p className="font-medium text-foreground">
+                Aucune case selectionnee.
+              </p>
               <p>Clique sur une case pour afficher son resume.</p>
-              <p className="mt-2">{totalCases || "..."} case(s) sont actuellement chargee(s).</p>
-            </div>
-          ) : adminModeEnabled && adminPanelMode === "edit" ? (
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
-              <section className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-                <SectionTitle title="Modification staff" />
-                <div className="mt-4">
-                  <CompactInfoRow label="Cases selectionnees" value={String(selectedCaseIds.length)} />
-                  <CompactInfoRow label="Case active" value={activeCase?.id_case ?? "Aucune"} />
-                  <CompactInfoRow label="Mode" value={isMultiSelection ? "Masse" : "Simple"} />
-                  <CompactInfoRow label="Etat" value={adminSaving ? "Enregistrement..." : adminDirty ? "Brouillon modifie" : "Pret a enregistrer"} />
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Case" meta={publicMeta} />
-                <div className="mt-4">
-                  {!isMultiSelection ? (
-                    <FormRow label="id_case">
-                      <input className={fieldClassName} value={singleDraft.public.id_case} onChange={(event) => onSingleFieldChange("public", "id_case", event.target.value)} disabled={adminLoading || adminSaving} />
-                    </FormRow>
-                  ) : null}
-                  <FormRow label="Region" mixed={isMultiSelection ? bulkDraft.public.region.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.public.region) : undefined}>
-                    <input className={fieldClassName} value={isMultiSelection ? bulkDraft.public.region.value : singleDraft.public.region} onChange={(event) => isMultiSelection ? onBulkFieldChange("public", "region", event.target.value) : onSingleFieldChange("public", "region", event.target.value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Sous-region" mixed={isMultiSelection ? bulkDraft.public.sous_region.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.public.sous_region) : undefined}>
-                    <input className={fieldClassName} value={isMultiSelection ? bulkDraft.public.sous_region.value : singleDraft.public.sous_region} onChange={(event) => isMultiSelection ? onBulkFieldChange("public", "sous_region", event.target.value) : onSingleFieldChange("public", "sous_region", event.target.value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  {(["cote", "lac", "fluvial"] as const).map((field) => (
-                    <FormRow key={field} label={field} mixed={isMultiSelection ? bulkDraft.public[field].mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.public[field]) : undefined}>
-                      <BooleanField value={isMultiSelection ? bulkDraft.public[field].value : singleDraft.public[field]} onChange={(value) => isMultiSelection ? onBulkFieldChange("public", field, value) : onSingleFieldChange("public", field, value)} disabled={adminLoading || adminSaving} />
-                    </FormRow>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Terrain" meta={terrainMeta} />
-                <div className="mt-4">
-                  <FormRow label="Categorie" mixed={isMultiSelection ? bulkDraft.terrain.terrain_cat.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.terrain_cat) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.terrain.terrain_cat.value : singleDraft.terrain.terrain_cat} options={terrainCategoryOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "terrain_cat", value) : onSingleFieldChange("terrain", "terrain_cat", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Type" mixed={isMultiSelection ? bulkDraft.terrain.terrain_type.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.terrain_type) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.terrain.terrain_type.value : singleDraft.terrain.terrain_type} options={isMultiSelection ? bulkTerrainTypeOptions : singleTerrainTypeOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "terrain_type", value) : onSingleFieldChange("terrain", "terrain_type", value)} disabled={adminLoading || adminSaving || (isMultiSelection ? bulkTerrainTypeOptions : singleTerrainTypeOptions).length === 0} />
-                  </FormRow>
-                  <FormRow label="Terrain secondaire" mixed={isMultiSelection ? bulkDraft.terrain.terrain_secondaire.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.terrain_secondaire) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.terrain.terrain_secondaire.value : singleDraft.terrain.terrain_secondaire} options={Object.values(activeAdminRecord?.reference_data.terrain_types_by_category ?? {}).flat().map((option) => option.value)} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "terrain_secondaire", value) : onSingleFieldChange("terrain", "terrain_secondaire", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Colline" mixed={isMultiSelection ? bulkDraft.terrain.colline.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.colline) : undefined}>
-                    <BooleanField value={isMultiSelection ? bulkDraft.terrain.colline.value : singleDraft.terrain.colline} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "colline", value) : onSingleFieldChange("terrain", "colline", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Controle" meta={controlMeta} />
-                <div className="mt-4">
-                  <FormRow label="Peuple" mixed={isMultiSelection ? bulkDraft.control.peuple.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.peuple) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.control.peuple.value : singleDraft.control.peuple} options={peupleOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "peuple", value) : onSingleFieldChange("control", "peuple", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Faction" mixed={isMultiSelection ? bulkDraft.control.faction.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.faction) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.control.faction.value : singleDraft.control.faction} options={factionOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "faction", value) : onSingleFieldChange("control", "faction", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Controleur" mixed={isMultiSelection ? bulkDraft.control.controleur.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.controleur) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.control.controleur.value : singleDraft.control.controleur} options={controllerOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "controleur", value) : onSingleFieldChange("control", "controleur", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                  <FormRow label="Type de controle" mixed={isMultiSelection ? bulkDraft.control.controle_type.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.control.controle_type) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.control.controle_type.value : singleDraft.control.controle_type} options={controlTypeOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("control", "controle_type", value) : onSingleFieldChange("control", "controle_type", value)} disabled={adminLoading || adminSaving} />
-                  </FormRow>
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                <SectionTitle title="Bonus contextuels" />
-                <div className="mt-4">
-                  <FormRow
-                    label="Bonus"
-                    mixed={isMultiSelection ? bulkDraft.bonus_contextuels.mixed : false}
-                    helper={
-                      isMultiSelection
-                        ? renderBulkListHelper(bulkDraft.bonus_contextuels)
-                        : undefined
-                    }
-                  >
-                    <CheckboxListField
-                      value={selectedBonusContextuels}
-                      options={bonusContextuelOptions}
-                      onChange={(value) =>
-                        isMultiSelection
-                          ? onBulkBonusContextuelsChange(value)
-                          : onSingleBonusContextuelsChange(value)
-                      }
-                      disabled={adminLoading || adminSaving}
-                    />
-                  </FormRow>
-                </div>
-              </section>
-
-              {dynamicSections.map((section) => (
-                <section key={section.table_key} className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-                  <SectionTitle title={section.title} meta={formatMeta(section.meta)} />
-                  <div className="mt-4">
-                    {section.fields.map((field) => (
-                      <FormRow key={`${section.table_key}:${field.field_key}`} label={field.label}>
-                        <DynamicFieldInput section={section} fieldKey={field.field_key} disabled={adminLoading || adminSaving} draft={singleDraft} onDynamicFieldChange={onDynamicFieldChange} />
-                      </FormRow>
-                    ))}
-                  </div>
-                </section>
-              ))}
-
-              {adminError ? <div className="rounded-[22px] border border-destructive/60 bg-destructive/15 px-4 py-3 text-sm text-foreground">{adminError}</div> : null}
-
-              <div className="flex flex-wrap justify-end gap-3">
-                <Button type="button" variant="ghost" onClick={onCancelEdit} disabled={adminSaving}>Annuler</Button>
-                <Button type="button" onClick={onSave} disabled={adminSaving || !adminDirty}>Enregistrer</Button>
-              </div>
+              <p className="mt-2">
+                {totalCases || "..."} case(s) sont actuellement chargee(s).
+              </p>
             </div>
           ) : (
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Identite" />
                 <div className="mt-4">
-                  <CompactInfoList rows={identityRows} emptyMessage="Aucune case selectionnee." />
+                  <CompactInfoList
+                    rows={identityRows}
+                    emptyMessage="Aucune case selectionnee."
+                  />
                 </div>
               </section>
 
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Localisation" />
                 <div className="mt-4">
-                  <CompactInfoList rows={localizationRows} emptyMessage="Aucune donnee de localisation renseignee." />
+                  <CompactInfoList
+                    rows={localizationRows}
+                    emptyMessage="Aucune donnee de localisation renseignee."
+                  />
                 </div>
               </section>
 
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Terrain" />
                 <div className="mt-4 space-y-4">
-                  <CompactInfoList rows={terrainRows} emptyMessage="Aucune donnee de terrain renseignee." />
+                  <CompactInfoList
+                    rows={terrainRows}
+                    emptyMessage="Aucune donnee de terrain renseignee."
+                  />
                   {slotDetails}
                 </div>
               </section>
@@ -719,7 +504,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
               <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                 <SectionTitle title="Controle" />
                 <div className="mt-4">
-                  <CompactInfoList rows={controlRows} emptyMessage="Aucune donnee de controle renseignee." />
+                  <CompactInfoList
+                    rows={controlRows}
+                    emptyMessage="Aucune donnee de controle renseignee."
+                  />
                 </div>
               </section>
 
@@ -727,7 +515,10 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                 <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
                   <SectionTitle title="Bonus contextuels" />
                   <div className="mt-4">
-                    <CompactInfoList rows={bonusRows} emptyMessage="Aucun bonus contextuel applique." />
+                    <CompactInfoList
+                      rows={bonusRows}
+                      emptyMessage="Aucun bonus contextuel applique."
+                    />
                   </div>
                 </section>
               ) : null}
@@ -741,13 +532,23 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                     </p>
                   ) : (
                     visibleDynamicSections.map((section) => (
-                      <div key={section.table_key} className="rounded-[18px] border border-border/60 bg-background/30 p-4">
-                        <p className="text-sm font-semibold text-foreground">{section.title}</p>
+                      <div
+                        key={section.table_key}
+                        className="rounded-[18px] border border-border/60 bg-background/30 p-4"
+                      >
+                        <p className="text-sm font-semibold text-foreground">
+                          {section.title}
+                        </p>
                         {section.description ? (
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{section.description}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            {section.description}
+                          </p>
                         ) : null}
                         <div className="mt-3">
-                          <CompactInfoList rows={section.rows} emptyMessage="Aucune donnee complementaire renseignee." />
+                          <CompactInfoList
+                            rows={section.rows}
+                            emptyMessage="Aucune donnee complementaire renseignee."
+                          />
                         </div>
                       </div>
                     ))

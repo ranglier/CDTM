@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Collection from "ol/Collection";
 import Feature from "ol/Feature";
@@ -12,10 +12,31 @@ import { unByKey } from "ol/Observable";
 import type { EventsKey } from "ol/events";
 import Translate from "ol/interaction/Translate";
 
-import type {
-  PublicCaseIndexResponse,
-  PublicCaseProperties,
+import {
+  createEmptyAdminBulkEditDraft,
+  type AdminBulkEditDraft,
+  type AdminBulkUpdateResult,
+  type AdminCaseDraft,
+  type AdminCaseRecord,
+  type PublicCaseIndexResponse,
+  type PublicCaseProperties,
 } from "@/admin/types";
+import {
+  applyPersistedRecordToStableCase,
+  buildBulkEditDraft,
+  buildBulkPatch,
+  createEmptySingleAdminDraft,
+  createSingleAdminDraft,
+  getDraftSnapshot,
+  hasBulkDraftChanges,
+  mergePersistedRecordsIntoStableCases,
+  updateBulkAdminDraftField,
+  updateBulkBonusContextuelsDraft,
+  updateSingleAdminDraftField,
+  updateSingleBonusContextuelsDraft,
+  updateSingleDynamicAdminDraftField,
+} from "@/admin/case-editing";
+import { CaseAdminEditor } from "@/components/admin/case-admin-editor";
 import { Button } from "@/components/ui/button";
 import { loadJsonData } from "@/data/loaders";
 import type {
@@ -34,6 +55,7 @@ import type {
 import {
   buildCasePropertiesById,
   getStableCasesFromCollection,
+  getRegistryCaseId,
   mergeStableCases,
 } from "@/map/case-data";
 import { buildCaseHoverRows } from "@/map/case-hover";
@@ -192,6 +214,10 @@ type DragOrigin =
       landmark: EditorMapLandmark;
     };
 
+type EditorMapCanvasProps = {
+  canEditMapObjects: boolean;
+};
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -218,19 +244,38 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function buildEditorCasePropertiesById(
-  collection: StableCaseFeatureCollection,
-  publicCases: PublicCaseProperties[],
-): Record<string, StableCaseProperties> {
-  const stableCases = getStableCasesFromCollection(collection).map((stableCase) => ({
-    ...stableCase,
-    registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
-  }));
+function readInitialCaseSelection(availableCaseIds: Set<string>): {
+  activeCaseId: string | null;
+  selectedCaseIds: string[];
+} {
+  if (typeof window === "undefined") {
+    return { activeCaseId: null, selectedCaseIds: [] };
+  }
 
-  return buildCasePropertiesById(mergeStableCases(stableCases, publicCases));
+  const params = new URLSearchParams(window.location.search);
+  const caseParam = params.get("case")?.trim() ?? "";
+  const caseListParam = params.get("cases")?.trim() ?? "";
+  const requestedIds = [
+    ...caseListParam
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    caseParam,
+  ].filter(Boolean);
+  const selectedCaseIds = Array.from(new Set(requestedIds)).filter((idCase) =>
+    availableCaseIds.has(idCase),
+  );
+  const activeCaseId =
+    caseParam && availableCaseIds.has(caseParam)
+      ? caseParam
+      : (selectedCaseIds.at(-1) ?? null);
+
+  return { activeCaseId, selectedCaseIds };
 }
 
-function createLocalityEditDraft(locality: EditorMapLocality): LocalityEditDraft {
+function createLocalityEditDraft(
+  locality: EditorMapLocality,
+): LocalityEditDraft {
   return {
     id_locality: locality.id_locality,
     name: locality.name,
@@ -244,7 +289,9 @@ function createLocalityEditDraft(locality: EditorMapLocality): LocalityEditDraft
   };
 }
 
-function createLandmarkEditDraft(landmark: EditorMapLandmark): LandmarkEditDraft {
+function createLandmarkEditDraft(
+  landmark: EditorMapLandmark,
+): LandmarkEditDraft {
   return {
     id_landmark: landmark.id_landmark,
     name: landmark.name,
@@ -264,7 +311,9 @@ function getReferenceOption(
   return options?.find((option) => option.value === value) ?? null;
 }
 
-function formatSlotRequirement(option: EditorReferenceOption | null): string | null {
+function formatSlotRequirement(
+  option: EditorReferenceOption | null,
+): string | null {
   if (!option?.consumes_slot) {
     return null;
   }
@@ -286,7 +335,10 @@ function getLocalityUpgradeDependencyOptions({
   idCase: string | null;
   excludedLocalityId?: string | null;
 }): EditorMapLocality[] {
-  const localityType = getReferenceOption(referenceData?.locality_types, typeKey);
+  const localityType = getReferenceOption(
+    referenceData?.locality_types,
+    typeKey,
+  );
   const upgradedTypeKey = localityType?.upgrades_from_type_id ?? null;
 
   if (!upgradedTypeKey || !idCase) {
@@ -305,11 +357,15 @@ function getLandmarkCategoryLabel(category: string | null | undefined): string {
   return category === "unique" ? "Lieu unique" : "Landmark";
 }
 
-function getRouteGeometryLabel(geometryMode: EditorMapRoute["geometry_mode"]): string {
+function getRouteGeometryLabel(
+  geometryMode: EditorMapRoute["geometry_mode"],
+): string {
   return geometryMode === "straight" ? "Droite" : "Courbe";
 }
 
-function getRouteStrokeStyleLabel(strokeStyle: EditorMapRoute["stroke_style"]): string {
+function getRouteStrokeStyleLabel(
+  strokeStyle: EditorMapRoute["stroke_style"],
+): string {
   if (strokeStyle === "dashed") {
     return "Tirets";
   }
@@ -321,13 +377,17 @@ function getRouteStrokeStyleLabel(strokeStyle: EditorMapRoute["stroke_style"]): 
   return "Plein";
 }
 
-function getDefaultPointFamily(referenceData: EditorReferenceData | null): EditorCreateObjectFamily {
+function getDefaultPointFamily(
+  referenceData: EditorReferenceData | null,
+): EditorCreateObjectFamily {
   if ((referenceData?.locality_types.length ?? 0) > 0) {
     return "locality";
   }
 
   if (
-    (referenceData?.landmark_types.filter((option) => option.category !== "unique").length ?? 0) > 0
+    (referenceData?.landmark_types.filter(
+      (option) => option.category !== "unique",
+    ).length ?? 0) > 0
   ) {
     return "landmark";
   }
@@ -339,7 +399,8 @@ function getFirstLandmarkTypeKey(
   referenceData: EditorReferenceData | null,
 ): string {
   return (
-    referenceData?.landmark_types.find((option) => option.category !== "unique")?.value ?? ""
+    referenceData?.landmark_types.find((option) => option.category !== "unique")
+      ?.value ?? ""
   );
 }
 
@@ -471,7 +532,9 @@ function getRouteEditSnapshot(draft: RouteEditDraft): string {
   return JSON.stringify(draft);
 }
 
-function createRouteGeometryDraft(route: EditorMapRoute): RouteGeometryEditDraft {
+function createRouteGeometryDraft(
+  route: EditorMapRoute,
+): RouteGeometryEditDraft {
   return {
     id_route: route.id_route,
     points: route.points.map(([x, y]) => [x, y]),
@@ -482,7 +545,9 @@ function getRouteGeometrySnapshot(points: Array<[number, number]>): string {
   return JSON.stringify(points);
 }
 
-function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null {
+function getFirstTranslatedFeature(
+  rawEvent: unknown,
+): Feature<Geometry> | null {
   if (!rawEvent || typeof rawEvent !== "object" || !("features" in rawEvent)) {
     return null;
   }
@@ -498,31 +563,47 @@ function getFirstTranslatedFeature(rawEvent: unknown): Feature<Geometry> | null 
   return feature instanceof Feature ? (feature as Feature<Geometry>) : null;
 }
 
-export function EditorMapCanvas() {
+export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
-  const casesSourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(null);
-  const casesLayerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(null);
-  const routesSourceRef = useRef<ReturnType<typeof createEditorRoutesVectorSource> | null>(null);
-  const routesLayerRef = useRef<ReturnType<typeof createEditorRoutesVectorLayer> | null>(null);
-  const routePreviewSourceRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorSource> | null>(null);
-  const routePreviewLayerRef = useRef<ReturnType<typeof createEditorRoutePreviewVectorLayer> | null>(null);
-  const routeVerticesSourceRef =
-    useRef<ReturnType<typeof createEditorRouteVerticesVectorSource> | null>(null);
-  const routeVerticesLayerRef =
-    useRef<ReturnType<typeof createEditorRouteVerticesVectorLayer> | null>(null);
-  const pointsSourceRef = useRef<ReturnType<typeof createEditorPointsVectorSource> | null>(
-    null,
-  );
-  const pointsLayerRef = useRef<ReturnType<typeof createEditorPointsVectorLayer> | null>(
-    null,
-  );
+  const casesSourceRef = useRef<ReturnType<
+    typeof createCasesVectorSource
+  > | null>(null);
+  const casesLayerRef = useRef<ReturnType<
+    typeof createCasesVectorLayer
+  > | null>(null);
+  const routesSourceRef = useRef<ReturnType<
+    typeof createEditorRoutesVectorSource
+  > | null>(null);
+  const routesLayerRef = useRef<ReturnType<
+    typeof createEditorRoutesVectorLayer
+  > | null>(null);
+  const routePreviewSourceRef = useRef<ReturnType<
+    typeof createEditorRoutePreviewVectorSource
+  > | null>(null);
+  const routePreviewLayerRef = useRef<ReturnType<
+    typeof createEditorRoutePreviewVectorLayer
+  > | null>(null);
+  const routeVerticesSourceRef = useRef<ReturnType<
+    typeof createEditorRouteVerticesVectorSource
+  > | null>(null);
+  const routeVerticesLayerRef = useRef<ReturnType<
+    typeof createEditorRouteVerticesVectorLayer
+  > | null>(null);
+  const pointsSourceRef = useRef<ReturnType<
+    typeof createEditorPointsVectorSource
+  > | null>(null);
+  const pointsLayerRef = useRef<ReturnType<
+    typeof createEditorPointsVectorLayer
+  > | null>(null);
   const casesVisibleRef = useRef(true);
   const routesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
   const landmarksVisibleRef = useRef(true);
   const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
-  const selectedCaseIdRef = useRef<string | null>(null);
+  const activeCaseIdRef = useRef<string | null>(null);
+  const selectedCaseIdsRef = useRef<Set<string>>(new Set());
+  const caseAdminDirtyRef = useRef(false);
   const selectedLocalityIdRef = useRef<string | null>(null);
   const selectedLandmarkIdRef = useRef<string | null>(null);
   const selectedRouteIdRef = useRef<string | null>(null);
@@ -544,9 +625,16 @@ export function EditorMapCanvas() {
   const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
   const localityDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
   const landmarkDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
-  const landmarkCategoryByTypeRef = useRef<Record<string, "landmark" | "unique">>({});
-  const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>({});
-  const publicMapStylesRef = useRef<PublicMapStyles>(createEmptyPublicMapStyles());
+  const landmarkCategoryByTypeRef = useRef<
+    Record<string, "landmark" | "unique">
+  >({});
+  const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(
+    {},
+  );
+  const publicMapStylesRef = useRef<PublicMapStyles>(
+    createEmptyPublicMapStyles(),
+  );
+  const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
   const [casesVisible, setCasesVisible] = useState(true);
   const [, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
@@ -564,45 +652,89 @@ export function EditorMapCanvas() {
   const [, setLandmarksCount] = useState<number | null>(null);
   const [, setLandmarksLoading] = useState(false);
   const [landmarksError, setLandmarksError] = useState<string | null>(null);
-  const [referenceData, setReferenceData] = useState<EditorReferenceData | null>(null);
+  const [referenceData, setReferenceData] =
+    useState<EditorReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [localityDisplayMode, setLocalityDisplayMode] =
     useState<LocalityDisplayMode>("icons");
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [selectedLocality, setSelectedLocality] = useState<EditorMapLocality | null>(null);
-  const [selectedLandmark, setSelectedLandmark] = useState<EditorMapLandmark | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<EditorMapRoute | null>(null);
-  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-  const [pointDraft, setPointDraft] = useState<MapObjectCreateDraft | null>(null);
-  const [routeDraft, setRouteDraft] = useState<RouteCreateDraft | null>(null);
-  const [localitySaving, setLocalitySaving] = useState(false);
-  const [localitySaveError, setLocalitySaveError] = useState<string | null>(null);
-  const [routeSaving, setRouteSaving] = useState(false);
-  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
-  const [routeEditDraft, setRouteEditDraft] = useState<RouteEditDraft | null>(null);
-  const [routeEditSnapshot, setRouteEditSnapshot] = useState<string | null>(null);
-  const [routeEditSaving, setRouteEditSaving] = useState(false);
-  const [routeEditError, setRouteEditError] = useState<string | null>(null);
-  const [routeGeometryDraft, setRouteGeometryDraft] = useState<RouteGeometryEditDraft | null>(
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [selectedLocality, setSelectedLocality] =
+    useState<EditorMapLocality | null>(null);
+  const [selectedLandmark, setSelectedLandmark] =
+    useState<EditorMapLandmark | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<EditorMapRoute | null>(
     null,
   );
-  const [routeGeometrySnapshot, setRouteGeometrySnapshot] = useState<string | null>(null);
-  const [selectedRouteVertexIndex, setSelectedRouteVertexIndex] = useState<number | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [pointDraft, setPointDraft] = useState<MapObjectCreateDraft | null>(
+    null,
+  );
+  const [routeDraft, setRouteDraft] = useState<RouteCreateDraft | null>(null);
+  const [localitySaving, setLocalitySaving] = useState(false);
+  const [localitySaveError, setLocalitySaveError] = useState<string | null>(
+    null,
+  );
+  const [routeSaving, setRouteSaving] = useState(false);
+  const [routeSaveError, setRouteSaveError] = useState<string | null>(null);
+  const [routeEditDraft, setRouteEditDraft] = useState<RouteEditDraft | null>(
+    null,
+  );
+  const [routeEditSnapshot, setRouteEditSnapshot] = useState<string | null>(
+    null,
+  );
+  const [routeEditSaving, setRouteEditSaving] = useState(false);
+  const [routeEditError, setRouteEditError] = useState<string | null>(null);
+  const [routeGeometryDraft, setRouteGeometryDraft] =
+    useState<RouteGeometryEditDraft | null>(null);
+  const [routeGeometrySnapshot, setRouteGeometrySnapshot] = useState<
+    string | null
+  >(null);
+  const [selectedRouteVertexIndex, setSelectedRouteVertexIndex] = useState<
+    number | null
+  >(null);
   const [routeGeometrySaving, setRouteGeometrySaving] = useState(false);
-  const [routeGeometryError, setRouteGeometryError] = useState<string | null>(null);
+  const [routeGeometryError, setRouteGeometryError] = useState<string | null>(
+    null,
+  );
   const [routeGeometryDragging, setRouteGeometryDragging] = useState(false);
   const [routeGeometryTool, setRouteGeometryTool] =
     useState<RouteGeometryTool>("select-vertex");
-  const [localityEditDraft, setLocalityEditDraft] = useState<LocalityEditDraft | null>(null);
-  const [localityEditSnapshot, setLocalityEditSnapshot] = useState<string | null>(null);
-  const [landmarkEditDraft, setLandmarkEditDraft] = useState<LandmarkEditDraft | null>(null);
-  const [landmarkEditSnapshot, setLandmarkEditSnapshot] = useState<string | null>(null);
+  const [localityEditDraft, setLocalityEditDraft] =
+    useState<LocalityEditDraft | null>(null);
+  const [localityEditSnapshot, setLocalityEditSnapshot] = useState<
+    string | null
+  >(null);
+  const [landmarkEditDraft, setLandmarkEditDraft] =
+    useState<LandmarkEditDraft | null>(null);
+  const [landmarkEditSnapshot, setLandmarkEditSnapshot] = useState<
+    string | null
+  >(null);
   const [localityEditSaving, setLocalityEditSaving] = useState(false);
-  const [localityEditError, setLocalityEditError] = useState<string | null>(null);
+  const [localityEditError, setLocalityEditError] = useState<string | null>(
+    null,
+  );
   const [localityDragging, setLocalityDragging] = useState(false);
   const [localityMoveSaving, setLocalityMoveSaving] = useState(false);
-  const [localityMoveError, setLocalityMoveError] = useState<string | null>(null);
+  const [localityMoveError, setLocalityMoveError] = useState<string | null>(
+    null,
+  );
+  const [adminRecordsById, setAdminRecordsById] = useState<
+    Record<string, AdminCaseRecord>
+  >({});
+  const [singleDraft, setSingleDraft] = useState<AdminCaseDraft>(
+    createEmptySingleAdminDraft(),
+  );
+  const [singleSnapshot, setSingleSnapshot] = useState(
+    getDraftSnapshot(createEmptySingleAdminDraft()),
+  );
+  const [bulkDraft, setBulkDraft] = useState<AdminBulkEditDraft>(
+    createEmptyAdminBulkEditDraft(),
+  );
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   const localityEditDirty =
     localityEditDraft && localityEditSnapshot
@@ -618,12 +750,45 @@ export function EditorMapCanvas() {
       : false;
   const routeGeometryDirty =
     routeGeometryDraft && routeGeometrySnapshot
-      ? getRouteGeometrySnapshot(routeGeometryDraft.points) !== routeGeometrySnapshot
+      ? getRouteGeometrySnapshot(routeGeometryDraft.points) !==
+        routeGeometrySnapshot
       : false;
-  const routeColorValid = routeDraft ? isValidRouteColor(routeDraft.stroke_color) : true;
+  const routeColorValid = routeDraft
+    ? isValidRouteColor(routeDraft.stroke_color)
+    : true;
   const routeEditColorValid = routeEditDraft
     ? isValidRouteColor(routeEditDraft.stroke_color)
     : true;
+  const stableCasesById = useMemo(
+    () =>
+      new globalThis.Map(
+        stableCases.map((item) => [getRegistryCaseId(item), item]),
+      ),
+    [stableCases],
+  );
+  const activeCase = useMemo(
+    () => (activeCaseId ? (stableCasesById.get(activeCaseId) ?? null) : null),
+    [activeCaseId, stableCasesById],
+  );
+  const selectedAdminRecords = useMemo(
+    () =>
+      selectedCaseIds
+        .map((idCase) => adminRecordsById[idCase])
+        .filter((record): record is AdminCaseRecord => Boolean(record)),
+    [adminRecordsById, selectedCaseIds],
+  );
+  const selectedCaseIdsKey = selectedCaseIds.join("\u0000");
+  const activeAdminRecord = activeCaseId
+    ? (adminRecordsById[activeCaseId] ?? null)
+    : null;
+  const isCaseMultiSelection = selectedCaseIds.length > 1;
+  const caseAdminDirty = isCaseMultiSelection
+    ? hasBulkDraftChanges(bulkDraft)
+    : getDraftSnapshot(singleDraft) !== singleSnapshot;
+
+  useEffect(() => {
+    caseAdminDirtyRef.current = caseAdminDirty;
+  }, [caseAdminDirty]);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
@@ -645,7 +810,10 @@ export function EditorMapCanvas() {
 
   useEffect(() => {
     localitiesVisibleRef.current = localitiesVisible;
-    syncEditorPointsLayerVisibility(pointsLayerRef.current, localitiesVisible || landmarksVisible);
+    syncEditorPointsLayerVisibility(
+      pointsLayerRef.current,
+      localitiesVisible || landmarksVisible,
+    );
 
     if (!localitiesVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
@@ -655,7 +823,10 @@ export function EditorMapCanvas() {
 
   useEffect(() => {
     landmarksVisibleRef.current = landmarksVisible;
-    syncEditorPointsLayerVisibility(pointsLayerRef.current, localitiesVisible || landmarksVisible);
+    syncEditorPointsLayerVisibility(
+      pointsLayerRef.current,
+      localitiesVisible || landmarksVisible,
+    );
 
     if (!landmarksVisible) {
       mapRef.current?.getTargetElement().style.setProperty("cursor", "");
@@ -689,10 +860,14 @@ export function EditorMapCanvas() {
       replaceEditorRoutePreviewFeatures(routePreviewSourceRef.current, {
         ...selectedRoute,
         points: routeGeometryDraft.points,
-        geometry_mode: routeEditDraft?.geometry_mode ?? selectedRoute.geometry_mode,
-        stroke_style: routeEditDraft?.stroke_style ?? selectedRoute.stroke_style,
-        stroke_width: routeEditDraft?.stroke_width ?? selectedRoute.stroke_width,
-        stroke_color: routeEditDraft?.stroke_color ?? selectedRoute.stroke_color ?? "",
+        geometry_mode:
+          routeEditDraft?.geometry_mode ?? selectedRoute.geometry_mode,
+        stroke_style:
+          routeEditDraft?.stroke_style ?? selectedRoute.stroke_style,
+        stroke_width:
+          routeEditDraft?.stroke_width ?? selectedRoute.stroke_width,
+        stroke_color:
+          routeEditDraft?.stroke_color ?? selectedRoute.stroke_color ?? "",
       });
       return;
     }
@@ -774,7 +949,11 @@ export function EditorMapCanvas() {
 
     async function loadIconSources() {
       const iconsWithPath = (referenceData?.map_icons ?? [])
-        .filter((icon) => typeof icon.image_path === "string" && icon.image_path.trim().length > 0)
+        .filter(
+          (icon) =>
+            typeof icon.image_path === "string" &&
+            icon.image_path.trim().length > 0,
+        )
         .map((icon) => [icon.value, icon.image_path!.trim()] as const);
 
       mapIconImagePathByKeyRef.current = Object.fromEntries(iconsWithPath);
@@ -788,7 +967,11 @@ export function EditorMapCanvas() {
 
             return [iconKey, source] as const;
           } catch (error) {
-            console.error("Icone SVG impossible a normaliser.", { icon: iconKey, imagePath, error });
+            console.error("Icone SVG impossible a normaliser.", {
+              icon: iconKey,
+              imagePath,
+              error,
+            });
             return [iconKey, imagePath] as const;
           }
         }),
@@ -799,7 +982,9 @@ export function EditorMapCanvas() {
       }
 
       mapIconSourceByKeyRef.current = Object.fromEntries(
-        entries.filter((entry): entry is readonly [string, string] => entry !== null),
+        entries.filter(
+          (entry): entry is readonly [string, string] => entry !== null,
+        ),
       );
       pointsLayerRef.current?.changed();
     }
@@ -840,23 +1025,10 @@ export function EditorMapCanvas() {
   }, [routeGeometryDragging]);
 
   useEffect(() => {
-    const previousCaseId = selectedCaseIdRef.current;
-    selectedCaseIdRef.current = selectedCaseId;
-
-    const source = casesSourceRef.current;
-
-    if (!source) {
-      return;
-    }
-
-    if (previousCaseId) {
-      source.getFeatureById(previousCaseId)?.changed();
-    }
-
-    if (selectedCaseId) {
-      source.getFeatureById(selectedCaseId)?.changed();
-    }
-  }, [selectedCaseId]);
+    activeCaseIdRef.current = activeCaseId;
+    selectedCaseIdsRef.current = new Set(selectedCaseIds);
+    casesLayerRef.current?.changed();
+  }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
     const interaction = localityTranslateInteractionRef.current;
@@ -866,7 +1038,8 @@ export function EditorMapCanvas() {
     }
 
     interaction.setActive(
-      (localitiesVisible || landmarksVisible) &&
+      canEditMapObjects &&
+        (localitiesVisible || landmarksVisible) &&
         editorTool === "select" &&
         !pointDraft &&
         !routeGeometryDraft &&
@@ -875,6 +1048,7 @@ export function EditorMapCanvas() {
         !landmarkEditDirty,
     );
   }, [
+    canEditMapObjects,
     editorTool,
     pointDraft,
     routeGeometryDraft,
@@ -893,7 +1067,8 @@ export function EditorMapCanvas() {
     }
 
     interaction.setActive(
-      routeGeometryDraft !== null &&
+      canEditMapObjects &&
+        routeGeometryDraft !== null &&
         routeGeometryTool === "select-vertex" &&
         editorTool === "select" &&
         !pointDraft &&
@@ -901,6 +1076,7 @@ export function EditorMapCanvas() {
         !routeGeometrySaving,
     );
   }, [
+    canEditMapObjects,
     editorTool,
     pointDraft,
     routeDraft,
@@ -968,6 +1144,143 @@ export function EditorMapCanvas() {
     setRouteGeometryTool("select-vertex");
   }, []);
 
+  const resetSingleAdminEditor = useCallback(
+    (
+      record: AdminCaseRecord | null,
+      stableCase: StableCaseProperties | null,
+    ) => {
+      const nextDraft = createSingleAdminDraft(record, stableCase);
+
+      setSingleDraft(nextDraft);
+      setSingleSnapshot(getDraftSnapshot(nextDraft));
+    },
+    [],
+  );
+
+  const resetBulkAdminEditor = useCallback((records: AdminCaseRecord[]) => {
+    setBulkDraft(buildBulkEditDraft(records));
+  }, []);
+
+  const clearCaseSelection = useCallback(() => {
+    setActiveCaseId(null);
+    setSelectedCaseIds([]);
+    setAdminError(null);
+  }, []);
+
+  const applyCaseSelectionState = useCallback(
+    (nextActiveCaseId: string | null, nextSelectedCaseIds: string[]) => {
+      setActiveCaseId(nextActiveCaseId);
+      setSelectedCaseIds(nextSelectedCaseIds);
+      setAdminError(null);
+    },
+    [],
+  );
+
+  const confirmDiscardCaseChanges = useCallback(
+    (message: string) => {
+      if (!caseAdminDirtyRef.current) {
+        return true;
+      }
+
+      return window.confirm(message);
+    },
+    [],
+  );
+
+  const fetchAdminRecords = useCallback(
+    async (idCases: string[]): Promise<AdminCaseRecord[]> => {
+      return Promise.all(
+        idCases.map((idCase) =>
+          fetchJson<AdminCaseRecord>(`/api/admin/cases/${idCase}`),
+        ),
+      );
+    },
+    [],
+  );
+
+  const refreshAdminRecords = useCallback(
+    async (idCases: string[]) => {
+      const records = await fetchAdminRecords(idCases);
+
+      setAdminRecordsById((current) => {
+        const next = { ...current };
+
+        for (const record of records) {
+          next[record.id_case] = record;
+        }
+
+        return next;
+      });
+
+      return records;
+    },
+    [fetchAdminRecords],
+  );
+
+  const handleCaseSelectionChange = useCallback(
+    (nextCaseId: string | null, intent: "replace" | "toggle") => {
+      const currentActiveCaseId = activeCaseIdRef.current;
+      const currentSelectedCaseIds = Array.from(selectedCaseIdsRef.current);
+
+      if (intent === "replace") {
+        const isSameSingleSelection =
+          nextCaseId !== null &&
+          currentActiveCaseId === nextCaseId &&
+          currentSelectedCaseIds.length === 1 &&
+          currentSelectedCaseIds[0] === nextCaseId;
+
+        if (!nextCaseId && currentSelectedCaseIds.length === 0) {
+          return;
+        }
+
+        if (isSameSingleSelection) {
+          return;
+        }
+
+        if (
+          !confirmDiscardCaseChanges(
+            "Changer de selection abandonnera le brouillon de case non enregistre. Continuer ?",
+          )
+        ) {
+          return;
+        }
+
+        applyCaseSelectionState(nextCaseId, nextCaseId ? [nextCaseId] : []);
+        return;
+      }
+
+      if (!nextCaseId) {
+        return;
+      }
+
+      if (
+        !confirmDiscardCaseChanges(
+          "Changer de selection abandonnera le brouillon de case non enregistre. Continuer ?",
+        )
+      ) {
+        return;
+      }
+
+      setSelectedCaseIds((current) => {
+        const alreadySelected = current.includes(nextCaseId);
+        const nextSelectedCaseIds = alreadySelected
+          ? current.filter((idCase) => idCase !== nextCaseId)
+          : [...current, nextCaseId];
+        const nextActiveCaseId = alreadySelected
+          ? activeCaseIdRef.current === nextCaseId
+            ? (nextSelectedCaseIds.at(-1) ?? null)
+            : activeCaseIdRef.current
+          : nextCaseId;
+
+        setActiveCaseId(nextActiveCaseId);
+        setAdminError(null);
+
+        return nextSelectedCaseIds;
+      });
+    },
+    [applyCaseSelectionState, confirmDiscardCaseChanges],
+  );
+
   function handleToolChangeBlockedByRouteGeometry(): boolean {
     if (!routeGeometryDraft) {
       return false;
@@ -1005,23 +1318,26 @@ export function EditorMapCanvas() {
     setLocalityEditError(null);
   }
 
-  const selectLocality = useCallback((locality: EditorMapLocality) => {
-    const draft = createLocalityEditDraft(locality);
+  const selectLocality = useCallback(
+    (locality: EditorMapLocality) => {
+      const draft = createLocalityEditDraft(locality);
 
-    setSelectedLocality(locality);
-    setSelectedLandmark(null);
-    setLocalityEditDraft(draft);
-    setLocalityEditSnapshot(getLocalityEditSnapshot(draft));
-    setLandmarkEditDraft(null);
-    setLandmarkEditSnapshot(null);
-    setLocalityEditError(null);
-    setPointDraft(null);
-    setRouteDraft(null);
-    setRouteSaveError(null);
-    handleCloseRouteSelection();
-    setSelectedCaseId(null);
-    setEditorTool("select");
-  }, [handleCloseRouteSelection]);
+      setSelectedLocality(locality);
+      setSelectedLandmark(null);
+      setLocalityEditDraft(draft);
+      setLocalityEditSnapshot(getLocalityEditSnapshot(draft));
+      setLandmarkEditDraft(null);
+      setLandmarkEditSnapshot(null);
+      setLocalityEditError(null);
+      setPointDraft(null);
+      setRouteDraft(null);
+      setRouteSaveError(null);
+      handleCloseRouteSelection();
+      clearCaseSelection();
+      setEditorTool("select");
+    },
+    [clearCaseSelection, handleCloseRouteSelection],
+  );
 
   function handleCancelLandmarkEdit() {
     if (!selectedLandmark) {
@@ -1035,23 +1351,26 @@ export function EditorMapCanvas() {
     setLocalityEditError(null);
   }
 
-  const selectLandmark = useCallback((landmark: EditorMapLandmark) => {
-    const draft = createLandmarkEditDraft(landmark);
+  const selectLandmark = useCallback(
+    (landmark: EditorMapLandmark) => {
+      const draft = createLandmarkEditDraft(landmark);
 
-    setSelectedLandmark(landmark);
-    setSelectedLocality(null);
-    setLandmarkEditDraft(draft);
-    setLandmarkEditSnapshot(getLandmarkEditSnapshot(draft));
-    setLocalityEditDraft(null);
-    setLocalityEditSnapshot(null);
-    setLocalityEditError(null);
-    setPointDraft(null);
-    setRouteDraft(null);
-    setRouteSaveError(null);
-    handleCloseRouteSelection();
-    setSelectedCaseId(null);
-    setEditorTool("select");
-  }, [handleCloseRouteSelection]);
+      setSelectedLandmark(landmark);
+      setSelectedLocality(null);
+      setLandmarkEditDraft(draft);
+      setLandmarkEditSnapshot(getLandmarkEditSnapshot(draft));
+      setLocalityEditDraft(null);
+      setLocalityEditSnapshot(null);
+      setLocalityEditError(null);
+      setPointDraft(null);
+      setRouteDraft(null);
+      setRouteSaveError(null);
+      handleCloseRouteSelection();
+      clearCaseSelection();
+      setEditorTool("select");
+    },
+    [clearCaseSelection, handleCloseRouteSelection],
+  );
 
   function handleCancelRouteEdit() {
     if (!selectedRoute) {
@@ -1065,207 +1384,245 @@ export function EditorMapCanvas() {
     setRouteEditError(null);
   }
 
-  const selectRoute = useCallback((route: EditorMapRoute) => {
-    const draft = createRouteEditDraft(route);
+  const selectRoute = useCallback(
+    (route: EditorMapRoute) => {
+      const draft = createRouteEditDraft(route);
 
-    handleCloseLocalitySelection();
-    handleCloseRouteGeometryEdit();
-    setSelectedRoute(route);
-    setRouteEditDraft(draft);
-    setRouteEditSnapshot(getRouteEditSnapshot(draft));
-    setRouteEditError(null);
-    setPointDraft(null);
-    setRouteDraft(null);
-    setRouteSaveError(null);
-    if (routePreviewSourceRef.current) {
-      clearEditorRoutePreview(routePreviewSourceRef.current);
-    }
-    setSelectedCaseId(null);
-    setEditorTool("select");
-  }, [handleCloseLocalitySelection, handleCloseRouteGeometryEdit]);
+      handleCloseLocalitySelection();
+      handleCloseRouteGeometryEdit();
+      setSelectedRoute(route);
+      setRouteEditDraft(draft);
+      setRouteEditSnapshot(getRouteEditSnapshot(draft));
+      setRouteEditError(null);
+      setPointDraft(null);
+      setRouteDraft(null);
+      setRouteSaveError(null);
+      if (routePreviewSourceRef.current) {
+        clearEditorRoutePreview(routePreviewSourceRef.current);
+      }
+      clearCaseSelection();
+      setEditorTool("select");
+    },
+    [
+      clearCaseSelection,
+      handleCloseLocalitySelection,
+      handleCloseRouteGeometryEdit,
+    ],
+  );
 
   const detectCaseIdAtCoordinate = useCallback(
-    (
-    map: Map | null,
-    coordinate: [number, number],
-  ): string | null => {
-    if (!map || !casesVisibleRef.current || !casesLayerRef.current) {
-      // For this lot, hidden cases mean we skip case detection during drag save.
-      return null;
-    }
-
-    const pixel = map.getPixelFromCoordinate(coordinate);
-    const feature = map.forEachFeatureAtPixel(
-      pixel,
-      (candidate) => {
-        if (candidate instanceof Feature) {
-          return candidate as Feature<Geometry>;
-        }
-
+    (map: Map | null, coordinate: [number, number]): string | null => {
+      if (!map || !casesVisibleRef.current || !casesLayerRef.current) {
+        // For this lot, hidden cases mean we skip case detection during drag save.
         return null;
-      },
-      {
-        layerFilter: (candidateLayer) => candidateLayer === casesLayerRef.current,
-      },
-    );
-    const id = feature?.getId();
+      }
 
-    return typeof id === "string" ? id : null;
+      const pixel = map.getPixelFromCoordinate(coordinate);
+      const feature = map.forEachFeatureAtPixel(
+        pixel,
+        (candidate) => {
+          if (candidate instanceof Feature) {
+            return candidate as Feature<Geometry>;
+          }
+
+          return null;
+        },
+        {
+          layerFilter: (candidateLayer) =>
+            candidateLayer === casesLayerRef.current,
+        },
+      );
+      const id = feature?.getId();
+
+      return typeof id === "string" ? id : null;
     },
     [],
   );
 
-  const handleLocalityTranslateEnd = useCallback(async (rawEvent: unknown) => {
-    const origin = localityDragOriginRef.current;
-    localityDragOriginRef.current = null;
-    setLocalityDragging(false);
+  const handleLocalityTranslateEnd = useCallback(
+    async (rawEvent: unknown) => {
+      const origin = localityDragOriginRef.current;
+      localityDragOriginRef.current = null;
+      setLocalityDragging(false);
 
-    const feature = getFirstTranslatedFeature(rawEvent);
+      const feature = getFirstTranslatedFeature(rawEvent);
 
-    if (!origin || !feature) {
-      return;
-    }
+      if (!origin || !feature) {
+        return;
+      }
 
-    const locality =
-      origin.family === "locality" ? getEditorLocalityFromPointFeature(feature) : null;
-    const landmark =
-      origin.family === "landmark" ? getEditorLandmarkFromPointFeature(feature) : null;
-    const coordinates = getEditorPointFeatureCoordinates(feature);
-
-    if (!coordinates) {
-      setEditorPointFeatureCoordinates(feature, origin.coordinates);
-      updateEditorPointFeature(
-        feature,
+      const locality =
         origin.family === "locality"
-          ? { family: "locality", locality: origin.locality }
-          : { family: "landmark", landmark: origin.landmark },
-      );
-      return;
-    }
+          ? getEditorLocalityFromPointFeature(feature)
+          : null;
+      const landmark =
+        origin.family === "landmark"
+          ? getEditorLandmarkFromPointFeature(feature)
+          : null;
+      const coordinates = getEditorPointFeatureCoordinates(feature);
 
-    if (origin.family === "locality" && !locality) {
-      setEditorPointFeatureCoordinates(feature, origin.coordinates);
-      updateEditorPointFeature(feature, { family: "locality", locality: origin.locality });
-      return;
-    }
-
-    if (origin.family === "landmark" && !landmark) {
-      setEditorPointFeatureCoordinates(feature, origin.coordinates);
-      updateEditorPointFeature(feature, { family: "landmark", landmark: origin.landmark });
-      return;
-    }
-
-    const [x, y] = coordinates;
-
-    if (x === origin.coordinates[0] && y === origin.coordinates[1]) {
-      return;
-    }
-
-    const idCaseDetected = detectCaseIdAtCoordinate(mapRef.current, [x, y]);
-
-    setLocalityMoveSaving(true);
-    setLocalityMoveError(null);
-
-    try {
-      if (origin.family === "locality" && locality) {
-        const slotOverride =
-          selectedLocalityIdRef.current === locality.id_locality &&
-          localityEditDraftRef.current?.force_slot_override
-            ? {
-                force_slot_override: true,
-                slot_override_reason:
-                  localityEditDraftRef.current.slot_override_reason.trim() || null,
-              }
-            : {};
-        const updated = await fetchJson<EditorMapLocality>(
-          `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              x,
-              y,
-              id_case_detected: idCaseDetected,
-              ...slotOverride,
-            } satisfies Pick<
-              EditorMapLocalityPatch,
-              "x" | "y" | "id_case_detected" | "force_slot_override" | "slot_override_reason"
-            >),
-          },
+      if (!coordinates) {
+        setEditorPointFeatureCoordinates(feature, origin.coordinates);
+        updateEditorPointFeature(
+          feature,
+          origin.family === "locality"
+            ? { family: "locality", locality: origin.locality }
+            : { family: "landmark", landmark: origin.landmark },
         );
+        return;
+      }
 
-        if (pointsSourceRef.current) {
-          upsertEditorPointFeature(pointsSourceRef.current, {
+      if (origin.family === "locality" && !locality) {
+        setEditorPointFeatureCoordinates(feature, origin.coordinates);
+        updateEditorPointFeature(feature, {
+          family: "locality",
+          locality: origin.locality,
+        });
+        return;
+      }
+
+      if (origin.family === "landmark" && !landmark) {
+        setEditorPointFeatureCoordinates(feature, origin.coordinates);
+        updateEditorPointFeature(feature, {
+          family: "landmark",
+          landmark: origin.landmark,
+        });
+        return;
+      }
+
+      const [x, y] = coordinates;
+
+      if (x === origin.coordinates[0] && y === origin.coordinates[1]) {
+        return;
+      }
+
+      const idCaseDetected = detectCaseIdAtCoordinate(mapRef.current, [x, y]);
+
+      setLocalityMoveSaving(true);
+      setLocalityMoveError(null);
+
+      try {
+        if (origin.family === "locality" && locality) {
+          const slotOverride =
+            selectedLocalityIdRef.current === locality.id_locality &&
+            localityEditDraftRef.current?.force_slot_override
+              ? {
+                  force_slot_override: true,
+                  slot_override_reason:
+                    localityEditDraftRef.current.slot_override_reason.trim() ||
+                    null,
+                }
+              : {};
+          const updated = await fetchJson<EditorMapLocality>(
+            `/api/admin/editor/localities/${encodeURIComponent(locality.id_locality)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                x,
+                y,
+                id_case_detected: idCaseDetected,
+                ...slotOverride,
+              } satisfies Pick<
+                EditorMapLocalityPatch,
+                | "x"
+                | "y"
+                | "id_case_detected"
+                | "force_slot_override"
+                | "slot_override_reason"
+              >),
+            },
+          );
+
+          if (pointsSourceRef.current) {
+            upsertEditorPointFeature(pointsSourceRef.current, {
+              family: "locality",
+              locality: updated,
+            });
+          }
+          setLocalities((items) =>
+            items.map((item) =>
+              item.id_locality === updated.id_locality ? updated : item,
+            ),
+          );
+
+          if (selectedLocalityIdRef.current === updated.id_locality) {
+            const nextDraft = createLocalityEditDraft(updated);
+
+            setSelectedLocality(updated);
+            setLocalityEditDraft(nextDraft);
+            setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+          }
+        } else if (origin.family === "landmark" && landmark) {
+          const slotOverride =
+            selectedLandmarkIdRef.current === landmark.id_landmark &&
+            landmarkEditDraftRef.current?.force_slot_override
+              ? {
+                  force_slot_override: true,
+                  slot_override_reason:
+                    landmarkEditDraftRef.current.slot_override_reason.trim() ||
+                    null,
+                }
+              : {};
+          const updated = await fetchJson<EditorMapLandmark>(
+            `/api/admin/editor/landmarks/${encodeURIComponent(landmark.id_landmark)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                x,
+                y,
+                id_case_detected: idCaseDetected,
+                ...slotOverride,
+              } satisfies Pick<
+                EditorMapLandmarkPatch,
+                | "x"
+                | "y"
+                | "id_case_detected"
+                | "force_slot_override"
+                | "slot_override_reason"
+              >),
+            },
+          );
+
+          if (pointsSourceRef.current) {
+            upsertEditorPointFeature(pointsSourceRef.current, {
+              family: "landmark",
+              landmark: updated,
+            });
+          }
+
+          if (selectedLandmarkIdRef.current === updated.id_landmark) {
+            const nextDraft = createLandmarkEditDraft(updated);
+
+            setSelectedLandmark(updated);
+            setLandmarkEditDraft(nextDraft);
+            setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
+          }
+        }
+      } catch (error) {
+        if (origin.family === "locality") {
+          setEditorPointFeatureCoordinates(feature, origin.coordinates);
+          updateEditorPointFeature(feature, {
             family: "locality",
-            locality: updated,
+            locality: origin.locality,
           });
-        }
-        setLocalities((items) =>
-          items.map((item) => (item.id_locality === updated.id_locality ? updated : item)),
-        );
-
-        if (selectedLocalityIdRef.current === updated.id_locality) {
-          const nextDraft = createLocalityEditDraft(updated);
-
-          setSelectedLocality(updated);
-          setLocalityEditDraft(nextDraft);
-          setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
-        }
-      } else if (origin.family === "landmark" && landmark) {
-        const slotOverride =
-          selectedLandmarkIdRef.current === landmark.id_landmark &&
-          landmarkEditDraftRef.current?.force_slot_override
-            ? {
-                force_slot_override: true,
-                slot_override_reason:
-                  landmarkEditDraftRef.current.slot_override_reason.trim() || null,
-              }
-            : {};
-        const updated = await fetchJson<EditorMapLandmark>(
-          `/api/admin/editor/landmarks/${encodeURIComponent(landmark.id_landmark)}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              x,
-              y,
-              id_case_detected: idCaseDetected,
-              ...slotOverride,
-            } satisfies Pick<
-              EditorMapLandmarkPatch,
-              "x" | "y" | "id_case_detected" | "force_slot_override" | "slot_override_reason"
-            >),
-          },
-        );
-
-        if (pointsSourceRef.current) {
-          upsertEditorPointFeature(pointsSourceRef.current, {
+        } else {
+          setEditorPointFeatureCoordinates(feature, origin.coordinates);
+          updateEditorPointFeature(feature, {
             family: "landmark",
-            landmark: updated,
+            landmark: origin.landmark,
           });
         }
-
-        if (selectedLandmarkIdRef.current === updated.id_landmark) {
-          const nextDraft = createLandmarkEditDraft(updated);
-
-          setSelectedLandmark(updated);
-          setLandmarkEditDraft(nextDraft);
-          setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
-        }
+        setLocalityMoveError(
+          error instanceof Error
+            ? error.message
+            : "Deplacement du point impossible.",
+        );
+      } finally {
+        setLocalityMoveSaving(false);
       }
-    } catch (error) {
-      if (origin.family === "locality") {
-        setEditorPointFeatureCoordinates(feature, origin.coordinates);
-        updateEditorPointFeature(feature, { family: "locality", locality: origin.locality });
-      } else {
-        setEditorPointFeatureCoordinates(feature, origin.coordinates);
-        updateEditorPointFeature(feature, { family: "landmark", landmark: origin.landmark });
-      }
-      setLocalityMoveError(
-        error instanceof Error ? error.message : "Deplacement du point impossible.",
-      );
-    } finally {
-      setLocalityMoveSaving(false);
-    }
-  }, [detectCaseIdAtCoordinate]);
+    },
+    [detectCaseIdAtCoordinate],
+  );
 
   const handleRouteVertexTranslateEnd = useCallback((rawEvent: unknown) => {
     const feature = getFirstTranslatedFeature(rawEvent);
@@ -1276,7 +1633,9 @@ export function EditorMapCanvas() {
       return;
     }
 
-    const routeVertex = getEditorRouteVertexFromFeature(feature as Feature<Geometry>);
+    const routeVertex = getEditorRouteVertexFromFeature(
+      feature as Feature<Geometry>,
+    );
     const geometry = feature.getGeometry();
 
     if (!routeVertex || !(geometry instanceof Point)) {
@@ -1335,7 +1694,11 @@ export function EditorMapCanvas() {
         getCasePropertiesById: () => casePropertiesByIdRef.current,
         getPublicMapStyles: () => publicMapStylesRef.current,
         getSelectionState: (idCase) =>
-          idCase && idCase === selectedCaseIdRef.current ? "active" : "default",
+          idCase && idCase === activeCaseIdRef.current
+            ? "active"
+            : idCase !== null && selectedCaseIdsRef.current.has(idCase)
+              ? "selected"
+              : "default",
       },
       {
         visible: casesVisibleRef.current,
@@ -1345,27 +1708,36 @@ export function EditorMapCanvas() {
     const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
       context: {
         getIconImagePath: (iconKey) =>
-          iconKey ? mapIconSourceByKeyRef.current[iconKey] ?? null : null,
+          iconKey ? (mapIconSourceByKeyRef.current[iconKey] ?? null) : null,
         getLocalityDefaultIconKeyForType: (typeKey) =>
           localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
         getLandmarkDefaultIconKeyForType: (typeKey) =>
           landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getLandmarkTypeCategory: (typeKey) => landmarkCategoryByTypeRef.current[typeKey] ?? null,
+        getLandmarkTypeCategory: (typeKey) =>
+          landmarkCategoryByTypeRef.current[typeKey] ?? null,
         getDisplayMode: () => localityDisplayModeRef.current,
         isFamilyVisible: (family) =>
-          family === "locality" ? localitiesVisibleRef.current : landmarksVisibleRef.current,
+          family === "locality"
+            ? localitiesVisibleRef.current
+            : landmarksVisibleRef.current,
       },
       visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
     });
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
     });
-    const routePreviewLayer = createEditorRoutePreviewVectorLayer(routePreviewSource, {
-      visible: true,
-    });
-    const routeVerticesLayer = createEditorRouteVerticesVectorLayer(routeVerticesSource, {
-      visible: false,
-    });
+    const routePreviewLayer = createEditorRoutePreviewVectorLayer(
+      routePreviewSource,
+      {
+        visible: true,
+      },
+    );
+    const routeVerticesLayer = createEditorRouteVerticesVectorLayer(
+      routeVerticesSource,
+      {
+        visible: false,
+      },
+    );
     const map = createCdtmMap(mapElementRef.current, [
       backgroundLayer,
       casesLayer,
@@ -1392,7 +1764,8 @@ export function EditorMapCanvas() {
     pointsSourceRef.current = pointsSource;
     pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
-    routeVertexTranslateInteractionRef.current = routeVertexTranslateInteraction;
+    routeVertexTranslateInteractionRef.current =
+      routeVertexTranslateInteraction;
     mapRef.current = map;
     fitCdtmCasesExtent(map, 0);
     map.addInteraction(translateInteraction);
@@ -1404,54 +1777,68 @@ export function EditorMapCanvas() {
 
     resizeObserver.observe(mapElementRef.current);
 
-    const translateStartKey = translateInteraction.on("translatestart", (event: unknown) => {
-      const feature = getFirstTranslatedFeature(event);
+    const translateStartKey = translateInteraction.on(
+      "translatestart",
+      (event: unknown) => {
+        const feature = getFirstTranslatedFeature(event);
 
-      if (!(feature instanceof Feature)) {
+        if (!(feature instanceof Feature)) {
+          localityDragOriginRef.current = null;
+          return;
+        }
+
+        const locality = getEditorLocalityFromPointFeature(
+          feature as Feature<Geometry>,
+        );
+        const localityCoordinates = getEditorPointFeatureCoordinates(
+          feature as Feature<Geometry>,
+        );
+
+        if (locality && localityCoordinates) {
+          localityDragOriginRef.current = {
+            family: "locality",
+            id: locality.id_locality,
+            coordinates: localityCoordinates,
+            locality,
+          };
+          setHoverInfo(null);
+          setLocalityDragging(true);
+          setLocalityMoveError(null);
+          selectLocality(locality);
+          return;
+        }
+
+        const landmark = getEditorLandmarkFromPointFeature(
+          feature as Feature<Geometry>,
+        );
+        const landmarkCoordinates = getEditorPointFeatureCoordinates(
+          feature as Feature<Geometry>,
+        );
+
+        if (landmark && landmarkCoordinates) {
+          localityDragOriginRef.current = {
+            family: "landmark",
+            id: landmark.id_landmark,
+            coordinates: landmarkCoordinates,
+            landmark,
+          };
+          setHoverInfo(null);
+          setLocalityDragging(true);
+          setLocalityMoveError(null);
+          selectLandmark(landmark);
+          return;
+        }
+
         localityDragOriginRef.current = null;
-        return;
-      }
+      },
+    ) as EventsKey;
 
-      const locality = getEditorLocalityFromPointFeature(feature as Feature<Geometry>);
-      const localityCoordinates = getEditorPointFeatureCoordinates(feature as Feature<Geometry>);
-
-      if (locality && localityCoordinates) {
-        localityDragOriginRef.current = {
-          family: "locality",
-          id: locality.id_locality,
-          coordinates: localityCoordinates,
-          locality,
-        };
-        setHoverInfo(null);
-        setLocalityDragging(true);
-        setLocalityMoveError(null);
-        selectLocality(locality);
-        return;
-      }
-
-      const landmark = getEditorLandmarkFromPointFeature(feature as Feature<Geometry>);
-      const landmarkCoordinates = getEditorPointFeatureCoordinates(feature as Feature<Geometry>);
-
-      if (landmark && landmarkCoordinates) {
-        localityDragOriginRef.current = {
-          family: "landmark",
-          id: landmark.id_landmark,
-          coordinates: landmarkCoordinates,
-          landmark,
-        };
-        setHoverInfo(null);
-        setLocalityDragging(true);
-        setLocalityMoveError(null);
-        selectLandmark(landmark);
-        return;
-      }
-
-      localityDragOriginRef.current = null;
-    }) as EventsKey;
-
-    const translateEndKey = translateInteraction.on("translateend", (event: unknown) => {
-      void handleLocalityTranslateEnd(event);
-    }) as EventsKey;
+    const translateEndKey = translateInteraction.on(
+      "translateend",
+      (event: unknown) => {
+        void handleLocalityTranslateEnd(event);
+      },
+    ) as EventsKey;
 
     const routeVertexTranslateStartKey = routeVertexTranslateInteraction.on(
       "translatestart",
@@ -1462,9 +1849,14 @@ export function EditorMapCanvas() {
           return;
         }
 
-        const routeVertex = getEditorRouteVertexFromFeature(feature as Feature<Geometry>);
+        const routeVertex = getEditorRouteVertexFromFeature(
+          feature as Feature<Geometry>,
+        );
 
-        if (!routeVertex || routeVertex.routeId !== selectedRouteIdRef.current) {
+        if (
+          !routeVertex ||
+          routeVertex.routeId !== selectedRouteIdRef.current
+        ) {
           return;
         }
 
@@ -1485,7 +1877,7 @@ export function EditorMapCanvas() {
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
 
-      if (editorToolRef.current === "create-route") {
+      if (canEditMapObjects && editorToolRef.current === "create-route") {
         const [x, y] = event.coordinate;
         setRouteDraft((draft) => {
           const nextDraft = draft ?? createEmptyRouteDraft();
@@ -1500,7 +1892,7 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (editorToolRef.current === "create-point") {
+      if (canEditMapObjects && editorToolRef.current === "create-point") {
         const [x, y] = event.coordinate;
         const caseFeature = map.forEachFeatureAtPixel(
           event.pixel,
@@ -1531,9 +1923,10 @@ export function EditorMapCanvas() {
 
       const currentRouteGeometryDraft = routeGeometryDraftRef.current;
       const currentRouteGeometryTool = routeGeometryToolRef.current;
-      const currentSelectedRouteVertexIndex = selectedRouteVertexIndexRef.current;
+      const currentSelectedRouteVertexIndex =
+        selectedRouteVertexIndexRef.current;
 
-      if (currentRouteGeometryDraft) {
+      if (canEditMapObjects && currentRouteGeometryDraft) {
         const vertexFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1544,7 +1937,8 @@ export function EditorMapCanvas() {
             return null;
           },
           {
-            layerFilter: (candidateLayer) => candidateLayer === routeVerticesLayer,
+            layerFilter: (candidateLayer) =>
+              candidateLayer === routeVerticesLayer,
             hitTolerance: 10,
           },
         );
@@ -1554,7 +1948,10 @@ export function EditorMapCanvas() {
             vertexFeature as Feature<Geometry>,
           );
 
-          if (routeVertex && routeVertex.routeId === currentRouteGeometryDraft.id_route) {
+          if (
+            routeVertex &&
+            routeVertex.routeId === currentRouteGeometryDraft.id_route
+          ) {
             setSelectedRouteVertexIndex(routeVertex.vertexIndex);
             setRouteGeometryTool("select-vertex");
             setRouteGeometryError(null);
@@ -1636,7 +2033,10 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (landmarksVisibleRef.current || localitiesVisibleRef.current) {
+      if (
+        canEditMapObjects &&
+        (landmarksVisibleRef.current || localitiesVisibleRef.current)
+      ) {
         const pointFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1653,16 +2053,22 @@ export function EditorMapCanvas() {
         );
 
         if (pointFeature) {
-          const family = getEditorPointFamilyFromFeature(pointFeature as Feature<Geometry>);
+          const family = getEditorPointFamilyFromFeature(
+            pointFeature as Feature<Geometry>,
+          );
           if (family === "landmark") {
-            const landmark = getEditorLandmarkFromPointFeature(pointFeature as Feature<Geometry>);
+            const landmark = getEditorLandmarkFromPointFeature(
+              pointFeature as Feature<Geometry>,
+            );
             if (landmark) {
               selectLandmark(landmark);
             }
             return;
           }
           if (family === "locality") {
-            const locality = getEditorLocalityFromPointFeature(pointFeature as Feature<Geometry>);
+            const locality = getEditorLocalityFromPointFeature(
+              pointFeature as Feature<Geometry>,
+            );
             if (locality) {
               selectLocality(locality);
             }
@@ -1671,7 +2077,7 @@ export function EditorMapCanvas() {
         }
       }
 
-      if (routesVisibleRef.current) {
+      if (canEditMapObjects && routesVisibleRef.current) {
         const routeFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1688,7 +2094,9 @@ export function EditorMapCanvas() {
         );
 
         if (routeFeature) {
-          const route = getEditorRouteFromFeature(routeFeature as Feature<Geometry>);
+          const route = getEditorRouteFromFeature(
+            routeFeature as Feature<Geometry>,
+          );
 
           if (route) {
             selectRoute(route);
@@ -1700,7 +2108,7 @@ export function EditorMapCanvas() {
       if (!casesVisibleRef.current) {
         handleCloseLocalitySelection();
         handleCloseRouteSelection();
-        setSelectedCaseId(null);
+        handleCaseSelectionChange(null, "replace");
         return;
       }
 
@@ -1721,30 +2129,47 @@ export function EditorMapCanvas() {
       if (!feature) {
         handleCloseLocalitySelection();
         handleCloseRouteSelection();
-        setSelectedCaseId(null);
+        handleCaseSelectionChange(null, "replace");
         return;
       }
 
       handleCloseLocalitySelection();
       handleCloseRouteSelection();
       const id = feature.getId();
-      setSelectedCaseId(typeof id === "string" ? id : null);
+      handleCaseSelectionChange(
+        typeof id === "string" ? id : null,
+        event.originalEvent.shiftKey ||
+          event.originalEvent.ctrlKey ||
+          event.originalEvent.metaKey
+          ? "toggle"
+          : "replace",
+      );
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
 
-    function getTooltipPosition(originalEvent: PointerEvent): { x: number; y: number } {
-      const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 0;
-      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 0;
+    function getTooltipPosition(originalEvent: PointerEvent): {
+      x: number;
+      y: number;
+    } {
+      const viewportWidth =
+        typeof window !== "undefined" ? window.innerWidth : 0;
+      const viewportHeight =
+        typeof window !== "undefined" ? window.innerHeight : 0;
       const preferredX = originalEvent.clientX + 18;
       const preferredY = originalEvent.clientY + 18;
       const tooltipWidth = 240;
       const tooltipHeight = 120;
 
       return {
-        x: viewportWidth > 0 ? Math.min(preferredX, viewportWidth - tooltipWidth) : preferredX,
+        x:
+          viewportWidth > 0
+            ? Math.min(preferredX, viewportWidth - tooltipWidth)
+            : preferredX,
         y:
-          viewportHeight > 0 ? Math.min(preferredY, viewportHeight - tooltipHeight) : preferredY,
+          viewportHeight > 0
+            ? Math.min(preferredY, viewportHeight - tooltipHeight)
+            : preferredY,
       };
     }
 
@@ -1764,19 +2189,23 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (editorToolRef.current === "create-route") {
+      if (canEditMapObjects && editorToolRef.current === "create-route") {
         target.style.cursor = "crosshair";
         setHoverInfo(null);
         return;
       }
 
-      if (routeGeometryDraftRef.current && routeGeometryToolRef.current !== "select-vertex") {
+      if (
+        canEditMapObjects &&
+        routeGeometryDraftRef.current &&
+        routeGeometryToolRef.current !== "select-vertex"
+      ) {
         target.style.cursor = "crosshair";
         setHoverInfo(null);
         return;
       }
 
-      if (routeGeometryDraftRef.current) {
+      if (canEditMapObjects && routeGeometryDraftRef.current) {
         const vertexFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1787,7 +2216,8 @@ export function EditorMapCanvas() {
             return null;
           },
           {
-            layerFilter: (candidateLayer) => candidateLayer === routeVerticesLayer,
+            layerFilter: (candidateLayer) =>
+              candidateLayer === routeVerticesLayer,
             hitTolerance: 10,
           },
         );
@@ -1812,7 +2242,10 @@ export function EditorMapCanvas() {
         return;
       }
 
-      if (landmarksVisibleRef.current || localitiesVisibleRef.current) {
+      if (
+        canEditMapObjects &&
+        (landmarksVisibleRef.current || localitiesVisibleRef.current)
+      ) {
         const pointFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1829,15 +2262,21 @@ export function EditorMapCanvas() {
         );
 
         if (pointFeature) {
-          const family = getEditorPointFamilyFromFeature(pointFeature as Feature<Geometry>);
+          const family = getEditorPointFamilyFromFeature(
+            pointFeature as Feature<Geometry>,
+          );
           if (family === "landmark") {
-            const landmark = getEditorLandmarkFromPointFeature(pointFeature as Feature<Geometry>);
+            const landmark = getEditorLandmarkFromPointFeature(
+              pointFeature as Feature<Geometry>,
+            );
             if (landmark) {
               const typeOption = referenceDataRef.current?.landmark_types.find(
                 (option) => option.value === landmark.type_key,
               );
               const category =
-                typeOption?.category ?? landmarkCategoryByTypeRef.current[landmark.type_key] ?? null;
+                typeOption?.category ??
+                landmarkCategoryByTypeRef.current[landmark.type_key] ??
+                null;
               target.style.cursor = "pointer";
               const position = getTooltipPosition(event.originalEvent);
               setHoverInfo({
@@ -1845,19 +2284,30 @@ export function EditorMapCanvas() {
                 y: position.y,
                 title: landmark.name,
                 rows: [
-                  { label: "Type", value: typeOption?.label ?? landmark.type_key },
-                  { label: "Categorie", value: getLandmarkCategoryLabel(category) },
+                  {
+                    label: "Type",
+                    value: typeOption?.label ?? landmark.type_key,
+                  },
+                  {
+                    label: "Categorie",
+                    value: getLandmarkCategoryLabel(category),
+                  },
                   { label: "Statut", value: landmark.status },
                   landmark.id_case_detected
                     ? { label: "Case", value: landmark.id_case_detected }
                     : null,
-                ].filter((row): row is { label: string; value: string } => row !== null),
+                ].filter(
+                  (row): row is { label: string; value: string } =>
+                    row !== null,
+                ),
               });
               return;
             }
           }
           if (family === "locality") {
-            const locality = getEditorLocalityFromPointFeature(pointFeature as Feature<Geometry>);
+            const locality = getEditorLocalityFromPointFeature(
+              pointFeature as Feature<Geometry>,
+            );
             if (locality) {
               target.style.cursor = "pointer";
               const position = getTooltipPosition(event.originalEvent);
@@ -1871,7 +2321,10 @@ export function EditorMapCanvas() {
                   locality.id_case_detected
                     ? { label: "Case", value: locality.id_case_detected }
                     : null,
-                ].filter((row): row is { label: string; value: string } => row !== null),
+                ].filter(
+                  (row): row is { label: string; value: string } =>
+                    row !== null,
+                ),
               });
               return;
             }
@@ -1879,7 +2332,7 @@ export function EditorMapCanvas() {
         }
       }
 
-      if (routesVisibleRef.current) {
+      if (canEditMapObjects && routesVisibleRef.current) {
         const routeFeature = map.forEachFeatureAtPixel(
           event.pixel,
           (candidate) => {
@@ -1896,7 +2349,9 @@ export function EditorMapCanvas() {
         );
 
         if (routeFeature) {
-          const route = getEditorRouteFromFeature(routeFeature as Feature<Geometry>);
+          const route = getEditorRouteFromFeature(
+            routeFeature as Feature<Geometry>,
+          );
 
           if (route) {
             target.style.cursor = "pointer";
@@ -1907,8 +2362,14 @@ export function EditorMapCanvas() {
               title: route.name,
               rows: [
                 { label: "Type", value: route.route_type },
-                { label: "Geometrie", value: getRouteGeometryLabel(route.geometry_mode) },
-                { label: "Style", value: getRouteStrokeStyleLabel(route.stroke_style) },
+                {
+                  label: "Geometrie",
+                  value: getRouteGeometryLabel(route.geometry_mode),
+                },
+                {
+                  label: "Style",
+                  value: getRouteStrokeStyleLabel(route.stroke_style),
+                },
                 { label: "Statut", value: route.status },
                 { label: "Points", value: String(route.points.length) },
               ],
@@ -1978,18 +2439,25 @@ export function EditorMapCanvas() {
       try {
         const [collection, publicCases] = await Promise.all([
           loadJsonData<StableCaseFeatureCollection>(CASES_DATA_URL),
-          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch((error) => {
-            console.error("Impossible de charger les styles publics des cases dans l'editeur.", error);
+          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(
+            (error) => {
+              console.error(
+                "Impossible de charger les styles publics des cases dans l'editeur.",
+                error,
+              );
 
-            return {
-              cases: [] as PublicCaseProperties[],
-              styles: createEmptyPublicMapStyles(),
-            };
-          }),
+              return {
+                cases: [] as PublicCaseProperties[],
+                styles: createEmptyPublicMapStyles(),
+              };
+            },
+          ),
         ]);
 
         if (!isStableCaseFeatureCollection(collection)) {
-          throw new Error("Le GeoJSON des cases ne respecte pas le contrat stable attendu.");
+          throw new Error(
+            "Le GeoJSON des cases ne respecte pas le contrat stable attendu.",
+          );
         }
 
         if (cancelled || !casesSourceRef.current || !mapRef.current) {
@@ -1997,12 +2465,35 @@ export function EditorMapCanvas() {
         }
 
         const features = readCaseFeatures(collection, cdtmProjection);
-        casePropertiesByIdRef.current = buildEditorCasePropertiesById(collection, publicCases.cases);
+        const nextStableCases = mergeStableCases(
+          getStableCasesFromCollection(collection).map((stableCase) => ({
+            ...stableCase,
+            registry_id_case: stableCase.registry_id_case ?? stableCase.id_case,
+          })),
+          publicCases.cases,
+        );
+        const nextCasePropertiesById = buildCasePropertiesById(nextStableCases);
+
+        casePropertiesByIdRef.current = nextCasePropertiesById;
         publicMapStylesRef.current = publicCases.styles;
 
         casesSourceRef.current.clear(true);
         casesSourceRef.current.addFeatures(features);
         casesLayerRef.current?.changed();
+        setStableCases(nextStableCases);
+        if (
+          selectedCaseIdsRef.current.size === 0 &&
+          activeCaseIdRef.current === null
+        ) {
+          const initialSelection = readInitialCaseSelection(
+            new Set(Object.keys(nextCasePropertiesById)),
+          );
+
+          if (initialSelection.selectedCaseIds.length > 0) {
+            setSelectedCaseIds(initialSelection.selectedCaseIds);
+            setActiveCaseId(initialSelection.activeCaseId);
+          }
+        }
         setCasesCount(features.length);
         fitCdtmCasesExtent(mapRef.current, 0);
       } catch (error) {
@@ -2013,7 +2504,9 @@ export function EditorMapCanvas() {
         console.error("Impossible de charger les cases dans l'editeur.", error);
         setCasesCount(0);
         setCasesError(
-          error instanceof Error ? error.message : "Chargement des cases impossible.",
+          error instanceof Error
+            ? error.message
+            : "Chargement des cases impossible.",
         );
       } finally {
         if (!cancelled) {
@@ -2027,7 +2520,9 @@ export function EditorMapCanvas() {
       setRoutesError(null);
 
       try {
-        const items = await fetchJson<EditorMapRoute[]>("/api/admin/editor/routes?limit=1000");
+        const items = await fetchJson<EditorMapRoute[]>(
+          "/api/admin/editor/routes?limit=1000",
+        );
 
         if (cancelled || !routesSourceRef.current) {
           return;
@@ -2040,9 +2535,16 @@ export function EditorMapCanvas() {
           return;
         }
 
-        console.error("Impossible de charger les routes dans l'editeur.", error);
+        console.error(
+          "Impossible de charger les routes dans l'editeur.",
+          error,
+        );
         setRoutesCount(0);
-        setRoutesError(error instanceof Error ? error.message : "Chargement des routes impossible.");
+        setRoutesError(
+          error instanceof Error
+            ? error.message
+            : "Chargement des routes impossible.",
+        );
       } finally {
         if (!cancelled) {
           setRoutesLoading(false);
@@ -2055,16 +2557,19 @@ export function EditorMapCanvas() {
       setLocalitiesError(null);
 
       try {
-        const items = await fetchJson<EditorMapLocality[]>("/api/admin/editor/localities?limit=1000");
+        const items = await fetchJson<EditorMapLocality[]>(
+          "/api/admin/editor/localities?limit=1000",
+        );
 
         if (cancelled || !pointsSourceRef.current) {
           return;
         }
-        const landmarkFeatures: EditorMapLandmark[] =
-          pointsSourceRef.current
-            .getFeatures()
-            .map((feature) => getEditorLandmarkFromPointFeature(feature as Feature<Geometry>))
-            .filter((item): item is EditorMapLandmark => item !== null);
+        const landmarkFeatures: EditorMapLandmark[] = pointsSourceRef.current
+          .getFeatures()
+          .map((feature) =>
+            getEditorLandmarkFromPointFeature(feature as Feature<Geometry>),
+          )
+          .filter((item): item is EditorMapLandmark => item !== null);
         replaceEditorPointFeatures(pointsSourceRef.current, {
           localities: items,
           landmarks: landmarkFeatures,
@@ -2076,11 +2581,16 @@ export function EditorMapCanvas() {
           return;
         }
 
-        console.error("Impossible de charger les localites dans l'editeur.", error);
+        console.error(
+          "Impossible de charger les localites dans l'editeur.",
+          error,
+        );
         setLocalities([]);
         setLocalitiesCount(0);
         setLocalitiesError(
-          error instanceof Error ? error.message : "Chargement des localites impossible.",
+          error instanceof Error
+            ? error.message
+            : "Chargement des localites impossible.",
         );
       } finally {
         if (!cancelled) {
@@ -2094,16 +2604,19 @@ export function EditorMapCanvas() {
       setLandmarksError(null);
 
       try {
-        const items = await fetchJson<EditorMapLandmark[]>("/api/admin/editor/landmarks?limit=1000");
+        const items = await fetchJson<EditorMapLandmark[]>(
+          "/api/admin/editor/landmarks?limit=1000",
+        );
 
         if (cancelled || !pointsSourceRef.current) {
           return;
         }
-        const localityFeatures: EditorMapLocality[] =
-          pointsSourceRef.current
-            .getFeatures()
-            .map((feature) => getEditorLocalityFromPointFeature(feature as Feature<Geometry>))
-            .filter((item): item is EditorMapLocality => item !== null);
+        const localityFeatures: EditorMapLocality[] = pointsSourceRef.current
+          .getFeatures()
+          .map((feature) =>
+            getEditorLocalityFromPointFeature(feature as Feature<Geometry>),
+          )
+          .filter((item): item is EditorMapLocality => item !== null);
         replaceEditorPointFeatures(pointsSourceRef.current, {
           localities: localityFeatures,
           landmarks: items,
@@ -2114,10 +2627,15 @@ export function EditorMapCanvas() {
           return;
         }
 
-        console.error("Impossible de charger les landmarks dans l'editeur.", error);
+        console.error(
+          "Impossible de charger les landmarks dans l'editeur.",
+          error,
+        );
         setLandmarksCount(0);
         setLandmarksError(
-          error instanceof Error ? error.message : "Chargement des landmarks impossible.",
+          error instanceof Error
+            ? error.message
+            : "Chargement des landmarks impossible.",
         );
       } finally {
         if (!cancelled) {
@@ -2128,26 +2646,35 @@ export function EditorMapCanvas() {
 
     async function loadReferenceData() {
       try {
-        const data = await fetchJson<EditorReferenceData>("/api/admin/editor/reference-data");
+        const data = await fetchJson<EditorReferenceData>(
+          "/api/admin/editor/reference-data",
+        );
 
         if (!cancelled) {
           setReferenceData(data);
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Impossible de charger les referentiels editeur.", error);
+          console.error(
+            "Impossible de charger les referentiels editeur.",
+            error,
+          );
           setReferenceError(
-            error instanceof Error ? error.message : "Chargement des referentiels impossible.",
+            error instanceof Error
+              ? error.message
+              : "Chargement des referentiels impossible.",
           );
         }
       }
     }
 
     void loadCases();
-    void loadRoutes();
-    void loadLocalities();
-    void loadLandmarks();
-    void loadReferenceData();
+    if (canEditMapObjects) {
+      void loadRoutes();
+      void loadLocalities();
+      void loadLandmarks();
+      void loadReferenceData();
+    }
 
     return () => {
       cancelled = true;
@@ -2177,6 +2704,8 @@ export function EditorMapCanvas() {
       mapRef.current = null;
     };
   }, [
+    canEditMapObjects,
+    handleCaseSelectionChange,
     handleCloseLocalitySelection,
     handleCloseRouteSelection,
     handleLocalityTranslateEnd,
@@ -2184,6 +2713,253 @@ export function EditorMapCanvas() {
     selectLandmark,
     selectLocality,
     selectRoute,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      if (selectedCaseIds.length === 0) {
+        resetSingleAdminEditor(null, null);
+        resetBulkAdminEditor([]);
+        return;
+      }
+
+      if (isCaseMultiSelection) {
+        if (selectedAdminRecords.length === selectedCaseIds.length) {
+          resetBulkAdminEditor(selectedAdminRecords);
+        }
+        return;
+      }
+
+      resetSingleAdminEditor(activeAdminRecord, activeCase);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeAdminRecord,
+    activeCase,
+    isCaseMultiSelection,
+    resetBulkAdminEditor,
+    resetSingleAdminEditor,
+    selectedAdminRecords,
+    selectedCaseIdsKey,
+    selectedCaseIds.length,
+  ]);
+
+  useEffect(() => {
+    if (selectedCaseIds.length === 0) {
+      return;
+    }
+
+    const idsToLoad = selectedCaseIds.filter(
+      (idCase) => !adminRecordsById[idCase],
+    );
+
+    if (idsToLoad.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAdminCases() {
+      setAdminLoading(true);
+      setAdminError(null);
+
+      try {
+        const records = await fetchAdminRecords(idsToLoad);
+
+        if (!cancelled) {
+          setAdminRecordsById((current) => {
+            const next = { ...current };
+
+            for (const record of records) {
+              next[record.id_case] = record;
+            }
+
+            return next;
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAdminError(
+            error instanceof Error
+              ? error.message
+              : "Chargement admin des cases impossible.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminLoading(false);
+        }
+      }
+    }
+
+    void loadAdminCases();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adminRecordsById, fetchAdminRecords, selectedCaseIds]);
+
+  const handleSingleAdminFieldChange = useCallback(
+    (
+      section: "public" | "terrain" | "control",
+      field: string,
+      value: string,
+    ) => {
+      setSingleDraft((current) =>
+        updateSingleAdminDraftField(current, section, field, value),
+      );
+    },
+    [],
+  );
+
+  const handleDynamicAdminFieldChange = useCallback(
+    (tableKey: string, field: string, value: string) => {
+      setSingleDraft((current) =>
+        updateSingleDynamicAdminDraftField(current, tableKey, field, value),
+      );
+    },
+    [],
+  );
+
+  const handleSingleBonusContextuelsChange = useCallback(
+    (bonusSlugs: string[]) => {
+      setSingleDraft((current) =>
+        updateSingleBonusContextuelsDraft(current, bonusSlugs),
+      );
+    },
+    [],
+  );
+
+  const handleBulkAdminFieldChange = useCallback(
+    (section: keyof AdminBulkEditDraft, field: string, value: string) => {
+      setBulkDraft((current) =>
+        updateBulkAdminDraftField(current, section, field, value),
+      );
+    },
+    [],
+  );
+
+  const handleBulkBonusContextuelsChange = useCallback(
+    (bonusSlugs: string[]) => {
+      setBulkDraft((current) =>
+        updateBulkBonusContextuelsDraft(current, bonusSlugs),
+      );
+    },
+    [],
+  );
+
+  const handleCancelCaseEdit = useCallback(() => {
+    if (isCaseMultiSelection) {
+      resetBulkAdminEditor(selectedAdminRecords);
+    } else {
+      resetSingleAdminEditor(activeAdminRecord, activeCase);
+    }
+
+    setAdminError(null);
+  }, [
+    activeAdminRecord,
+    activeCase,
+    isCaseMultiSelection,
+    resetBulkAdminEditor,
+    resetSingleAdminEditor,
+    selectedAdminRecords,
+  ]);
+
+  const handleAdminSave = useCallback(async () => {
+    if (selectedCaseIds.length === 0) {
+      return;
+    }
+
+    setAdminSaving(true);
+    setAdminError(null);
+
+    try {
+      if (isCaseMultiSelection) {
+        const patch = buildBulkPatch(bulkDraft);
+
+        await fetchJson<AdminBulkUpdateResult>("/api/admin/cases/bulk", {
+          method: "PATCH",
+          body: JSON.stringify({
+            id_cases: selectedCaseIds,
+            patch,
+          }),
+        });
+
+        const refreshedRecords = await refreshAdminRecords(selectedCaseIds);
+
+        setStableCases((current) => {
+          const nextStableCases = mergePersistedRecordsIntoStableCases(
+            current,
+            refreshedRecords,
+          );
+          casePropertiesByIdRef.current =
+            buildCasePropertiesById(nextStableCases);
+          casesLayerRef.current?.changed();
+          return nextStableCases;
+        });
+        resetBulkAdminEditor(refreshedRecords);
+      } else {
+        const currentCaseId = activeCaseId;
+
+        if (!currentCaseId) {
+          return;
+        }
+
+        const record = await fetchJson<AdminCaseRecord>(
+          `/api/admin/cases/${currentCaseId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify(singleDraft),
+          },
+        );
+
+        setAdminRecordsById((current) => ({
+          ...current,
+          [record.id_case]: record,
+        }));
+        setStableCases((current) => {
+          const nextStableCases = mergePersistedRecordsIntoStableCases(
+            current,
+            [record],
+          );
+          casePropertiesByIdRef.current =
+            buildCasePropertiesById(nextStableCases);
+          casesLayerRef.current?.changed();
+          return nextStableCases;
+        });
+        resetSingleAdminEditor(
+          record,
+          activeCase
+            ? applyPersistedRecordToStableCase(activeCase, record)
+            : record.public,
+        );
+      }
+    } catch (error) {
+      setAdminError(
+        error instanceof Error ? error.message : "Enregistrement impossible.",
+      );
+    } finally {
+      setAdminSaving(false);
+    }
+  }, [
+    activeCase,
+    activeCaseId,
+    bulkDraft,
+    isCaseMultiSelection,
+    refreshAdminRecords,
+    resetBulkAdminEditor,
+    resetSingleAdminEditor,
+    selectedCaseIds,
+    singleDraft,
   ]);
 
   async function handleCreatePoint() {
@@ -2233,10 +3009,13 @@ export function EditorMapCanvas() {
           description: pointDraft.description.trim() || null,
         };
 
-        const created = await fetchJson<EditorMapLocality>("/api/admin/editor/localities", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        const created = await fetchJson<EditorMapLocality>(
+          "/api/admin/editor/localities",
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+        );
 
         if (pointsSourceRef.current) {
           upsertEditorPointFeature(pointsSourceRef.current, {
@@ -2251,7 +3030,10 @@ export function EditorMapCanvas() {
       } else {
         const payload: EditorMapLandmarkInput = {
           name: trimmedName,
-          type_key: pointDraft.family === "unique" ? "lieu_unique" : pointDraft.type_key,
+          type_key:
+            pointDraft.family === "unique"
+              ? "lieu_unique"
+              : pointDraft.type_key,
           icon_key: pointDraft.family === "unique" ? pointDraft.icon_key : null,
           x: pointDraft.x,
           y: pointDraft.y,
@@ -2264,10 +3046,13 @@ export function EditorMapCanvas() {
           description: pointDraft.description.trim() || null,
         };
 
-        const created = await fetchJson<EditorMapLandmark>("/api/admin/editor/landmarks", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        const created = await fetchJson<EditorMapLandmark>(
+          "/api/admin/editor/landmarks",
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+        );
 
         if (pointsSourceRef.current) {
           upsertEditorPointFeature(pointsSourceRef.current, {
@@ -2284,7 +3069,9 @@ export function EditorMapCanvas() {
       setEditorTool("select");
     } catch (error) {
       setLocalitySaveError(
-        error instanceof Error ? error.message : "Creation du point impossible.",
+        error instanceof Error
+          ? error.message
+          : "Creation du point impossible.",
       );
     } finally {
       setLocalitySaving(false);
@@ -2315,7 +3102,8 @@ export function EditorMapCanvas() {
         status: localityEditDraft.status,
         depends_on_locality_id: localityEditDraft.depends_on_locality_id,
         force_slot_override: localityEditDraft.force_slot_override,
-        slot_override_reason: localityEditDraft.slot_override_reason.trim() || null,
+        slot_override_reason:
+          localityEditDraft.slot_override_reason.trim() || null,
         description:
           localityEditDraft.description.trim().length > 0
             ? localityEditDraft.description.trim()
@@ -2340,14 +3128,18 @@ export function EditorMapCanvas() {
       const nextDraft = createLocalityEditDraft(updated);
 
       setLocalities((items) =>
-        items.map((item) => (item.id_locality === updated.id_locality ? updated : item)),
+        items.map((item) =>
+          item.id_locality === updated.id_locality ? updated : item,
+        ),
       );
       setSelectedLocality(updated);
       setLocalityEditDraft(nextDraft);
       setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
     } catch (error) {
       setLocalityEditError(
-        error instanceof Error ? error.message : "Mise a jour de localite impossible.",
+        error instanceof Error
+          ? error.message
+          : "Mise a jour de localite impossible.",
       );
     } finally {
       setLocalityEditSaving(false);
@@ -2362,7 +3154,8 @@ export function EditorMapCanvas() {
     const name = landmarkEditDraft.name.trim();
     const typeKey = landmarkEditDraft.type_key.trim();
     const typeCategory =
-      referenceData?.landmark_types.find((option) => option.value === typeKey)?.category ?? null;
+      referenceData?.landmark_types.find((option) => option.value === typeKey)
+        ?.category ?? null;
 
     if (!name || !typeKey) {
       setLocalityEditError("Le nom et le type sont obligatoires.");
@@ -2388,7 +3181,8 @@ export function EditorMapCanvas() {
         icon_key: typeCategory === "unique" ? landmarkEditDraft.icon_key : null,
         status: landmarkEditDraft.status,
         force_slot_override: landmarkEditDraft.force_slot_override,
-        slot_override_reason: landmarkEditDraft.slot_override_reason.trim() || null,
+        slot_override_reason:
+          landmarkEditDraft.slot_override_reason.trim() || null,
         description:
           landmarkEditDraft.description.trim().length > 0
             ? landmarkEditDraft.description.trim()
@@ -2417,7 +3211,9 @@ export function EditorMapCanvas() {
       setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
     } catch (error) {
       setLocalityEditError(
-        error instanceof Error ? error.message : "Mise a jour de landmark impossible.",
+        error instanceof Error
+          ? error.message
+          : "Mise a jour de landmark impossible.",
       );
     } finally {
       setLocalityEditSaving(false);
@@ -2477,10 +3273,13 @@ export function EditorMapCanvas() {
         description: routeDraft.description.trim() || null,
       };
 
-      const created = await fetchJson<EditorMapRoute>("/api/admin/editor/routes", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const created = await fetchJson<EditorMapRoute>(
+        "/api/admin/editor/routes",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (routesSourceRef.current) {
         upsertEditorRouteFeature(routesSourceRef.current, created);
@@ -2493,7 +3292,11 @@ export function EditorMapCanvas() {
         clearEditorRoutePreview(routePreviewSourceRef.current);
       }
     } catch (error) {
-      setRouteSaveError(error instanceof Error ? error.message : "Creation de route impossible.");
+      setRouteSaveError(
+        error instanceof Error
+          ? error.message
+          : "Creation de route impossible.",
+      );
     } finally {
       setRouteSaving(false);
     }
@@ -2555,14 +3358,22 @@ export function EditorMapCanvas() {
       setRouteEditDraft(nextDraft);
       setRouteEditSnapshot(getRouteEditSnapshot(nextDraft));
     } catch (error) {
-      setRouteEditError(error instanceof Error ? error.message : "Mise a jour de route impossible.");
+      setRouteEditError(
+        error instanceof Error
+          ? error.message
+          : "Mise a jour de route impossible.",
+      );
     } finally {
       setRouteEditSaving(false);
     }
   }
 
   function handleDeleteSelectedRouteVertex() {
-    if (!routeGeometryDraft || selectedRouteVertexIndex === null || routeGeometryDraft.points.length <= 2) {
+    if (
+      !routeGeometryDraft ||
+      selectedRouteVertexIndex === null ||
+      routeGeometryDraft.points.length <= 2
+    ) {
       return;
     }
 
@@ -2643,7 +3454,9 @@ export function EditorMapCanvas() {
       setRouteGeometryTool("select-vertex");
     } catch (error) {
       setRouteGeometryError(
-        error instanceof Error ? error.message : "Mise a jour de geometrie impossible.",
+        error instanceof Error
+          ? error.message
+          : "Mise a jour de geometrie impossible.",
       );
     } finally {
       setRouteGeometrySaving(false);
@@ -2652,8 +3465,9 @@ export function EditorMapCanvas() {
 
   const selectedLandmarkTypeOption =
     selectedLandmark && landmarkEditDraft
-      ? referenceData?.landmark_types.find((option) => option.value === landmarkEditDraft.type_key) ??
-        null
+      ? (referenceData?.landmark_types.find(
+          (option) => option.value === landmarkEditDraft.type_key,
+        ) ?? null)
       : null;
   const selectedLandmarkCategory = selectedLandmarkTypeOption?.category ?? null;
   const pointDraftTypeOption =
@@ -2672,11 +3486,15 @@ export function EditorMapCanvas() {
           idCase: pointDraft.id_case_detected,
         })
       : [];
-  const localityEditTypeOption =
-    localityEditDraft
-      ? getReferenceOption(referenceData?.locality_types, localityEditDraft.type_key)
-      : null;
-  const localityEditSlotRequirement = formatSlotRequirement(localityEditTypeOption);
+  const localityEditTypeOption = localityEditDraft
+    ? getReferenceOption(
+        referenceData?.locality_types,
+        localityEditDraft.type_key,
+      )
+    : null;
+  const localityEditSlotRequirement = formatSlotRequirement(
+    localityEditTypeOption,
+  );
   const localityEditUpgradeOptions =
     selectedLocality && localityEditDraft
       ? getLocalityUpgradeDependencyOptions({
@@ -2687,7 +3505,9 @@ export function EditorMapCanvas() {
           excludedLocalityId: selectedLocality.id_locality,
         })
       : [];
-  const landmarkEditSlotRequirement = formatSlotRequirement(selectedLandmarkTypeOption);
+  const landmarkEditSlotRequirement = formatSlotRequirement(
+    selectedLandmarkTypeOption,
+  );
   const panelTitle = routeDraft
     ? "Nouvelle route"
     : pointDraft
@@ -2698,7 +3518,9 @@ export function EditorMapCanvas() {
           ? "Localite selectionnee"
           : selectedLandmark
             ? "Landmark selectionne"
-            : "Editeur";
+            : selectedCaseIds.length > 0
+              ? "Case selectionnee"
+              : "Editeur";
   const mapStatusMessages = [
     localityDragging ? "Deplacement de point en cours..." : null,
     localityMoveSaving ? "Sauvegarde du deplacement..." : null,
@@ -2745,130 +3567,158 @@ export function EditorMapCanvas() {
                     >
                       {casesVisible ? "Cases visibles" : "Cases masquees"}
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={localitiesVisible ? "secondary" : "outline"}
-                      className="justify-start"
-                      onClick={() =>
-                        setLocalitiesVisible((visible) => {
-                          if (visible) {
-                            setHoverInfo(null);
-                          }
+                    {canEditMapObjects ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={localitiesVisible ? "secondary" : "outline"}
+                          className="justify-start"
+                          onClick={() =>
+                            setLocalitiesVisible((visible) => {
+                              if (visible) {
+                                setHoverInfo(null);
+                              }
 
-                          return !visible;
-                        })
-                      }
-                    >
-                      {localitiesVisible ? "Localites visibles" : "Localites masquees"}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={landmarksVisible ? "secondary" : "outline"}
-                      className="justify-start"
-                      onClick={() =>
-                        setLandmarksVisible((visible) => {
-                          if (visible) {
-                            setHoverInfo(null);
+                              return !visible;
+                            })
                           }
+                        >
+                          {localitiesVisible
+                            ? "Localites visibles"
+                            : "Localites masquees"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={landmarksVisible ? "secondary" : "outline"}
+                          className="justify-start"
+                          onClick={() =>
+                            setLandmarksVisible((visible) => {
+                              if (visible) {
+                                setHoverInfo(null);
+                              }
 
-                          return !visible;
-                        })
-                      }
-                    >
-                      {landmarksVisible ? "Landmarks visibles" : "Landmarks masques"}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={routesVisible ? "secondary" : "outline"}
-                      className="justify-start"
-                      onClick={() =>
-                        setRoutesVisible((visible) => {
-                          if (visible) {
-                            setHoverInfo(null);
+                              return !visible;
+                            })
                           }
+                        >
+                          {landmarksVisible
+                            ? "Landmarks visibles"
+                            : "Landmarks masques"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={routesVisible ? "secondary" : "outline"}
+                          className="justify-start"
+                          onClick={() =>
+                            setRoutesVisible((visible) => {
+                              if (visible) {
+                                setHoverInfo(null);
+                              }
 
-                          return !visible;
-                        })
-                      }
-                    >
-                      {routesVisible ? "Routes visibles" : "Routes masquees"}
-                    </Button>
+                              return !visible;
+                            })
+                          }
+                        >
+                          {routesVisible
+                            ? "Routes visibles"
+                            : "Routes masquees"}
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </details>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  setLocalityDisplayMode((mode) => (mode === "icons" ? "points" : "icons"))
-                }
-              >
-                {localityDisplayMode === "icons" ? "Icones" : "Points"}
-              </Button>
+              {canEditMapObjects ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setLocalityDisplayMode((mode) =>
+                      mode === "icons" ? "points" : "icons",
+                    )
+                  }
+                >
+                  {localityDisplayMode === "icons" ? "Icones" : "Points"}
+                </Button>
+              ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={editorTool === "create-point" ? "secondary" : "outline"}
-                disabled={
-                  !referenceData ||
-                  (referenceData.locality_types.length === 0 &&
-                    referenceData.landmark_types.length === 0)
-                }
-                onClick={() => {
-                  if (handleToolChangeBlockedByRouteGeometry()) {
-                    return;
+            {canEditMapObjects ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={
+                    editorTool === "create-point" ? "secondary" : "outline"
                   }
-                  handleCloseLocalitySelection();
-                  handleCloseRouteSelection();
-                  setRouteDraft(null);
-                  setRouteSaveError(null);
-                  if (routePreviewSourceRef.current) {
-                    clearEditorRoutePreview(routePreviewSourceRef.current);
+                  disabled={
+                    !referenceData ||
+                    (referenceData.locality_types.length === 0 &&
+                      referenceData.landmark_types.length === 0)
                   }
-                  setEditorTool((tool) => (tool === "create-point" ? "select" : "create-point"));
-                  setPointDraft(null);
-                  setLocalitySaveError(null);
-                }}
-              >
-                {editorTool === "create-point" ? "Annuler point" : "Creer un point"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={editorTool === "create-route" ? "secondary" : "outline"}
-                onClick={() => {
-                  if (handleToolChangeBlockedByRouteGeometry()) {
-                    return;
-                  }
-                  handleCloseLocalitySelection();
-                  handleCloseRouteSelection();
-                  setPointDraft(null);
-                  setLocalitySaveError(null);
-                  setEditorTool((tool) => {
-                    if (tool === "create-route") {
-                      setRouteDraft(null);
-                      setRouteSaveError(null);
-                      if (routePreviewSourceRef.current) {
-                        clearEditorRoutePreview(routePreviewSourceRef.current);
-                      }
-                      return "select";
+                  onClick={() => {
+                    if (handleToolChangeBlockedByRouteGeometry()) {
+                      return;
                     }
-
-                    setRouteDraft(createEmptyRouteDraft());
+                    handleCloseLocalitySelection();
+                    handleCloseRouteSelection();
+                    setRouteDraft(null);
                     setRouteSaveError(null);
-                    return "create-route";
-                  });
-                }}
-              >
-                {editorTool === "create-route" ? "Annuler route" : "Creer une route"}
-              </Button>
-            </div>
+                    if (routePreviewSourceRef.current) {
+                      clearEditorRoutePreview(routePreviewSourceRef.current);
+                    }
+                    setEditorTool((tool) =>
+                      tool === "create-point" ? "select" : "create-point",
+                    );
+                    setPointDraft(null);
+                    setLocalitySaveError(null);
+                  }}
+                >
+                  {editorTool === "create-point"
+                    ? "Annuler point"
+                    : "Creer un point"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={
+                    editorTool === "create-route" ? "secondary" : "outline"
+                  }
+                  onClick={() => {
+                    if (handleToolChangeBlockedByRouteGeometry()) {
+                      return;
+                    }
+                    handleCloseLocalitySelection();
+                    handleCloseRouteSelection();
+                    setPointDraft(null);
+                    setLocalitySaveError(null);
+                    setEditorTool((tool) => {
+                      if (tool === "create-route") {
+                        setRouteDraft(null);
+                        setRouteSaveError(null);
+                        if (routePreviewSourceRef.current) {
+                          clearEditorRoutePreview(
+                            routePreviewSourceRef.current,
+                          );
+                        }
+                        return "select";
+                      }
+
+                      setRouteDraft(createEmptyRouteDraft());
+                      setRouteSaveError(null);
+                      return "create-route";
+                    });
+                  }}
+                >
+                  {editorTool === "create-route"
+                    ? "Annuler route"
+                    : "Creer une route"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
         {mapStatusMessages.length > 0 || panelErrors.length > 0 ? (
@@ -2898,15 +3748,29 @@ export function EditorMapCanvas() {
             Enregistrez ou annulez les modifications avant de deplacer le point.
           </p>
         ) : null}
-        {selectedCaseId && !routeDraft && !pointDraft && !selectedRoute && !selectedLocality && !selectedLandmark ? (
+        {selectedCaseIds.length > 0 &&
+        !routeDraft &&
+        !pointDraft &&
+        !selectedRoute &&
+        !selectedLocality &&
+        !selectedLandmark ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="mt-3"
-            onClick={() => setSelectedCaseId(null)}
+            onClick={() => {
+              if (
+                confirmDiscardCaseChanges(
+                  "Deselectionner abandonnera le brouillon de case non enregistre. Continuer ?",
+                )
+              ) {
+                clearCaseSelection();
+              }
+            }}
           >
-            Deselectionner la case
+            Deselectionner{" "}
+            {selectedCaseIds.length > 1 ? "les cases" : "la case"}
           </Button>
         ) : null}
         {panelErrors.length > 0 ? (
@@ -2922,798 +3786,676 @@ export function EditorMapCanvas() {
         !pointDraft &&
         !selectedRoute &&
         !selectedLocality &&
-        !selectedLandmark ? (
+        !selectedLandmark &&
+        selectedCaseIds.length > 0 ? (
+          <div className="mt-4">
+            <CaseAdminEditor
+              activeCase={activeCase}
+              selectedCaseIds={selectedCaseIds}
+              activeAdminRecord={activeAdminRecord}
+              selectedAdminRecords={selectedAdminRecords}
+              singleDraft={singleDraft}
+              bulkDraft={bulkDraft}
+              adminLoading={adminLoading}
+              adminSaving={adminSaving}
+              adminError={adminError}
+              adminDirty={caseAdminDirty}
+              onSingleFieldChange={handleSingleAdminFieldChange}
+              onSingleBonusContextuelsChange={
+                handleSingleBonusContextuelsChange
+              }
+              onDynamicFieldChange={handleDynamicAdminFieldChange}
+              onBulkFieldChange={handleBulkAdminFieldChange}
+              onBulkBonusContextuelsChange={handleBulkBonusContextuelsChange}
+              onCancelEdit={handleCancelCaseEdit}
+              onSave={handleAdminSave}
+            />
+          </div>
+        ) : null}
+        {!routeDraft &&
+        !pointDraft &&
+        !selectedRoute &&
+        !selectedLocality &&
+        !selectedLandmark &&
+        selectedCaseIds.length === 0 ? (
           <div className="mt-4 rounded-[22px] border border-dashed border-border/70 bg-background/35 px-4 py-4">
             <p className="text-sm text-muted-foreground">
-              Utilisez la toolbar pour afficher les couches, creer un point ou une route, puis
-              cliquez sur la carte pour selectionner un objet.
+              Cliquez sur une case pour la modifier. Les outils de localites,
+              landmarks et routes sont disponibles pour les administrateurs
+              techniques.
             </p>
           </div>
         ) : null}
         {routeDraft ? (
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSaveRouteCreate();
-              }}
-            >
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Nom</span>
-                <input
-                  value={routeDraft.name}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft ? { ...draft, name: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Type technique</span>
-                <input
-                  value={routeDraft.route_type}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft ? { ...draft, route_type: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Geometrie</span>
-                <select
-                  value={routeDraft.geometry_mode}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            geometry_mode: event.target.value as RouteCreateDraft["geometry_mode"],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="curved">Courbe</option>
-                  <option value="straight">Droite</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Style</span>
-                <select
-                  value={routeDraft.stroke_style}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            stroke_style: event.target.value as RouteCreateDraft["stroke_style"],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="solid">Plein</option>
-                  <option value="dashed">Tirets</option>
-                  <option value="dotted">Points</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Epaisseur</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={routeDraft.stroke_width}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            stroke_width: Number.parseInt(event.target.value || "3", 10),
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Couleur optionnelle</span>
-                <input
-                  placeholder="#ffffff"
-                  value={routeDraft.stroke_color}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft ? { ...draft, stroke_color: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              {!routeColorValid ? (
-                <p className="text-xs text-destructive">
-                  La couleur doit etre vide, `#rgb` ou `#rrggbb`.
-                </p>
-              ) : null}
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Description</span>
-                <textarea
-                  value={routeDraft.description}
-                  onChange={(event) =>
-                    setRouteDraft((draft) =>
-                      draft ? { ...draft, description: event.target.value } : draft,
-                    )
-                  }
-                  rows={3}
-                  className="w-full rounded-2xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                />
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {routeDraft.points.length} point{routeDraft.points.length > 1 ? "s" : ""}
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveRouteCreate();
+            }}
+          >
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Nom</span>
+              <input
+                value={routeDraft.name}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft ? { ...draft, name: event.target.value } : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Type technique</span>
+              <input
+                value={routeDraft.route_type}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? { ...draft, route_type: event.target.value }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Geometrie</span>
+              <select
+                value={routeDraft.geometry_mode}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          geometry_mode: event.target
+                            .value as RouteCreateDraft["geometry_mode"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="curved">Courbe</option>
+                <option value="straight">Droite</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Style</span>
+              <select
+                value={routeDraft.stroke_style}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          stroke_style: event.target
+                            .value as RouteCreateDraft["stroke_style"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="solid">Plein</option>
+                <option value="dashed">Tirets</option>
+                <option value="dotted">Points</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Epaisseur</span>
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={routeDraft.stroke_width}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          stroke_width: Number.parseInt(
+                            event.target.value || "3",
+                            10,
+                          ),
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Couleur optionnelle</span>
+              <input
+                placeholder="#ffffff"
+                value={routeDraft.stroke_color}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? { ...draft, stroke_color: event.target.value }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            {!routeColorValid ? (
+              <p className="text-xs text-destructive">
+                La couleur doit etre vide, `#rgb` ou `#rrggbb`.
               </p>
-              {routeSaveError ? (
-                <p className="text-xs text-destructive">{routeSaveError}</p>
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Description</span>
+              <textarea
+                value={routeDraft.description}
+                onChange={(event) =>
+                  setRouteDraft((draft) =>
+                    draft
+                      ? { ...draft, description: event.target.value }
+                      : draft,
+                  )
+                }
+                rows={3}
+                className="w-full rounded-2xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+              />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {routeDraft.points.length} point
+              {routeDraft.points.length > 1 ? "s" : ""}
+            </p>
+            {routeSaveError ? (
+              <p className="text-xs text-destructive">{routeSaveError}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                disabled={
+                  routeSaving ||
+                  routeDraft.name.trim().length === 0 ||
+                  routeDraft.route_type.trim().length === 0 ||
+                  routeDraft.points.length < 2 ||
+                  !routeColorValid
+                }
+              >
+                {routeSaving ? "Sauvegarde..." : "Terminer"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePopLastRoutePoint}
+                disabled={routeSaving || routeDraft.points.length === 0}
+              >
+                Retirer le dernier point
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClearRouteTrace}
+                disabled={routeSaving || routeDraft.points.length === 0}
+              >
+                Vider le trace
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleCancelRouteCreate}
+                disabled={routeSaving}
+              >
+                Annuler
+              </Button>
+            </div>
+          </form>
+        ) : null}
+        {selectedRoute && routeEditDraft ? (
+          <form
+            className="mt-4 space-y-3 border-t border-border/70 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveRouteEdit();
+            }}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {selectedRoute.name}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {routeGeometryDraft?.points.length ?? selectedRoute.points.length}{" "}
+              point
+              {(routeGeometryDraft?.points.length ??
+                selectedRoute.points.length) > 1
+                ? "s"
+                : ""}{" "}
+              de controle
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={routeGeometryDraft ? "secondary" : "outline"}
+                size="sm"
+                disabled={routeGeometrySaving || routeSaving}
+                onClick={() => {
+                  if (routeGeometryDraft) {
+                    handleCloseRouteGeometryEdit();
+                    return;
+                  }
+                  handleEnterRouteGeometryEdit();
+                }}
+              >
+                {routeGeometryDraft
+                  ? "Fermer l'edition geometrique"
+                  : "Editer la geometrie"}
+              </Button>
+              {routeGeometryDraft ? (
+                <>
+                  <Button
+                    type="button"
+                    variant={
+                      routeGeometryTool === "prepend-vertex"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    size="sm"
+                    disabled={routeGeometrySaving}
+                    onClick={() => {
+                      setRouteGeometryTool("prepend-vertex");
+                      setRouteGeometryError(null);
+                    }}
+                  >
+                    Ajouter un sommet au debut
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      routeGeometryTool === "append-vertex"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    size="sm"
+                    disabled={routeGeometrySaving}
+                    onClick={() => {
+                      setRouteGeometryTool("append-vertex");
+                      setRouteGeometryError(null);
+                    }}
+                  >
+                    Ajouter un sommet a la fin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      routeGeometryTool === "insert-before-vertex"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    size="sm"
+                    disabled={
+                      routeGeometrySaving || selectedRouteVertexIndex === null
+                    }
+                    onClick={() => {
+                      setRouteGeometryTool("insert-before-vertex");
+                      setRouteGeometryError(null);
+                    }}
+                  >
+                    Inserer avant ce sommet
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      routeGeometryTool === "insert-after-vertex"
+                        ? "secondary"
+                        : "outline"
+                    }
+                    size="sm"
+                    disabled={
+                      routeGeometrySaving || selectedRouteVertexIndex === null
+                    }
+                    onClick={() => {
+                      setRouteGeometryTool("insert-after-vertex");
+                      setRouteGeometryError(null);
+                    }}
+                  >
+                    Inserer apres ce sommet
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      routeGeometrySaving ||
+                      selectedRouteVertexIndex === null ||
+                      routeGeometryDraft.points.length <= 2
+                    }
+                    onClick={handleDeleteSelectedRouteVertex}
+                  >
+                    Supprimer le sommet
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            {routeGeometryDraft ? (
+              <div className="space-y-2 rounded-2xl border border-border/70 bg-background/60 px-3 py-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedRouteVertexIndex !== null
+                    ? `Sommet selectionne : ${selectedRouteVertexIndex + 1} / ${routeGeometryDraft.points.length}`
+                    : `${routeGeometryDraft.points.length} sommets visibles`}
+                </p>
+                {routeGeometryDirty ? (
+                  <p className="text-xs text-muted-foreground">
+                    Sauvegardez ou annulez la geometrie avant de modifier les
+                    autres champs.
+                  </p>
+                ) : null}
+                {routeGeometryError ? (
+                  <p className="text-xs text-destructive">
+                    {routeGeometryError}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      routeGeometrySaving ||
+                      routeGeometryDraft.points.length < 2 ||
+                      !routeGeometryDirty
+                    }
+                    onClick={() => {
+                      void handleSaveRouteGeometry();
+                    }}
+                  >
+                    {routeGeometrySaving
+                      ? "Enregistrement..."
+                      : "Enregistrer la geometrie"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={routeGeometrySaving || !routeGeometryDirty}
+                    onClick={handleCancelRouteGeometryEdit}
+                  >
+                    Annuler les modifications geometriques
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Nom</span>
+              <input
+                value={routeEditDraft.name}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft ? { ...draft, name: event.target.value } : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Type technique</span>
+              <input
+                value={routeEditDraft.route_type}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? { ...draft, route_type: event.target.value }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Geometrie</span>
+              <select
+                value={routeEditDraft.geometry_mode}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          geometry_mode: event.target
+                            .value as RouteEditDraft["geometry_mode"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="curved">Courbe</option>
+                <option value="straight">Droite</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Style</span>
+              <select
+                value={routeEditDraft.stroke_style}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          stroke_style: event.target
+                            .value as RouteEditDraft["stroke_style"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="solid">Plein</option>
+                <option value="dashed">Tirets</option>
+                <option value="dotted">Points</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Epaisseur</span>
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={routeEditDraft.stroke_width}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          stroke_width: Number.parseInt(
+                            event.target.value || "3",
+                            10,
+                          ),
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Couleur</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="color"
+                  value={normalizeColorInput(routeEditDraft.stroke_color)}
+                  onChange={(event) =>
+                    setRouteEditDraft((draft) =>
+                      draft
+                        ? { ...draft, stroke_color: event.target.value }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-14 rounded-xl border border-border/80 bg-background/70 px-1"
+                />
+                <input
+                  value={routeEditDraft.stroke_color}
+                  placeholder="#ffffff"
+                  onChange={(event) =>
+                    setRouteEditDraft((draft) =>
+                      draft
+                        ? { ...draft, stroke_color: event.target.value }
+                        : draft,
+                    )
+                  }
+                  className="h-10 min-w-28 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setRouteEditDraft((draft) =>
+                      draft ? { ...draft, stroke_color: "" } : draft,
+                    )
+                  }
+                >
+                  Couleur par defaut
+                </Button>
+              </div>
+            </label>
+            {!routeEditColorValid ? (
+              <p className="text-xs text-destructive">
+                La couleur doit etre vide, `#rgb` ou `#rrggbb`.
+              </p>
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Statut</span>
+              <select
+                value={routeEditDraft.status}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          status: event.target
+                            .value as RouteEditDraft["status"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="draft">draft</option>
+                <option value="published">published</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Description</span>
+              <textarea
+                value={routeEditDraft.description}
+                onChange={(event) =>
+                  setRouteEditDraft((draft) =>
+                    draft
+                      ? { ...draft, description: event.target.value }
+                      : draft,
+                  )
+                }
+                rows={3}
+                className="w-full rounded-2xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+              />
+            </label>
+            <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+              {routeEditError ? (
+                <p className="text-xs text-destructive">{routeEditError}</p>
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="submit"
+                  size="sm"
                   disabled={
-                    routeSaving ||
-                    routeDraft.name.trim().length === 0 ||
-                    routeDraft.route_type.trim().length === 0 ||
-                    routeDraft.points.length < 2 ||
-                    !routeColorValid
+                    routeEditSaving ||
+                    routeGeometryDirty ||
+                    routeGeometrySaving ||
+                    routeEditDraft.name.trim().length === 0 ||
+                    routeEditDraft.route_type.trim().length === 0 ||
+                    routeEditDraft.stroke_width < 1 ||
+                    routeEditDraft.stroke_width > 12 ||
+                    !routeEditColorValid ||
+                    !routeEditDirty
                   }
                 >
-                  {routeSaving ? "Sauvegarde..." : "Terminer"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handlePopLastRoutePoint}
-                  disabled={routeSaving || routeDraft.points.length === 0}
-                >
-                  Retirer le dernier point
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClearRouteTrace}
-                  disabled={routeSaving || routeDraft.points.length === 0}
-                >
-                  Vider le trace
+                  {routeEditSaving ? "Enregistrement..." : "Enregistrer"}
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={handleCancelRouteCreate}
-                  disabled={routeSaving}
+                  size="sm"
+                  disabled={routeEditSaving || !routeEditDirty}
+                  onClick={handleCancelRouteEdit}
                 >
                   Annuler
                 </Button>
-              </div>
-            </form>
-          ) : null}
-          {selectedRoute && routeEditDraft ? (
-            <form
-              className="mt-4 space-y-3 border-t border-border/70 pt-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSaveRouteEdit();
-              }}
-            >
-              <p className="text-sm font-semibold text-foreground">{selectedRoute.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {(routeGeometryDraft?.points.length ?? selectedRoute.points.length)} point
-                {(routeGeometryDraft?.points.length ?? selectedRoute.points.length) > 1 ? "s" : ""} de controle
-              </p>
-              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant={routeGeometryDraft ? "secondary" : "outline"}
+                  variant="ghost"
                   size="sm"
-                  disabled={routeGeometrySaving || routeSaving}
-                  onClick={() => {
-                    if (routeGeometryDraft) {
-                      handleCloseRouteGeometryEdit();
-                      return;
-                    }
-                    handleEnterRouteGeometryEdit();
-                  }}
+                  disabled={routeEditSaving}
+                  onClick={handleCloseRouteSelection}
                 >
-                  {routeGeometryDraft ? "Fermer l'edition geometrique" : "Editer la geometrie"}
+                  Fermer
                 </Button>
-                {routeGeometryDraft ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant={routeGeometryTool === "prepend-vertex" ? "secondary" : "outline"}
-                      size="sm"
-                      disabled={routeGeometrySaving}
-                      onClick={() => {
-                        setRouteGeometryTool("prepend-vertex");
-                        setRouteGeometryError(null);
-                      }}
-                    >
-                      Ajouter un sommet au debut
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={routeGeometryTool === "append-vertex" ? "secondary" : "outline"}
-                      size="sm"
-                      disabled={routeGeometrySaving}
-                      onClick={() => {
-                        setRouteGeometryTool("append-vertex");
-                        setRouteGeometryError(null);
-                      }}
-                    >
-                      Ajouter un sommet a la fin
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={
-                        routeGeometryTool === "insert-before-vertex" ? "secondary" : "outline"
-                      }
-                      size="sm"
-                      disabled={routeGeometrySaving || selectedRouteVertexIndex === null}
-                      onClick={() => {
-                        setRouteGeometryTool("insert-before-vertex");
-                        setRouteGeometryError(null);
-                      }}
-                    >
-                      Inserer avant ce sommet
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={
-                        routeGeometryTool === "insert-after-vertex" ? "secondary" : "outline"
-                      }
-                      size="sm"
-                      disabled={routeGeometrySaving || selectedRouteVertexIndex === null}
-                      onClick={() => {
-                        setRouteGeometryTool("insert-after-vertex");
-                        setRouteGeometryError(null);
-                      }}
-                    >
-                      Inserer apres ce sommet
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        routeGeometrySaving ||
-                        selectedRouteVertexIndex === null ||
-                        routeGeometryDraft.points.length <= 2
-                      }
-                      onClick={handleDeleteSelectedRouteVertex}
-                    >
-                      Supprimer le sommet
-                    </Button>
-                  </>
-                ) : null}
               </div>
-              {routeGeometryDraft ? (
-                <div className="space-y-2 rounded-2xl border border-border/70 bg-background/60 px-3 py-3">
-                  <p className="text-xs text-muted-foreground">
-                    {selectedRouteVertexIndex !== null
-                      ? `Sommet selectionne : ${selectedRouteVertexIndex + 1} / ${routeGeometryDraft.points.length}`
-                      : `${routeGeometryDraft.points.length} sommets visibles`}
-                  </p>
-                  {routeGeometryDirty ? (
-                    <p className="text-xs text-muted-foreground">
-                      Sauvegardez ou annulez la geometrie avant de modifier les autres champs.
-                    </p>
-                  ) : null}
-                  {routeGeometryError ? (
-                    <p className="text-xs text-destructive">{routeGeometryError}</p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={
-                        routeGeometrySaving ||
-                        routeGeometryDraft.points.length < 2 ||
-                        !routeGeometryDirty
-                      }
-                      onClick={() => {
-                        void handleSaveRouteGeometry();
-                      }}
-                    >
-                      {routeGeometrySaving ? "Enregistrement..." : "Enregistrer la geometrie"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={routeGeometrySaving || !routeGeometryDirty}
-                      onClick={handleCancelRouteGeometryEdit}
-                    >
-                      Annuler les modifications geometriques
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Nom</span>
-                <input
-                  value={routeEditDraft.name}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft ? { ...draft, name: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Type technique</span>
-                <input
-                  value={routeEditDraft.route_type}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft ? { ...draft, route_type: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Geometrie</span>
-                <select
-                  value={routeEditDraft.geometry_mode}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            geometry_mode: event.target.value as RouteEditDraft["geometry_mode"],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="curved">Courbe</option>
-                  <option value="straight">Droite</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Style</span>
-                <select
-                  value={routeEditDraft.stroke_style}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            stroke_style: event.target.value as RouteEditDraft["stroke_style"],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="solid">Plein</option>
-                  <option value="dashed">Tirets</option>
-                  <option value="dotted">Points</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Epaisseur</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={routeEditDraft.stroke_width}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            stroke_width: Number.parseInt(event.target.value || "3", 10),
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Couleur</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="color"
-                    value={normalizeColorInput(routeEditDraft.stroke_color)}
-                    onChange={(event) =>
-                      setRouteEditDraft((draft) =>
-                        draft ? { ...draft, stroke_color: event.target.value } : draft,
-                      )
-                    }
-                    className="h-10 w-14 rounded-xl border border-border/80 bg-background/70 px-1"
-                  />
-                  <input
-                    value={routeEditDraft.stroke_color}
-                    placeholder="#ffffff"
-                    onChange={(event) =>
-                      setRouteEditDraft((draft) =>
-                        draft ? { ...draft, stroke_color: event.target.value } : draft,
-                      )
-                    }
-                    className="h-10 min-w-28 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setRouteEditDraft((draft) =>
-                        draft ? { ...draft, stroke_color: "" } : draft,
-                      )
-                    }
-                  >
-                    Couleur par defaut
-                  </Button>
-                </div>
-              </label>
-              {!routeEditColorValid ? (
-                <p className="text-xs text-destructive">
-                  La couleur doit etre vide, `#rgb` ou `#rrggbb`.
-                </p>
-              ) : null}
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Statut</span>
-                <select
-                  value={routeEditDraft.status}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            status: event.target.value as RouteEditDraft["status"],
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="draft">draft</option>
-                  <option value="published">published</option>
-                  <option value="archived">archived</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Description</span>
-                <textarea
-                  value={routeEditDraft.description}
-                  onChange={(event) =>
-                    setRouteEditDraft((draft) =>
-                      draft ? { ...draft, description: event.target.value } : draft,
-                    )
-                  }
-                  rows={3}
-                  className="w-full rounded-2xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                />
-              </label>
-              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
-                {routeEditError ? (
-                  <p className="text-xs text-destructive">{routeEditError}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={
-                      routeEditSaving ||
-                      routeGeometryDirty ||
-                      routeGeometrySaving ||
-                      routeEditDraft.name.trim().length === 0 ||
-                      routeEditDraft.route_type.trim().length === 0 ||
-                      routeEditDraft.stroke_width < 1 ||
-                      routeEditDraft.stroke_width > 12 ||
-                      !routeEditColorValid ||
-                      !routeEditDirty
-                    }
-                  >
-                    {routeEditSaving ? "Enregistrement..." : "Enregistrer"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={routeEditSaving || !routeEditDirty}
-                    onClick={handleCancelRouteEdit}
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={routeEditSaving}
-                    onClick={handleCloseRouteSelection}
-                  >
-                    Fermer
-                  </Button>
-                </div>
-              </div>
-            </form>
-          ) : null}
-          {pointDraft ? (
-            <form
-              className="mt-4 space-y-3 border-t border-border/70 pt-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleCreatePoint();
-              }}
-            >
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Famille</span>
-                <select
-                  value={pointDraft.family}
-                  onChange={(event) =>
-                    setPointDraft((draft) =>
-                      draft
-                        ? changePointDraftFamily(
-                            referenceData,
-                            draft,
-                            event.target.value as EditorCreateObjectFamily,
-                          )
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="locality">Localite</option>
-                  <option value="landmark">Landmark</option>
-                  <option value="unique">Lieu unique</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Nom</span>
-                <input
-                  value={pointDraft.name}
-                  onChange={(event) =>
-                    setPointDraft((draft) =>
-                      draft ? { ...draft, name: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              {pointDraft.family === "unique" ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Type</span>
-                  <input
-                    value="Lieu unique"
-                    readOnly
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/60 px-3 text-sm text-foreground outline-none"
-                  />
-                </label>
-              ) : (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Type</span>
-                  <select
-                    value={pointDraft.type_key}
-                    onChange={(event) =>
-                      setPointDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              type_key: event.target.value,
-                              depends_on_locality_id: null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    {(pointDraft.family === "locality"
-                      ? referenceData?.locality_types ?? []
-                      : (referenceData?.landmark_types ?? []).filter(
-                          (option) => option.category !== "unique",
+            </div>
+          </form>
+        ) : null}
+        {pointDraft ? (
+          <form
+            className="mt-4 space-y-3 border-t border-border/70 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreatePoint();
+            }}
+          >
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Famille</span>
+              <select
+                value={pointDraft.family}
+                onChange={(event) =>
+                  setPointDraft((draft) =>
+                    draft
+                      ? changePointDraftFamily(
+                          referenceData,
+                          draft,
+                          event.target.value as EditorCreateObjectFamily,
                         )
-                    ).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {pointDraftSlotRequirement ? (
-                <p className="text-xs text-muted-foreground">{pointDraftSlotRequirement}</p>
-              ) : null}
-              {pointDraft.family === "locality" && pointDraftTypeOption?.upgrades_from_type_id ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Ameliore</span>
-                  <select
-                    value={pointDraft.depends_on_locality_id ?? ""}
-                    onChange={(event) =>
-                      setPointDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              depends_on_locality_id:
-                                event.target.value.trim().length > 0 ? event.target.value : null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    <option value="">Nouvelle chaine</option>
-                    {pointDraftUpgradeOptions.map((locality) => (
-                      <option key={locality.id_locality} value={locality.id_locality}>
-                        {locality.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {pointDraft.family === "unique" ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Icone</span>
-                  <select
-                    value={pointDraft.icon_key ?? ""}
-                    onChange={(event) =>
-                      setPointDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              icon_key: event.target.value.trim().length > 0 ? event.target.value : null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    <option value="">Aucune icone</option>
-                    {(referenceData?.map_icons ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {pointDraft.family === "locality" ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Icone</span>
-                  <select
-                    value={pointDraft.icon_key ?? ""}
-                    onChange={(event) =>
-                      setPointDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              icon_key:
-                                event.target.value.trim().length > 0 ? event.target.value : null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    <option value="">Icone du type</option>
-                    {(referenceData?.map_icons ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="locality">Localite</option>
+                <option value="landmark">Landmark</option>
+                <option value="unique">Lieu unique</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Nom</span>
+              <input
+                value={pointDraft.name}
+                onChange={(event) =>
+                  setPointDraft((draft) =>
+                    draft ? { ...draft, name: event.target.value } : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            {pointDraft.family === "unique" ? (
               <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Description</span>
-                <textarea
-                  value={pointDraft.description}
-                  onChange={(event) =>
-                    setPointDraft((draft) =>
-                      draft ? { ...draft, description: event.target.value } : draft,
-                    )
-                  }
-                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                />
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Coordonnees : {Math.round(pointDraft.x)}, {Math.round(pointDraft.y)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {pointDraft.id_case_detected
-                  ? `Case detectee : ${pointDraft.id_case_detected}`
-                  : "Aucune case detectee"}
-              </p>
-              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                <span className="mb-1 block">Type</span>
                 <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                  checked={pointDraft.force_slot_override}
-                  onChange={(event) =>
-                    setPointDraft((draft) =>
-                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
-                    )
-                  }
-                />
-                <span>Forcer si les emplacements sont depasses</span>
-              </label>
-              {pointDraft.force_slot_override ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Justification</span>
-                  <textarea
-                    value={pointDraft.slot_override_reason}
-                    onChange={(event) =>
-                      setPointDraft((draft) =>
-                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
-                      )
-                    }
-                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                  />
-                </label>
-              ) : null}
-              {pointDraft.family === "unique" && (referenceData?.map_icons.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Aucune icone active n&apos;est disponible. Le lieu unique sera cree avec le fallback visuel.
-                </p>
-              ) : null}
-              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
-                {localitySaveError ? (
-                  <p className="text-xs text-destructive">{localitySaveError}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button type="submit" size="sm" disabled={localitySaving}>
-                    {localitySaving ? "Enregistrement..." : "Enregistrer"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setPointDraft(null);
-                      setLocalitySaveError(null);
-                      setEditorTool("select");
-                    }}
-                  >
-                    Annuler
-                  </Button>
-                </div>
-              </div>
-            </form>
-          ) : null}
-          {selectedLocality && localityEditDraft ? (
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSaveLocalityEdit();
-              }}
-            >
-              <p className="text-sm font-semibold text-foreground">{selectedLocality.name}</p>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Nom</span>
-                <input
-                  value={localityEditDraft.name}
-                  onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
-                      draft ? { ...draft, name: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                  value="Lieu unique"
+                  readOnly
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/60 px-3 text-sm text-foreground outline-none"
                 />
               </label>
+            ) : (
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Type</span>
                 <select
-                  value={localityEditDraft.type_key}
+                  value={pointDraft.type_key}
                   onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
+                    setPointDraft((draft) =>
                       draft
                         ? {
                             ...draft,
@@ -3725,54 +4467,100 @@ export function EditorMapCanvas() {
                   }
                   className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
                 >
-                  {referenceData?.locality_types.map((option) => (
+                  {(pointDraft.family === "locality"
+                    ? (referenceData?.locality_types ?? [])
+                    : (referenceData?.landmark_types ?? []).filter(
+                        (option) => option.category !== "unique",
+                      )
+                  ).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
               </label>
-              {localityEditSlotRequirement ? (
-                <p className="text-xs text-muted-foreground">{localityEditSlotRequirement}</p>
-              ) : null}
-              {localityEditTypeOption?.upgrades_from_type_id ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Ameliore</span>
-                  <select
-                    value={localityEditDraft.depends_on_locality_id ?? ""}
-                    onChange={(event) =>
-                      setLocalityEditDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              depends_on_locality_id:
-                                event.target.value.trim().length > 0 ? event.target.value : null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    <option value="">Nouvelle chaine</option>
-                    {localityEditUpgradeOptions.map((locality) => (
-                      <option key={locality.id_locality} value={locality.id_locality}>
-                        {locality.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+            )}
+            {pointDraftSlotRequirement ? (
+              <p className="text-xs text-muted-foreground">
+                {pointDraftSlotRequirement}
+              </p>
+            ) : null}
+            {pointDraft.family === "locality" &&
+            pointDraftTypeOption?.upgrades_from_type_id ? (
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Ameliore</span>
+                <select
+                  value={pointDraft.depends_on_locality_id ?? ""}
+                  onChange={(event) =>
+                    setPointDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            depends_on_locality_id:
+                              event.target.value.trim().length > 0
+                                ? event.target.value
+                                : null,
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="">Nouvelle chaine</option>
+                  {pointDraftUpgradeOptions.map((locality) => (
+                    <option
+                      key={locality.id_locality}
+                      value={locality.id_locality}
+                    >
+                      {locality.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {pointDraft.family === "unique" ? (
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Icone</span>
                 <select
-                  value={localityEditDraft.icon_key ?? ""}
+                  value={pointDraft.icon_key ?? ""}
                   onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
+                    setPointDraft((draft) =>
                       draft
                         ? {
                             ...draft,
                             icon_key:
-                              event.target.value.trim().length > 0 ? event.target.value : null,
+                              event.target.value.trim().length > 0
+                                ? event.target.value
+                                : null,
+                          }
+                        : draft,
+                    )
+                  }
+                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="">Aucune icone</option>
+                  {(referenceData?.map_icons ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {pointDraft.family === "locality" ? (
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Icone</span>
+                <select
+                  value={pointDraft.icon_key ?? ""}
+                  onChange={(event) =>
+                    setPointDraft((draft) =>
+                      draft
+                        ? {
+                            ...draft,
+                            icon_key:
+                              event.target.value.trim().length > 0
+                                ? event.target.value
+                                : null,
                           }
                         : draft,
                     )
@@ -3787,141 +4575,157 @@ export function EditorMapCanvas() {
                   ))}
                 </select>
               </label>
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Description</span>
+              <textarea
+                value={pointDraft.description}
+                onChange={(event) =>
+                  setPointDraft((draft) =>
+                    draft
+                      ? { ...draft, description: event.target.value }
+                      : draft,
+                  )
+                }
+                className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+              />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Coordonnees : {Math.round(pointDraft.x)},{" "}
+              {Math.round(pointDraft.y)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {pointDraft.id_case_detected
+                ? `Case detectee : ${pointDraft.id_case_detected}`
+                : "Aucune case detectee"}
+            </p>
+            <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={pointDraft.force_slot_override}
+                onChange={(event) =>
+                  setPointDraft((draft) =>
+                    draft
+                      ? { ...draft, force_slot_override: event.target.checked }
+                      : draft,
+                  )
+                }
+              />
+              <span>Forcer si les emplacements sont depasses</span>
+            </label>
+            {pointDraft.force_slot_override ? (
               <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Statut</span>
-                <select
-                  value={localityEditDraft.status}
+                <span className="mb-1 block">Justification</span>
+                <textarea
+                  value={pointDraft.slot_override_reason}
                   onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
+                    setPointDraft((draft) =>
                       draft
-                        ? {
-                            ...draft,
-                            status: event.target.value as LocalityEditDraft["status"],
-                          }
+                        ? { ...draft, slot_override_reason: event.target.value }
                         : draft,
                     )
                   }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="draft">draft</option>
-                  <option value="published">published</option>
-                  <option value="archived">archived</option>
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Description</span>
-                <textarea
-                  value={localityEditDraft.description}
-                  onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
-                      draft ? { ...draft, description: event.target.value } : draft,
-                    )
-                  }
-                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                  className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
                 />
               </label>
-              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                  checked={localityEditDraft.force_slot_override}
-                  onChange={(event) =>
-                    setLocalityEditDraft((draft) =>
-                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
-                    )
-                  }
-                />
-                <span>Forcer si les emplacements sont depasses</span>
-              </label>
-              {localityEditDraft.force_slot_override ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Justification</span>
-                  <textarea
-                    value={localityEditDraft.slot_override_reason}
-                    onChange={(event) =>
-                      setLocalityEditDraft((draft) =>
-                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
-                      )
-                    }
-                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                  />
-                </label>
+            ) : null}
+            {pointDraft.family === "unique" &&
+            (referenceData?.map_icons.length ?? 0) === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Aucune icone active n&apos;est disponible. Le lieu unique sera
+                cree avec le fallback visuel.
+              </p>
+            ) : null}
+            <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+              {localitySaveError ? (
+                <p className="text-xs text-destructive">{localitySaveError}</p>
               ) : null}
-              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
-                {localityEditError ? (
-                  <p className="text-xs text-destructive">{localityEditError}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={
-                      localityEditSaving ||
-                      localityEditDraft.name.trim().length === 0 ||
-                      localityEditDraft.type_key.trim().length === 0 ||
-                      !localityEditDirty
-                    }
-                  >
-                    {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={localityEditSaving || !localityEditDirty}
-                    onClick={handleCancelLocalityEdit}
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={localityEditSaving}
-                    onClick={handleCloseLocalitySelection}
-                  >
-                    Fermer
-                  </Button>
-                </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" size="sm" disabled={localitySaving}>
+                  {localitySaving ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPointDraft(null);
+                    setLocalitySaveError(null);
+                    setEditorTool("select");
+                  }}
+                >
+                  Annuler
+                </Button>
               </div>
-            </form>
-          ) : null}
-          {selectedLandmark && landmarkEditDraft ? (
-            <form
-              className="mt-4 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSaveLandmarkEdit();
-              }}
-            >
-              <p className="text-sm font-semibold text-foreground">{selectedLandmark.name}</p>
+            </div>
+          </form>
+        ) : null}
+        {selectedLocality && localityEditDraft ? (
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveLocalityEdit();
+            }}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {selectedLocality.name}
+            </p>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Nom</span>
+              <input
+                value={localityEditDraft.name}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft ? { ...draft, name: event.target.value } : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Type</span>
+              <select
+                value={localityEditDraft.type_key}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          type_key: event.target.value,
+                          depends_on_locality_id: null,
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                {referenceData?.locality_types.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {localityEditSlotRequirement ? (
+              <p className="text-xs text-muted-foreground">
+                {localityEditSlotRequirement}
+              </p>
+            ) : null}
+            {localityEditTypeOption?.upgrades_from_type_id ? (
               <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Nom</span>
-                <input
-                  value={landmarkEditDraft.name}
-                  onChange={(event) =>
-                    setLandmarkEditDraft((draft) =>
-                      draft ? { ...draft, name: event.target.value } : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Type</span>
+                <span className="mb-1 block">Ameliore</span>
                 <select
-                  value={landmarkEditDraft.type_key}
+                  value={localityEditDraft.depends_on_locality_id ?? ""}
                   onChange={(event) =>
-                    setLandmarkEditDraft((draft) =>
+                    setLocalityEditDraft((draft) =>
                       draft
                         ? {
                             ...draft,
-                            type_key: event.target.value,
-                            icon_key:
-                              referenceData?.landmark_types.find(
-                                (option) => option.value === event.target.value,
-                              )?.category === "unique"
-                                ? draft.icon_key
+                            depends_on_locality_id:
+                              event.target.value.trim().length > 0
+                                ? event.target.value
                                 : null,
                           }
                         : draft,
@@ -3929,148 +4733,356 @@ export function EditorMapCanvas() {
                   }
                   className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
                 >
-                  {referenceData?.landmark_types.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+                  <option value="">Nouvelle chaine</option>
+                  {localityEditUpgradeOptions.map((locality) => (
+                    <option
+                      key={locality.id_locality}
+                      value={locality.id_locality}
+                    >
+                      {locality.name}
                     </option>
                   ))}
                 </select>
               </label>
-              {landmarkEditSlotRequirement ? (
-                <p className="text-xs text-muted-foreground">{landmarkEditSlotRequirement}</p>
-              ) : null}
-              {selectedLandmarkCategory === "unique" ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Icone</span>
-                  <select
-                    value={landmarkEditDraft.icon_key ?? ""}
-                    onChange={(event) =>
-                      setLandmarkEditDraft((draft) =>
-                        draft
-                          ? {
-                              ...draft,
-                              icon_key: event.target.value.trim().length > 0 ? event.target.value : null,
-                            }
-                          : draft,
-                      )
-                    }
-                    className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                  >
-                    <option value="">Aucune icone</option>
-                    {(referenceData?.map_icons ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Icone</span>
+              <select
+                value={localityEditDraft.icon_key ?? ""}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          icon_key:
+                            event.target.value.trim().length > 0
+                              ? event.target.value
+                              : null,
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="">Icone du type</option>
+                {(referenceData?.map_icons ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Statut</span>
+              <select
+                value={localityEditDraft.status}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          status: event.target
+                            .value as LocalityEditDraft["status"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="draft">draft</option>
+                <option value="published">published</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Description</span>
+              <textarea
+                value={localityEditDraft.description}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft
+                      ? { ...draft, description: event.target.value }
+                      : draft,
+                  )
+                }
+                className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={localityEditDraft.force_slot_override}
+                onChange={(event) =>
+                  setLocalityEditDraft((draft) =>
+                    draft
+                      ? { ...draft, force_slot_override: event.target.checked }
+                      : draft,
+                  )
+                }
+              />
+              <span>Forcer si les emplacements sont depasses</span>
+            </label>
+            {localityEditDraft.force_slot_override ? (
               <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Statut</span>
+                <span className="mb-1 block">Justification</span>
+                <textarea
+                  value={localityEditDraft.slot_override_reason}
+                  onChange={(event) =>
+                    setLocalityEditDraft((draft) =>
+                      draft
+                        ? { ...draft, slot_override_reason: event.target.value }
+                        : draft,
+                    )
+                  }
+                  className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                />
+              </label>
+            ) : null}
+            <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+              {localityEditError ? (
+                <p className="text-xs text-destructive">{localityEditError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    localityEditSaving ||
+                    localityEditDraft.name.trim().length === 0 ||
+                    localityEditDraft.type_key.trim().length === 0 ||
+                    !localityEditDirty
+                  }
+                >
+                  {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={localityEditSaving || !localityEditDirty}
+                  onClick={handleCancelLocalityEdit}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={localityEditSaving}
+                  onClick={handleCloseLocalitySelection}
+                >
+                  Fermer
+                </Button>
+              </div>
+            </div>
+          </form>
+        ) : null}
+        {selectedLandmark && landmarkEditDraft ? (
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveLandmarkEdit();
+            }}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {selectedLandmark.name}
+            </p>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Nom</span>
+              <input
+                value={landmarkEditDraft.name}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft ? { ...draft, name: event.target.value } : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Type</span>
+              <select
+                value={landmarkEditDraft.type_key}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          type_key: event.target.value,
+                          icon_key:
+                            referenceData?.landmark_types.find(
+                              (option) => option.value === event.target.value,
+                            )?.category === "unique"
+                              ? draft.icon_key
+                              : null,
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                {referenceData?.landmark_types.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {landmarkEditSlotRequirement ? (
+              <p className="text-xs text-muted-foreground">
+                {landmarkEditSlotRequirement}
+              </p>
+            ) : null}
+            {selectedLandmarkCategory === "unique" ? (
+              <label className="block text-xs text-muted-foreground">
+                <span className="mb-1 block">Icone</span>
                 <select
-                  value={landmarkEditDraft.status}
+                  value={landmarkEditDraft.icon_key ?? ""}
                   onChange={(event) =>
                     setLandmarkEditDraft((draft) =>
                       draft
                         ? {
                             ...draft,
-                            status: event.target.value as LandmarkEditDraft["status"],
+                            icon_key:
+                              event.target.value.trim().length > 0
+                                ? event.target.value
+                                : null,
                           }
                         : draft,
                     )
                   }
                   className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
                 >
-                  <option value="draft">draft</option>
-                  <option value="published">published</option>
-                  <option value="archived">archived</option>
+                  <option value="">Aucune icone</option>
+                  {(referenceData?.map_icons ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
+            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Statut</span>
+              <select
+                value={landmarkEditDraft.status}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          status: event.target
+                            .value as LandmarkEditDraft["status"],
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="draft">draft</option>
+                <option value="published">published</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Description</span>
+              <textarea
+                value={landmarkEditDraft.description}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft
+                      ? { ...draft, description: event.target.value }
+                      : draft,
+                  )
+                }
+                className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+              />
+            </label>
+            <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={landmarkEditDraft.force_slot_override}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft
+                      ? { ...draft, force_slot_override: event.target.checked }
+                      : draft,
+                  )
+                }
+              />
+              <span>Forcer si les emplacements sont depasses</span>
+            </label>
+            {landmarkEditDraft.force_slot_override ? (
               <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Description</span>
+                <span className="mb-1 block">Justification</span>
                 <textarea
-                  value={landmarkEditDraft.description}
+                  value={landmarkEditDraft.slot_override_reason}
                   onChange={(event) =>
                     setLandmarkEditDraft((draft) =>
-                      draft ? { ...draft, description: event.target.value } : draft,
+                      draft
+                        ? { ...draft, slot_override_reason: event.target.value }
+                        : draft,
                     )
                   }
-                  className="min-h-24 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
+                  className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
                 />
               </label>
-              <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                  checked={landmarkEditDraft.force_slot_override}
-                  onChange={(event) =>
-                    setLandmarkEditDraft((draft) =>
-                      draft ? { ...draft, force_slot_override: event.target.checked } : draft,
-                    )
+            ) : null}
+            {selectedLandmarkCategory === "unique" &&
+            (referenceData?.map_icons.length ?? 0) === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Aucune icone active n&apos;est disponible. Le lieu unique
+                gardera le fallback visuel.
+              </p>
+            ) : null}
+            <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
+              {localityEditError ? (
+                <p className="text-xs text-destructive">{localityEditError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    localityEditSaving ||
+                    landmarkEditDraft.name.trim().length === 0 ||
+                    landmarkEditDraft.type_key.trim().length === 0 ||
+                    !landmarkEditDirty
                   }
-                />
-                <span>Forcer si les emplacements sont depasses</span>
-              </label>
-              {landmarkEditDraft.force_slot_override ? (
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Justification</span>
-                  <textarea
-                    value={landmarkEditDraft.slot_override_reason}
-                    onChange={(event) =>
-                      setLandmarkEditDraft((draft) =>
-                        draft ? { ...draft, slot_override_reason: event.target.value } : draft,
-                      )
-                    }
-                    className="min-h-16 w-full rounded-xl border border-border/80 bg-background/70 px-3 py-2 text-sm text-foreground outline-none"
-                  />
-                </label>
-              ) : null}
-              {selectedLandmarkCategory === "unique" && (referenceData?.map_icons.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Aucune icone active n&apos;est disponible. Le lieu unique gardera le fallback visuel.
-                </p>
-              ) : null}
-              <div className="sticky bottom-0 -mx-4 mt-4 space-y-2 border-t border-border/70 bg-background/95 px-4 py-3">
-                {localityEditError ? (
-                  <p className="text-xs text-destructive">{localityEditError}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={
-                      localityEditSaving ||
-                      landmarkEditDraft.name.trim().length === 0 ||
-                      landmarkEditDraft.type_key.trim().length === 0 ||
-                      !landmarkEditDirty
-                    }
-                  >
-                    {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={localityEditSaving || !landmarkEditDirty}
-                    onClick={handleCancelLandmarkEdit}
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={localityEditSaving}
-                    onClick={handleCloseLocalitySelection}
-                  >
-                    Fermer
-                  </Button>
-                </div>
+                >
+                  {localityEditSaving ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={localityEditSaving || !landmarkEditDirty}
+                  onClick={handleCancelLandmarkEdit}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={localityEditSaving}
+                  onClick={handleCloseLocalitySelection}
+                >
+                  Fermer
+                </Button>
               </div>
-            </form>
-          ) : null}
+            </div>
+          </form>
+        ) : null}
       </aside>
-      {hoverInfo && (casesVisible || routesVisible || localitiesVisible || landmarksVisible) ? (
+      {hoverInfo &&
+      (casesVisible ||
+        routesVisible ||
+        localitiesVisible ||
+        landmarksVisible) ? (
         <div
           className="pointer-events-none fixed z-[80] min-w-44 rounded-[16px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
           style={{
@@ -4079,14 +5091,21 @@ export function EditorMapCanvas() {
             transform: "translate3d(0, 0, 0)",
           }}
         >
-          <p className="text-sm font-semibold text-foreground">{hoverInfo.title}</p>
+          <p className="text-sm font-semibold text-foreground">
+            {hoverInfo.title}
+          </p>
           <div className="mt-2 space-y-1.5">
             {hoverInfo.rows.map((row) => (
-              <div key={row.label} className="flex items-start justify-between gap-3">
+              <div
+                key={row.label}
+                className="flex items-start justify-between gap-3"
+              >
                 <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   {row.label}
                 </span>
-                <span className="text-right text-sm text-foreground">{row.value}</span>
+                <span className="text-right text-sm text-foreground">
+                  {row.value}
+                </span>
               </div>
             ))}
           </div>

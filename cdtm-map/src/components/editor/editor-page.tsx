@@ -79,7 +79,11 @@ export function EditorPage() {
       setSession(nextSession);
       window.location.href = "/";
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Deconnexion impossible.");
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Deconnexion impossible.",
+      );
     }
   }, []);
 
@@ -87,13 +91,15 @@ export function EditorPage() {
     return (
       <AppShell>
         <SectionPanel className="p-6">
-          <p className="text-sm text-muted-foreground">Chargement de l’editeur...</p>
+          <p className="text-sm text-muted-foreground">
+            Chargement de l’editeur...
+          </p>
         </SectionPanel>
       </AppShell>
     );
   }
 
-  if (!session.is_tech_admin) {
+  if (!session.authenticated) {
     return (
       <AppShell>
         <SiteHeader
@@ -105,9 +111,11 @@ export function EditorPage() {
           onAdminLogout={() => void handleLogout()}
         />
         <SectionPanel className="p-6">
-          <h1 className="font-chronicle text-3xl text-foreground">Editeur cartographique</h1>
+          <h1 className="font-chronicle text-3xl text-foreground">
+            Editeur cartographique
+          </h1>
           <p className="mt-4 text-sm leading-7 text-muted-foreground">
-            Cette page est reservee aux administrateurs techniques.
+            Cette page est reservee aux comptes staff connectes.
           </p>
           <div className="mt-6">
             <Button asChild variant="outline">
@@ -127,7 +135,9 @@ export function EditorPage() {
         navigationItems={[
           { href: "/?admin=1", label: "Carte" },
           { href: "/editeur", label: "Editeur", current: true },
-          { href: "/admin/tech", label: "Administration" },
+          ...(session.is_tech_admin
+            ? [{ href: "/admin/tech", label: "Administration" }]
+            : []),
         ]}
         showAdminAction={false}
         onAdminAction={() => {}}
@@ -138,7 +148,7 @@ export function EditorPage() {
           <p className="text-sm text-destructive">{error}</p>
         </SectionPanel>
       ) : null}
-      <EditorMapCanvas />
+      <EditorMapCanvas canEditMapObjects={session.is_tech_admin} />
     </AppShell>
   );
 }
