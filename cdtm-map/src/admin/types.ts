@@ -4,6 +4,7 @@ import type {
 } from "@/admin/tech-types";
 import type { AdminRole } from "@/admin/roles";
 import type { PublicMapStyles } from "@/map/types";
+import type { SlotCalculationResult } from "@/map/rules";
 
 export type PublicCaseProperties = {
   registry_id_case: string;
@@ -11,10 +12,12 @@ export type PublicCaseProperties = {
   region: string | null;
   sous_region: string | null;
   cote: boolean | null;
-  lac_majeur: boolean | null;
-  cours_eau_majeur: boolean | null;
+  lac: boolean | null;
+  fluvial: boolean | null;
   terrain_cat: string | null;
   terrain_type: string | null;
+  terrain_secondaire: string | null;
+  colline: boolean | null;
   relief: string | null;
   faction: string | null;
   controleur: string | null;
@@ -47,6 +50,8 @@ type AdminPublicCaseRecord = PublicCaseProperties & {
 type AdminTerrainRecord = {
   terrain_cat: string | null;
   terrain_type: string | null;
+  terrain_secondaire: string | null;
+  colline: boolean | null;
   relief: string | null;
   meta: AdminBlockMeta;
 };
@@ -78,6 +83,7 @@ export type AdminCaseRecord = {
   public: AdminPublicCaseRecord;
   terrain: AdminTerrainRecord;
   control: AdminControlRecord;
+  emplacements: SlotCalculationResult;
   dynamic_sections: AdminDynamicSectionRecord[];
   reference_data: AdminReferenceData;
 };
@@ -88,12 +94,14 @@ export type AdminCaseDraft = {
     region: string;
     sous_region: string;
     cote: string;
-    lac_majeur: string;
-    cours_eau_majeur: string;
+    lac: string;
+    fluvial: string;
   };
   terrain: {
     terrain_cat: string;
     terrain_type: string;
+    terrain_secondaire: string;
+    colline: string;
     relief: string;
   };
   control: {
@@ -115,12 +123,14 @@ export type AdminBulkEditDraft = {
     region: AdminBulkEditFieldState;
     sous_region: AdminBulkEditFieldState;
     cote: AdminBulkEditFieldState;
-    lac_majeur: AdminBulkEditFieldState;
-    cours_eau_majeur: AdminBulkEditFieldState;
+    lac: AdminBulkEditFieldState;
+    fluvial: AdminBulkEditFieldState;
   };
   terrain: {
     terrain_cat: AdminBulkEditFieldState;
     terrain_type: AdminBulkEditFieldState;
+    terrain_secondaire: AdminBulkEditFieldState;
+    colline: AdminBulkEditFieldState;
     relief: AdminBulkEditFieldState;
   };
   control: {
@@ -135,12 +145,14 @@ export type AdminBulkPatch = {
     region?: string | null;
     sous_region?: string | null;
     cote?: boolean | null;
-    lac_majeur?: boolean | null;
-    cours_eau_majeur?: boolean | null;
+    lac?: boolean | null;
+    fluvial?: boolean | null;
   };
   terrain?: {
     terrain_cat?: string | null;
     terrain_type?: string | null;
+    terrain_secondaire?: string | null;
+    colline?: boolean | null;
     relief?: string | null;
   };
   control?: {
@@ -201,12 +213,14 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
       region: "",
       sous_region: "",
       cote: "",
-      lac_majeur: "",
-      cours_eau_majeur: "",
+      lac: "",
+      fluvial: "",
     },
     terrain: {
       terrain_cat: "",
       terrain_type: "",
+      terrain_secondaire: "",
+      colline: "",
       relief: "",
     },
     control: {
@@ -224,12 +238,14 @@ export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
       region: createEmptyBulkFieldState(),
       sous_region: createEmptyBulkFieldState(),
       cote: createEmptyBulkFieldState(),
-      lac_majeur: createEmptyBulkFieldState(),
-      cours_eau_majeur: createEmptyBulkFieldState(),
+      lac: createEmptyBulkFieldState(),
+      fluvial: createEmptyBulkFieldState(),
     },
     terrain: {
       terrain_cat: createEmptyBulkFieldState(),
       terrain_type: createEmptyBulkFieldState(),
+      terrain_secondaire: createEmptyBulkFieldState(),
+      colline: createEmptyBulkFieldState(),
       relief: createEmptyBulkFieldState(),
     },
     control: {
@@ -251,12 +267,14 @@ export function toAdminCaseDraft(record: AdminCaseRecord | null): AdminCaseDraft
       region: record.public.region ?? "",
       sous_region: record.public.sous_region ?? "",
       cote: booleanToDraftValue(record.public.cote),
-      lac_majeur: booleanToDraftValue(record.public.lac_majeur),
-      cours_eau_majeur: booleanToDraftValue(record.public.cours_eau_majeur),
+      lac: booleanToDraftValue(record.public.lac),
+      fluvial: booleanToDraftValue(record.public.fluvial),
     },
     terrain: {
       terrain_cat: record.terrain.terrain_cat ?? "",
       terrain_type: record.terrain.terrain_type ?? "",
+      terrain_secondaire: record.terrain.terrain_secondaire ?? "",
+      colline: booleanToDraftValue(record.terrain.colline),
       relief: record.terrain.relief ?? "",
     },
     control: {

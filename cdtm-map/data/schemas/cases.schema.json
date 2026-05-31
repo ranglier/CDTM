@@ -29,13 +29,13 @@
           "null"
         ]
       },
-      "lac_majeur": {
+      "lac": {
         "type": [
           "boolean",
           "null"
         ]
       },
-      "cours_eau_majeur": {
+      "fluvial": {
         "type": [
           "boolean",
           "null"

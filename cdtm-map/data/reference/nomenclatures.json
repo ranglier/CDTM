@@ -4,24 +4,21 @@
     "region",
     "sous_region",
     "cote",
-    "lac_majeur",
-    "cours_eau_majeur"
+    "lac",
+    "fluvial"
   ],
   "water_boolean_fields": [
     "cote",
-    "lac_majeur",
-    "cours_eau_majeur"
+    "lac",
+    "fluvial"
   ],
   "reserved_business_fields": [
     "terrain_cat",
     "terrain_type",
-    "relief",
     "terrain_secondaire",
+    "colline",
     "faction",
     "peuple",
-    "bonus_speciaux",
-    "empl_base",
-    "empl_max",
     "controleur",
     "controle_type"
   ],
@@ -31,23 +28,14 @@
       "desert",
       "marais",
       "foret",
-      "montagne",
-      "inconnu"
+      "montagne"
     ],
     "terrain_type_by_cat": {
       "plaine": [
         "prairie",
         "plaine_aride",
-        "plaine_boisee",
+        "bocage",
         "toundra"
-      ],
-      "desert": [
-        "terres_gelees",
-        "desert_sable",
-        "terre_desolee"
-      ],
-      "marais": [
-        "marais"
       ],
       "foret": [
         "foret",
@@ -58,28 +46,29 @@
         "montagne",
         "montagne_riche"
       ],
-      "inconnu": [
-        "inconnu"
+      "marais": [
+        "marais"
+      ],
+      "desert": [
+        "desert",
+        "terres_gelees",
+        "terre_desolee"
       ]
     },
     "terrain_type": [
       "prairie",
       "plaine_aride",
-      "plaine_boisee",
+      "bocage",
       "toundra",
-      "terres_gelees",
-      "desert_sable",
-      "terre_desolee",
-      "marais",
       "foret",
       "taiga",
       "foret_luxuriante",
       "montagne",
       "montagne_riche",
-      "inconnu"
-    ],
-    "relief": [
-      "colline"
+      "marais",
+      "desert",
+      "terres_gelees",
+      "terre_desolee"
     ],
     "controle_type": [
       "aucun",
@@ -89,10 +78,6 @@
       "occupe",
       "vassalise",
       "inconnu"
-    ],
-    "bonus_special": [
-      "ancien_bonus_empire_desert_glace",
-      "ancien_bonus_empire_montagne"
     ],
     "localite_niveau": [
       "hameau",

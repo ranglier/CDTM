@@ -428,8 +428,10 @@ export function getFriendlyFieldLabel(fieldName: string): string {
       return "Icone par defaut";
     case "consumes_slot":
       return "Consomme un emplacement";
-    case "slot_weight":
-      return "Poids d'emplacement";
+    case "emp_requis":
+      return "Emplacements requis";
+    case "upgrades_from_type_id":
+      return "Ameliore le type";
     case "race_key":
       return "Race";
     case "peuple_key":

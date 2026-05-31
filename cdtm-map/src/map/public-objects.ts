@@ -17,6 +17,9 @@ export type PublicMapReferenceLocalityType = {
   value: string;
   label: string;
   default_icon_key: string | null;
+  consumes_slot?: boolean | null;
+  emp_requis?: number | null;
+  upgrades_from_type_id?: string | null;
 };
 
 export type PublicMapReferenceLandmarkType = {
@@ -24,6 +27,8 @@ export type PublicMapReferenceLandmarkType = {
   label: string;
   category: "landmark" | "unique" | null;
   default_icon_key: string | null;
+  consumes_slot?: boolean | null;
+  emp_requis?: number | null;
 };
 
 export type PublicMapObjectReferenceData = {

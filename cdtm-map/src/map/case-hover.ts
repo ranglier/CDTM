@@ -23,6 +23,6 @@ export function buildCaseHoverRows(
   return [
     properties.terrain_cat ? { label: "Categorie", value: properties.terrain_cat } : null,
     properties.terrain_type ? { label: "Terrain", value: properties.terrain_type } : null,
-    properties.relief ? { label: "Relief", value: properties.relief } : null,
+    properties.colline ? { label: "Attribut", value: "Colline" } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 }

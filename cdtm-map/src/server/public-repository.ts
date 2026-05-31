@@ -18,10 +18,12 @@ type PublicCaseRow = {
   region: string | null;
   sous_region: string | null;
   cote: boolean | null;
-  lac_majeur: boolean | null;
-  cours_eau_majeur: boolean | null;
+  lac: boolean | null;
+  fluvial: boolean | null;
   terrain_cat: string | null;
   terrain_type: string | null;
+  terrain_secondaire: string | null;
+  colline: boolean | null;
   relief: string | null;
   faction: string | null;
   controleur: string | null;
@@ -72,10 +74,12 @@ function createEmptyPublicCase(idCase: string): PublicCaseProperties {
     region: null,
     sous_region: null,
     cote: null,
-    lac_majeur: null,
-    cours_eau_majeur: null,
+    lac: null,
+    fluvial: null,
     terrain_cat: null,
     terrain_type: null,
+    terrain_secondaire: null,
+    colline: null,
     relief: null,
     faction: null,
     controleur: null,
@@ -90,10 +94,12 @@ function mergePublicCase(row: PublicCaseRow, fallback: PublicCaseProperties): Pu
     region: row.region ?? fallback.region,
     sous_region: row.sous_region ?? fallback.sous_region,
     cote: row.cote ?? fallback.cote,
-    lac_majeur: row.lac_majeur ?? fallback.lac_majeur,
-    cours_eau_majeur: row.cours_eau_majeur ?? fallback.cours_eau_majeur,
+    lac: row.lac ?? fallback.lac,
+    fluvial: row.fluvial ?? fallback.fluvial,
     terrain_cat: row.terrain_cat,
     terrain_type: row.terrain_type,
+    terrain_secondaire: row.terrain_secondaire,
+    colline: row.colline,
     relief: row.relief,
     faction: row.faction,
     controleur: row.controleur,
@@ -130,10 +136,12 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
     region: stableCase.region ?? null,
     sous_region: stableCase.sous_region ?? null,
     cote: stableCase.cote ?? null,
-    lac_majeur: stableCase.lac_majeur ?? null,
-    cours_eau_majeur: stableCase.cours_eau_majeur ?? null,
+    lac: stableCase.lac ?? null,
+    fluvial: stableCase.fluvial ?? null,
     terrain_cat: null,
     terrain_type: null,
+    terrain_secondaire: null,
+    colline: null,
     relief: null,
     faction: null,
     controleur: null,
@@ -154,10 +162,12 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
         public_current.region,
         public_current.sous_region,
         public_current.cote,
-        public_current.lac_majeur,
-        public_current.cours_eau_majeur,
+        public_current.lac,
+        public_current.fluvial,
         terrain.terrain_cat,
         terrain.terrain_type,
+        terrain.terrain_secondaire,
+        terrain.colline,
         terrain.relief,
         control_current.faction,
         control_current.controleur,
@@ -179,10 +189,12 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
           region: stableCase.region ?? null,
           sous_region: stableCase.sous_region ?? null,
           cote: stableCase.cote ?? null,
-          lac_majeur: stableCase.lac_majeur ?? null,
-          cours_eau_majeur: stableCase.cours_eau_majeur ?? null,
+          lac: stableCase.lac ?? null,
+          fluvial: stableCase.fluvial ?? null,
           terrain_cat: null,
           terrain_type: null,
+          terrain_secondaire: null,
+          colline: null,
           relief: null,
           faction: null,
           controleur: null,
@@ -347,7 +359,10 @@ async function listPublicLocalityTypeReferences(): Promise<PublicMapReferenceLoc
       SELECT
         type_key AS value,
         COALESCE(label, type_key) AS label,
-        default_icon_key
+        default_icon_key,
+        consumes_slot,
+        emp_requis,
+        upgrades_from_type_id
       FROM reference_locality_types
       WHERE is_active = TRUE
       ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
@@ -370,7 +385,9 @@ async function listPublicLandmarkTypeReferences(): Promise<PublicMapReferenceLan
         type_key AS value,
         COALESCE(label, type_key) AS label,
         category,
-        default_icon_key
+        default_icon_key,
+        consumes_slot,
+        emp_requis
       FROM reference_landmark_types
       WHERE is_active = TRUE
       ORDER BY

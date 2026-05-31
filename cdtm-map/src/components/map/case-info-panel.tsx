@@ -295,7 +295,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const bulkTerrainCategory = bulkDraft.terrain.terrain_cat.mixed && !bulkDraft.terrain.terrain_cat.touched ? "" : bulkDraft.terrain.terrain_cat.value;
   const singleTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, singleDraft.terrain.terrain_cat);
   const bulkTerrainTypeOptions = getTerrainTypeOptions(activeAdminRecord, bulkTerrainCategory);
-  const reliefOptions = activeAdminRecord?.reference_data.relief_options.map((option) => option.value) ?? [];
   const factionOptions = activeAdminRecord?.reference_data.faction_options.map((option) => option.value) ?? [];
   const controllerOptions = activeAdminRecord?.reference_data.controller_options.map((option) => option.value) ?? [];
   const controlTypeOptions = activeAdminRecord?.reference_data.control_type_options.map((option) => option.value) ?? [];
@@ -303,6 +302,12 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   const terrainMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.terrain.meta)) : formatMeta(activeAdminRecord?.terrain.meta);
   const controlMeta = isMultiSelection ? summarizeMeta(selectedAdminRecords.map((record) => record.control.meta)) : formatMeta(activeAdminRecord?.control.meta);
   const dynamicSections = !isMultiSelection ? activeAdminRecord?.dynamic_sections ?? [] : [];
+  const slotSummary =
+    !isMultiSelection && activeAdminRecord
+      ? activeAdminRecord.emplacements.available
+        ? `${activeAdminRecord.emplacements.emplacements_restants}/${activeAdminRecord.emplacements.emplacements_max} restants`
+        : activeAdminRecord.emplacements.reason
+      : "Non renseigne";
 
   const identityRows = [
     {
@@ -318,16 +323,17 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     { label: "Region", value: summarizeStrings(selectedCases.map((item) => item.region)) },
     { label: "Sous-region", value: summarizeStrings(selectedCases.map((item) => item.sous_region)) },
     { label: "Cote", value: summarizeBooleans(selectedCases.map((item) => item.cote)) },
-    { label: "Lac majeur", value: summarizeBooleans(selectedCases.map((item) => item.lac_majeur)) },
+    { label: "Lac", value: summarizeBooleans(selectedCases.map((item) => item.lac)) },
     {
-      label: "Cours d'eau majeur",
-      value: summarizeBooleans(selectedCases.map((item) => item.cours_eau_majeur)),
+      label: "Fluvial",
+      value: summarizeBooleans(selectedCases.map((item) => item.fluvial)),
     },
   ];
   const terrainRows = [
     { label: "Categorie", value: summarizeStrings(selectedCases.map((item) => item.terrain_cat)) },
     { label: "Type", value: summarizeStrings(selectedCases.map((item) => item.terrain_type)) },
-    { label: "Relief", value: summarizeStrings(selectedCases.map((item) => item.relief)) },
+    { label: "Colline", value: summarizeBooleans(selectedCases.map((item) => item.colline)) },
+    { label: "Emplacements", value: slotSummary },
   ];
   const controlRows = [
     { label: "Faction", value: summarizeStrings(selectedCases.map((item) => item.faction)) },
@@ -424,7 +430,7 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   <FormRow label="Sous-region" mixed={isMultiSelection ? bulkDraft.public.sous_region.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.public.sous_region) : undefined}>
                     <input className={fieldClassName} value={isMultiSelection ? bulkDraft.public.sous_region.value : singleDraft.public.sous_region} onChange={(event) => isMultiSelection ? onBulkFieldChange("public", "sous_region", event.target.value) : onSingleFieldChange("public", "sous_region", event.target.value)} disabled={adminLoading || adminSaving} />
                   </FormRow>
-                  {(["cote", "lac_majeur", "cours_eau_majeur"] as const).map((field) => (
+                  {(["cote", "lac", "fluvial"] as const).map((field) => (
                     <FormRow key={field} label={field} mixed={isMultiSelection ? bulkDraft.public[field].mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.public[field]) : undefined}>
                       <BooleanField value={isMultiSelection ? bulkDraft.public[field].value : singleDraft.public[field]} onChange={(value) => isMultiSelection ? onBulkFieldChange("public", field, value) : onSingleFieldChange("public", field, value)} disabled={adminLoading || adminSaving} />
                     </FormRow>
@@ -441,8 +447,11 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
                   <FormRow label="Type" mixed={isMultiSelection ? bulkDraft.terrain.terrain_type.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.terrain_type) : undefined}>
                     <SelectField value={isMultiSelection ? bulkDraft.terrain.terrain_type.value : singleDraft.terrain.terrain_type} options={isMultiSelection ? bulkTerrainTypeOptions : singleTerrainTypeOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "terrain_type", value) : onSingleFieldChange("terrain", "terrain_type", value)} disabled={adminLoading || adminSaving || (isMultiSelection ? bulkTerrainTypeOptions : singleTerrainTypeOptions).length === 0} />
                   </FormRow>
-                  <FormRow label="Relief" mixed={isMultiSelection ? bulkDraft.terrain.relief.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.relief) : undefined}>
-                    <SelectField value={isMultiSelection ? bulkDraft.terrain.relief.value : singleDraft.terrain.relief} options={reliefOptions} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "relief", value) : onSingleFieldChange("terrain", "relief", value)} disabled={adminLoading || adminSaving} />
+                  <FormRow label="Terrain secondaire" mixed={isMultiSelection ? bulkDraft.terrain.terrain_secondaire.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.terrain_secondaire) : undefined}>
+                    <SelectField value={isMultiSelection ? bulkDraft.terrain.terrain_secondaire.value : singleDraft.terrain.terrain_secondaire} options={Object.values(activeAdminRecord?.reference_data.terrain_types_by_category ?? {}).flat().map((option) => option.value)} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "terrain_secondaire", value) : onSingleFieldChange("terrain", "terrain_secondaire", value)} disabled={adminLoading || adminSaving} />
+                  </FormRow>
+                  <FormRow label="Colline" mixed={isMultiSelection ? bulkDraft.terrain.colline.mixed : false} helper={isMultiSelection ? renderBulkHelper(bulkDraft.terrain.colline) : undefined}>
+                    <BooleanField value={isMultiSelection ? bulkDraft.terrain.colline.value : singleDraft.terrain.colline} onChange={(value) => isMultiSelection ? onBulkFieldChange("terrain", "colline", value) : onSingleFieldChange("terrain", "colline", value)} disabled={adminLoading || adminSaving} />
                   </FormRow>
                 </div>
               </section>

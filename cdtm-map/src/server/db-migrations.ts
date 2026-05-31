@@ -1,5 +1,7 @@
 import { type Pool, type PoolClient } from "pg";
 
+import { TERRAIN_DEFINITIONS } from "@/map/rules";
+
 type DatabaseMigration = {
   version: string;
   name: string;
@@ -428,8 +430,8 @@ const databaseMigrations: DatabaseMigration[] = [
           region TEXT,
           sous_region TEXT,
           cote BOOLEAN,
-          lac_majeur BOOLEAN,
-          cours_eau_majeur BOOLEAN,
+          lac BOOLEAN,
+          fluvial BOOLEAN,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1020,6 +1022,296 @@ const databaseMigrations: DatabaseMigration[] = [
            OR stroke_width < 1
            OR stroke_width > 12
       `);
+    },
+  },
+  {
+    version: "008",
+    name: "map_rules_v1_foundation",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE case_public_current
+        ADD COLUMN IF NOT EXISTS lac BOOLEAN
+      `);
+      await client.query(`
+        ALTER TABLE case_public_current
+        ADD COLUMN IF NOT EXISTS fluvial BOOLEAN
+      `);
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_public_current'
+              AND column_name = 'lac_majeur'
+          ) THEN
+            UPDATE case_public_current
+            SET lac = COALESCE(lac, lac_majeur)
+            WHERE lac IS NULL;
+          END IF;
+
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_public_current'
+              AND column_name = 'cours_eau_majeur'
+          ) THEN
+            UPDATE case_public_current
+            SET fluvial = COALESCE(fluvial, cours_eau_majeur)
+            WHERE fluvial IS NULL;
+          END IF;
+        END
+        $$;
+      `);
+      await client.query(`ALTER TABLE case_public_current DROP COLUMN IF EXISTS lac_majeur`);
+      await client.query(`ALTER TABLE case_public_current DROP COLUMN IF EXISTS cours_eau_majeur`);
+
+      await client.query(`
+        ALTER TABLE case_terrain_current
+        ADD COLUMN IF NOT EXISTS terrain_secondaire TEXT
+      `);
+      await client.query(`
+        ALTER TABLE case_terrain_current
+        ADD COLUMN IF NOT EXISTS colline BOOLEAN
+      `);
+      await client.query(`
+        UPDATE case_terrain_current
+        SET
+          colline = TRUE,
+          relief = NULL,
+          updated_at = NOW()
+        WHERE relief = 'colline'
+      `);
+      await client.query(`
+        UPDATE case_terrain_current
+        SET terrain_type = CASE terrain_type
+          WHEN 'desert_sable' THEN 'desert'
+          WHEN 'plaine_boisee' THEN 'bocage'
+          WHEN 'steppe' THEN 'plaine_aride'
+          WHEN 'savane' THEN 'plaine_aride'
+          ELSE terrain_type
+        END,
+        updated_at = NOW()
+        WHERE terrain_type IN ('desert_sable', 'plaine_boisee', 'steppe', 'savane')
+      `);
+
+      await client.query(`
+        ALTER TABLE reference_nomenclature_values
+        ADD COLUMN IF NOT EXISTS emplacements_base INTEGER
+      `);
+      await client.query(`
+        DELETE FROM reference_nomenclature_values
+        WHERE group_key = 'terrain_type'
+          AND entry_key IN ('desert_sable', 'plaine_boisee', 'steppe', 'savane', 'glacier', 'inconnu')
+      `);
+      await client.query(`
+        UPDATE reference_nomenclature_values
+        SET parent_entry_key = CASE parent_entry_key
+          WHEN 'desert_sable' THEN 'desert'
+          WHEN 'plaine_boisee' THEN 'bocage'
+          WHEN 'steppe' THEN 'plaine_aride'
+          WHEN 'savane' THEN 'plaine_aride'
+          ELSE parent_entry_key
+        END,
+        updated_at = NOW()
+        WHERE parent_entry_key IN ('desert_sable', 'plaine_boisee', 'steppe', 'savane')
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS reference_peuple_modificateurs (
+          id BIGSERIAL PRIMARY KEY,
+          peuple_slug TEXT NOT NULL REFERENCES reference_peuples(peuple_key) ON DELETE CASCADE,
+          type_declencheur TEXT NOT NULL CHECK (type_declencheur IN ('terrain', 'attribut', 'groupe_logique')),
+          declencheur TEXT NOT NULL,
+          valeur INTEGER NOT NULL,
+          groupe_logique TEXT,
+          description TEXT,
+          updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (peuple_slug, type_declencheur, declencheur)
+        )
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS reference_peuple_modificateurs_peuple_idx
+        ON reference_peuple_modificateurs(peuple_slug, type_declencheur, declencheur)
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS bonus_contextuel (
+          id BIGSERIAL PRIMARY KEY,
+          slug TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL,
+          valeur INTEGER NOT NULL DEFAULT 0,
+          description TEXT,
+          active BOOLEAN NOT NULL DEFAULT TRUE,
+          updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS case_bonus_contextuels (
+          id BIGSERIAL PRIMARY KEY,
+          id_case TEXT NOT NULL REFERENCES case_registry(id_case) ON DELETE CASCADE,
+          bonus_slug TEXT NOT NULL REFERENCES bonus_contextuel(slug) ON DELETE RESTRICT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (id_case, bonus_slug)
+        )
+      `);
+
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS emplacements_base INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS malus_colline INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS modificateur_peuple INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS bonus_contextuel INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS emplacements_bruts INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS emplacements_max INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS emplacements_utilises INTEGER
+      `);
+      await client.query(`
+        ALTER TABLE case_emplacements_current
+        ADD COLUMN IF NOT EXISTS emplacements_restants INTEGER
+      `);
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_emplacements_current'
+              AND column_name = 'empl_base'
+          ) THEN
+            UPDATE case_emplacements_current
+            SET emplacements_base = COALESCE(emplacements_base, empl_base)
+            WHERE emplacements_base IS NULL;
+          END IF;
+
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_emplacements_current'
+              AND column_name = 'empl_max'
+          ) THEN
+            UPDATE case_emplacements_current
+            SET emplacements_max = COALESCE(emplacements_max, empl_max)
+            WHERE emplacements_max IS NULL;
+          END IF;
+
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'case_emplacements_current'
+              AND column_name = 'bonus_speciaux'
+          ) THEN
+            INSERT INTO bonus_contextuel (slug, label, valeur, description)
+            SELECT
+              'legacy_bonus_speciaux',
+              'Ancien bonus_speciaux',
+              0,
+              'Migration minimale des anciennes valeurs bonus_speciaux; valeur a reprendre manuellement.'
+            WHERE EXISTS (
+              SELECT 1 FROM case_emplacements_current
+              WHERE bonus_speciaux IS NOT NULL AND BTRIM(bonus_speciaux) <> ''
+            )
+            ON CONFLICT (slug) DO NOTHING;
+
+            INSERT INTO case_bonus_contextuels (id_case, bonus_slug)
+            SELECT id_case, 'legacy_bonus_speciaux'
+            FROM case_emplacements_current
+            WHERE bonus_speciaux IS NOT NULL AND BTRIM(bonus_speciaux) <> ''
+            ON CONFLICT (id_case, bonus_slug) DO NOTHING;
+          END IF;
+        END
+        $$;
+      `);
+      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS bonus_speciaux`);
+      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_base`);
+      await client.query(`ALTER TABLE case_emplacements_current DROP COLUMN IF EXISTS empl_max`);
+
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS emp_requis INTEGER DEFAULT 0
+      `);
+      await client.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'reference_locality_types'
+              AND column_name = 'slot_weight'
+          ) THEN
+            UPDATE reference_locality_types
+            SET emp_requis = COALESCE(emp_requis, slot_weight)
+            WHERE emp_requis IS NULL OR emp_requis = 0;
+          END IF;
+        END
+        $$;
+      `);
+      await client.query(`
+        ALTER TABLE reference_locality_types
+        ADD COLUMN IF NOT EXISTS upgrades_from_type_id TEXT REFERENCES reference_locality_types(type_key) ON DELETE SET NULL
+      `);
+      await client.query(`ALTER TABLE reference_locality_types DROP COLUMN IF EXISTS slot_weight`);
+
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS consumes_slot BOOLEAN DEFAULT FALSE
+      `);
+      await client.query(`
+        ALTER TABLE reference_landmark_types
+        ADD COLUMN IF NOT EXISTS emp_requis INTEGER DEFAULT 0
+      `);
+
+      for (const terrain of TERRAIN_DEFINITIONS) {
+        await client.query(
+          `
+            INSERT INTO reference_nomenclature_values (
+              id_entry,
+              group_key,
+              entry_key,
+              label,
+              parent_entry_key,
+              emplacements_base
+            )
+            VALUES ($1, 'terrain_type', $2, $3, $4, $5)
+            ON CONFLICT (group_key, entry_key) DO UPDATE
+            SET
+              label = EXCLUDED.label,
+              parent_entry_key = EXCLUDED.parent_entry_key,
+              emplacements_base = EXCLUDED.emplacements_base,
+              updated_at = NOW()
+          `,
+          [
+            `terrain_type:${terrain.slug}`,
+            terrain.slug,
+            terrain.label,
+            terrain.category,
+            terrain.emplacements_base,
+          ],
+        );
+      }
     },
   },
 ];

@@ -4,6 +4,7 @@ import controleursExample from "../../data/reference/controleurs.example.json";
 import type { AdminRole } from "@/admin/roles";
 import nomenclatures from "../../data/reference/nomenclatures.json";
 import { referenceTableDefinitions } from "@/admin/tech-types";
+import { PEUPLE_MODIFICATEURS_V1, TERRAIN_DEFINITIONS } from "@/map/rules";
 import { runDatabaseMigrations } from "@/server/db-migrations";
 import { getServerEnv } from "@/server/env";
 import { hashSecret } from "@/server/security";
@@ -99,6 +100,11 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
     DELETE FROM reference_nomenclature_values
     WHERE group_key IN ('peuple_majoritaire', 'peuple', 'visibilite')
   `);
+  await client.query(`
+    DELETE FROM reference_nomenclature_values
+    WHERE group_key = 'terrain_type'
+      AND entry_key IN ('desert_sable', 'plaine_boisee', 'steppe', 'savane', 'glacier', 'inconnu')
+  `);
 
   await client.query(
     `
@@ -107,6 +113,49 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
       WHERE parent_entry_key = 'desert_glace'
     `,
   );
+
+  for (const category of Array.from(new Set(TERRAIN_DEFINITIONS.map((terrain) => terrain.category)))) {
+    await client.query(
+      `
+        INSERT INTO reference_nomenclature_values (id_entry, group_key, entry_key, label)
+        VALUES ($1, 'terrain_cat', $2, $3)
+        ON CONFLICT (group_key, entry_key) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          updated_at = NOW()
+      `,
+      [`terrain_cat:${category}`, category, category],
+    );
+  }
+
+  for (const terrain of TERRAIN_DEFINITIONS) {
+    await client.query(
+      `
+        INSERT INTO reference_nomenclature_values (
+          id_entry,
+          group_key,
+          entry_key,
+          label,
+          parent_entry_key,
+          emplacements_base
+        )
+        VALUES ($1, 'terrain_type', $2, $3, $4, $5)
+        ON CONFLICT (group_key, entry_key) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          parent_entry_key = EXCLUDED.parent_entry_key,
+          emplacements_base = EXCLUDED.emplacements_base,
+          updated_at = NOW()
+      `,
+      [
+        `terrain_type:${terrain.slug}`,
+        terrain.slug,
+        terrain.label,
+        terrain.category,
+        terrain.emplacements_base,
+      ],
+    );
+  }
 
   const countResult = await client.query<{ count: string }>(
     "SELECT COUNT(*)::text AS count FROM reference_nomenclature_values",
@@ -247,23 +296,25 @@ async function seedReferenceRaces(client: PoolClient): Promise<void> {
 
 async function seedReferencePeuples(client: PoolClient): Promise<void> {
   const peuples = [
-    ["nandor", "elfes"],
-    ["noldor", "elfes"],
-    ["sindar", "elfes"],
-    ["avari", "elfes"],
-    ["lossoths", "hommes"],
-    ["enedwaithrim", "hommes"],
-    ["druedain", "hommes"],
-    ["haradrim", "hommes"],
-    ["heritiers_numenor", "hommes"],
-    ["umbareens", "hommes"],
-    ["hommes_vertbois", "hommes"],
-    ["nains", "nains"],
-    ["orques", "orques"],
-    ["hobbits", "hobbits"],
+    ["hommes", "hommes", "Hommes"],
+    ["elfes", "elfes", "Elfes"],
+    ["orques", "orques", "Orcs"],
+    ["nains", "nains", "Nains"],
+    ["hobbits", "hobbits", "Hobbits"],
+    ["nandor", "elfes", "Nandor"],
+    ["noldor", "elfes", "Noldor"],
+    ["sindar", "elfes", "Sindar"],
+    ["avari", "elfes", "Avari"],
+    ["lossoths", "hommes", "Lossoth"],
+    ["enedwaithrim", "hommes", "Enedwaithrim"],
+    ["druedain", "hommes", "Druedain"],
+    ["haradrim", "hommes", "Haradrim"],
+    ["heritiers_numenor", "hommes", "Heritiers de Numenor"],
+    ["umbareens", "hommes", "Umbareens"],
+    ["hommes_vertbois", "hommes", "Hommes de Vert-Bois"],
   ] as const;
 
-  for (const [peupleKey, raceKey] of peuples) {
+  for (const [peupleKey, raceKey, label] of peuples) {
     await client.query(
       `
         INSERT INTO reference_peuples (peuple_key, race_key, label)
@@ -274,19 +325,53 @@ async function seedReferencePeuples(client: PoolClient): Promise<void> {
           label = EXCLUDED.label,
           updated_at = NOW()
       `,
-      [peupleKey, raceKey, peupleKey],
+      [peupleKey, raceKey, label],
+    );
+  }
+}
+
+async function seedPeupleModificateurs(client: PoolClient): Promise<void> {
+  for (const modifier of PEUPLE_MODIFICATEURS_V1) {
+    await client.query(
+      `
+        INSERT INTO reference_peuple_modificateurs (
+          peuple_slug,
+          type_declencheur,
+          declencheur,
+          valeur,
+          groupe_logique,
+          description
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (peuple_slug, type_declencheur, declencheur) DO UPDATE
+        SET
+          valeur = EXCLUDED.valeur,
+          groupe_logique = EXCLUDED.groupe_logique,
+          description = EXCLUDED.description,
+          updated_at = NOW()
+      `,
+      [
+        modifier.peuple_slug,
+        modifier.type_declencheur,
+        modifier.declencheur,
+        modifier.valeur,
+        "groupe_logique" in modifier ? modifier.groupe_logique ?? null : null,
+        "description" in modifier ? modifier.description ?? null : null,
+      ],
     );
   }
 }
 
 async function seedLocalityTypes(client: PoolClient): Promise<void> {
-  for (const [typeKey, consumesSlot] of [
-    ["fort", true],
-    ["ville_fortifiee", true],
-    ["ville_non_fortifiee", true],
-    ["avant_poste", true],
-    ["hobbit_bourg", true],
-    ["dependance", false],
+  for (const [typeKey, label, consumesSlot, empRequis, upgradesFromTypeId] of [
+    ["avant_poste", "Avant-poste", true, 1, null],
+    ["hameau", "Hameau", true, 1, "avant_poste"],
+    ["village", "Village", true, 1, "hameau"],
+    ["bourg", "Bourg", true, 2, "village"],
+    ["ville", "Ville", true, 3, "bourg"],
+    ["cite", "Cite", true, 4, "ville"],
+    ["fort", "Fort", true, 2, "avant_poste"],
+    ["dependance", "Dependance", false, 0, null],
   ] as const) {
     await client.query(
       `
@@ -295,17 +380,19 @@ async function seedLocalityTypes(client: PoolClient): Promise<void> {
           label,
           default_icon_key,
           consumes_slot,
-          slot_weight
+          emp_requis,
+          upgrades_from_type_id
         )
-        VALUES ($1, $2, NULL, $3, $4)
+        VALUES ($1, $2, NULL, $3, $4, $5)
         ON CONFLICT (type_key) DO UPDATE
         SET
           label = EXCLUDED.label,
           consumes_slot = EXCLUDED.consumes_slot,
-          slot_weight = EXCLUDED.slot_weight,
+          emp_requis = EXCLUDED.emp_requis,
+          upgrades_from_type_id = EXCLUDED.upgrades_from_type_id,
           updated_at = NOW()
       `,
-      [typeKey, typeKey, consumesSlot, 0],
+      [typeKey, label, consumesSlot, empRequis, upgradesFromTypeId],
     );
   }
 }
@@ -327,14 +414,18 @@ async function seedLandmarkTypes(client: PoolClient): Promise<void> {
           description,
           category,
           default_icon_key,
+          consumes_slot,
+          emp_requis,
           is_active
         )
-        VALUES ($1, $2, $3, $4, NULL, TRUE)
+        VALUES ($1, $2, $3, $4, NULL, FALSE, 0, TRUE)
         ON CONFLICT (type_key) DO UPDATE
         SET
           label = EXCLUDED.label,
           description = EXCLUDED.description,
           category = EXCLUDED.category,
+          consumes_slot = EXCLUDED.consumes_slot,
+          emp_requis = EXCLUDED.emp_requis,
           is_active = TRUE,
           updated_at = NOW()
       `,
@@ -370,6 +461,7 @@ async function seedReferenceTables(client: PoolClient): Promise<void> {
   await seedControleurs(client);
   await seedReferenceRaces(client);
   await seedReferencePeuples(client);
+  await seedPeupleModificateurs(client);
   await seedLocalityTypes(client);
   await seedLandmarkTypes(client);
   await seedForceTypes(client);

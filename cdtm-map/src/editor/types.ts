@@ -13,6 +13,9 @@ export type EditorReferenceOption = {
   image_alt?: string | null;
   default_icon_key?: string | null;
   category?: string | null;
+  consumes_slot?: boolean | null;
+  emp_requis?: number | null;
+  upgrades_from_type_id?: string | null;
 };
 
 export type EditorMapLocality = {
@@ -95,6 +98,8 @@ export type EditorMapLocalityInput = {
   controleur?: string | null;
   status?: MapObjectStatus;
   depends_on_locality_id?: string | null;
+  force_slot_override?: boolean | null;
+  slot_override_reason?: string | null;
   description?: string | null;
 };
 
@@ -109,6 +114,8 @@ export type EditorMapLandmarkInput = {
   faction?: string | null;
   controleur?: string | null;
   status?: MapObjectStatus;
+  force_slot_override?: boolean | null;
+  slot_override_reason?: string | null;
   description?: string | null;
 };
 

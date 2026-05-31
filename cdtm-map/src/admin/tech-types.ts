@@ -36,7 +36,9 @@ export type ReferenceTableKey =
   | "landmark_types"
   | "force_types"
   | "races"
-  | "peuples";
+  | "peuples"
+  | "peuple_modificateurs"
+  | "bonus_contextuel";
 
 export type ReferenceTableDefinition = {
   key: ReferenceTableKey;
@@ -189,6 +191,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "entry_key", label: "entry_key", type: "text", required: true, searchable: true },
       { name: "label", label: "label", type: "text", searchable: true },
       { name: "parent_entry_key", label: "parent_entry_key", type: "text", searchable: true },
+      { name: "emplacements_base", label: "emplacements_base", type: "integer" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
@@ -282,7 +285,13 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         reference_table_key: "map_icons",
       },
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
-      { name: "slot_weight", label: "slot_weight", type: "integer" },
+      { name: "emp_requis", label: "emp_requis", type: "integer" },
+      {
+        name: "upgrades_from_type_id",
+        label: "upgrades_from_type_id",
+        type: "reference",
+        reference_table_key: "locality_types",
+      },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
@@ -306,6 +315,8 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         type: "reference",
         reference_table_key: "map_icons",
       },
+      { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
+      { name: "emp_requis", label: "emp_requis", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
@@ -369,6 +380,50 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "label", label: "label", type: "text", required: true, searchable: true },
       { name: "description", label: "description", type: "textarea", searchable: true },
       { name: "is_active", label: "is_active", type: "boolean" },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "peuple_modificateurs",
+    title: "Modificateurs de peuples",
+    description: "Regles V1 de calcul des emplacements rattachees aux peuples.",
+    physical_name: "reference_peuple_modificateurs",
+    primary_key: "id",
+    fields: [
+      { name: "id", label: "id", type: "integer", readOnly: true },
+      {
+        name: "peuple_slug",
+        label: "peuple_slug",
+        type: "reference",
+        required: true,
+        searchable: true,
+        reference_table_key: "peuples",
+      },
+      { name: "type_declencheur", label: "type_declencheur", type: "text", required: true, searchable: true },
+      { name: "declencheur", label: "declencheur", type: "text", required: true, searchable: true },
+      { name: "valeur", label: "valeur", type: "integer", required: true },
+      { name: "groupe_logique", label: "groupe_logique", type: "text", searchable: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
+      { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
+      { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },
+    ],
+  },
+  {
+    key: "bonus_contextuel",
+    title: "Bonus contextuels",
+    description: "Bonus ou malus fixes applicables a une case.",
+    physical_name: "bonus_contextuel",
+    primary_key: "id",
+    fields: [
+      { name: "id", label: "id", type: "integer", readOnly: true },
+      { name: "slug", label: "slug", type: "text", required: true, searchable: true },
+      { name: "label", label: "label", type: "text", required: true, searchable: true },
+      { name: "valeur", label: "valeur", type: "integer", required: true },
+      { name: "description", label: "description", type: "textarea", searchable: true },
+      { name: "active", label: "active", type: "boolean" },
       { name: "updated_by_user_id", label: "updated_by_user_id", type: "integer", readOnly: true },
       { name: "created_at", label: "created_at", type: "datetime", readOnly: true },
       { name: "updated_at", label: "updated_at", type: "datetime", readOnly: true },

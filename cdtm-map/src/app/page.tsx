@@ -132,10 +132,12 @@ function mergeStableCases(
       region: publicCase.region,
       sous_region: publicCase.sous_region,
       cote: publicCase.cote,
-      lac_majeur: publicCase.lac_majeur,
-      cours_eau_majeur: publicCase.cours_eau_majeur,
+      lac: publicCase.lac,
+      fluvial: publicCase.fluvial,
       terrain_cat: publicCase.terrain_cat,
       terrain_type: publicCase.terrain_type,
+      terrain_secondaire: publicCase.terrain_secondaire,
+      colline: publicCase.colline,
       relief: publicCase.relief,
       faction: publicCase.faction,
       controleur: publicCase.controleur,
@@ -154,10 +156,12 @@ function applyPersistedRecordToStableCase(
     region: record.public.region,
     sous_region: record.public.sous_region,
     cote: record.public.cote,
-    lac_majeur: record.public.lac_majeur,
-    cours_eau_majeur: record.public.cours_eau_majeur,
+    lac: record.public.lac,
+    fluvial: record.public.fluvial,
     terrain_cat: record.public.terrain_cat,
     terrain_type: record.public.terrain_type,
+    terrain_secondaire: record.public.terrain_secondaire,
+    colline: record.public.colline,
     relief: record.public.relief,
     faction: record.public.faction,
     controleur: record.public.controleur,
@@ -182,10 +186,12 @@ function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
     draft.public.region,
     draft.public.sous_region,
     draft.public.cote,
-    draft.public.lac_majeur,
-    draft.public.cours_eau_majeur,
+    draft.public.lac,
+    draft.public.fluvial,
     draft.terrain.terrain_cat,
     draft.terrain.terrain_type,
+    draft.terrain.terrain_secondaire,
+    draft.terrain.colline,
     draft.terrain.relief,
     draft.control.faction,
     draft.control.controleur,
@@ -214,16 +220,18 @@ function buildBulkEditDraft(records: AdminCaseRecord[]): AdminBulkEditDraft {
       region: buildBulkFieldState(records.map((record) => record.public.region)),
       sous_region: buildBulkFieldState(records.map((record) => record.public.sous_region)),
       cote: buildBulkFieldState(records.map((record) => normalizeDraftBooleanValue(record.public.cote))),
-      lac_majeur: buildBulkFieldState(
-        records.map((record) => normalizeDraftBooleanValue(record.public.lac_majeur)),
+      lac: buildBulkFieldState(
+        records.map((record) => normalizeDraftBooleanValue(record.public.lac)),
       ),
-      cours_eau_majeur: buildBulkFieldState(
-        records.map((record) => normalizeDraftBooleanValue(record.public.cours_eau_majeur)),
+      fluvial: buildBulkFieldState(
+        records.map((record) => normalizeDraftBooleanValue(record.public.fluvial)),
       ),
     },
     terrain: {
       terrain_cat: buildBulkFieldState(records.map((record) => record.terrain.terrain_cat)),
       terrain_type: buildBulkFieldState(records.map((record) => record.terrain.terrain_type)),
+      terrain_secondaire: buildBulkFieldState(records.map((record) => record.terrain.terrain_secondaire)),
+      colline: buildBulkFieldState(records.map((record) => normalizeDraftBooleanValue(record.terrain.colline))),
       relief: buildBulkFieldState(records.map((record) => record.terrain.relief)),
     },
     control: {
@@ -241,8 +249,8 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
     draft.public.region.touched ||
     draft.public.sous_region.touched ||
     draft.public.cote.touched ||
-    draft.public.lac_majeur.touched ||
-    draft.public.cours_eau_majeur.touched
+    draft.public.lac.touched ||
+    draft.public.fluvial.touched
   ) {
     patch.public = {};
 
@@ -262,13 +270,13 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
       patch.public.cote = parseDraftBooleanValue(draft.public.cote.value);
     }
 
-    if (draft.public.lac_majeur.touched) {
-      patch.public.lac_majeur = parseDraftBooleanValue(draft.public.lac_majeur.value);
+    if (draft.public.lac.touched) {
+      patch.public.lac = parseDraftBooleanValue(draft.public.lac.value);
     }
 
-    if (draft.public.cours_eau_majeur.touched) {
-      patch.public.cours_eau_majeur = parseDraftBooleanValue(
-        draft.public.cours_eau_majeur.value,
+    if (draft.public.fluvial.touched) {
+      patch.public.fluvial = parseDraftBooleanValue(
+        draft.public.fluvial.value,
       );
     }
   }
@@ -276,6 +284,8 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
   if (
     draft.terrain.terrain_cat.touched ||
     draft.terrain.terrain_type.touched ||
+    draft.terrain.terrain_secondaire.touched ||
+    draft.terrain.colline.touched ||
     draft.terrain.relief.touched
   ) {
     patch.terrain = {};
@@ -292,6 +302,17 @@ function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
         draft.terrain.terrain_type.value.trim().length > 0
           ? draft.terrain.terrain_type.value.trim()
           : null;
+    }
+
+    if (draft.terrain.terrain_secondaire.touched) {
+      patch.terrain.terrain_secondaire =
+        draft.terrain.terrain_secondaire.value.trim().length > 0
+          ? draft.terrain.terrain_secondaire.value.trim()
+          : null;
+    }
+
+    if (draft.terrain.colline.touched) {
+      patch.terrain.colline = parseDraftBooleanValue(draft.terrain.colline.value);
     }
 
     if (draft.terrain.relief.touched) {
@@ -442,8 +463,8 @@ export default function HomePage() {
           region: stableCase.region ?? "",
           sous_region: stableCase.sous_region ?? "",
           cote: normalizeDraftBooleanValue(stableCase.cote),
-          lac_majeur: normalizeDraftBooleanValue(stableCase.lac_majeur),
-          cours_eau_majeur: normalizeDraftBooleanValue(stableCase.cours_eau_majeur),
+          lac: normalizeDraftBooleanValue(stableCase.lac),
+          fluvial: normalizeDraftBooleanValue(stableCase.fluvial),
         };
       }
 

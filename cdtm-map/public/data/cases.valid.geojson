@@ -9,8 +9,8 @@
         "region": "calenardhon",
         "sous_region": "eastfold",
         "cote": false,
-        "lac_majeur": false,
-        "cours_eau_majeur": false
+        "lac": false,
+        "fluvial": false
       },
       "geometry": {
         "type": "Polygon",
@@ -47,8 +47,8 @@
         "region": "rhovanion",
         "sous_region": "val_d_anduin",
         "cote": false,
-        "lac_majeur": false,
-        "cours_eau_majeur": true
+        "lac": false,
+        "fluvial": true
       },
       "geometry": {
         "type": "Polygon",
@@ -85,8 +85,8 @@
         "region": "umbar",
         "sous_region": "cote",
         "cote": true,
-        "lac_majeur": false,
-        "cours_eau_majeur": false
+        "lac": false,
+        "fluvial": false
       },
       "geometry": {
         "type": "Polygon",
@@ -123,8 +123,8 @@
         "region": "rhovanion",
         "sous_region": "lac_long",
         "cote": false,
-        "lac_majeur": true,
-        "cours_eau_majeur": false
+        "lac": true,
+        "fluvial": false
       },
       "geometry": {
         "type": "Polygon",

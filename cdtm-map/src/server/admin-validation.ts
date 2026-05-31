@@ -71,12 +71,14 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
       region: normalizeText(publicFields.region),
       sous_region: normalizeText(publicFields.sous_region),
       cote: normalizeBooleanDraftValue(publicFields.cote),
-      lac_majeur: normalizeBooleanDraftValue(publicFields.lac_majeur),
-      cours_eau_majeur: normalizeBooleanDraftValue(publicFields.cours_eau_majeur),
+      lac: normalizeBooleanDraftValue(publicFields.lac),
+      fluvial: normalizeBooleanDraftValue(publicFields.fluvial),
     },
     terrain: {
       terrain_cat: normalizeText(terrain.terrain_cat),
       terrain_type: normalizeText(terrain.terrain_type),
+      terrain_secondaire: normalizeText(terrain.terrain_secondaire),
+      colline: normalizeBooleanDraftValue(terrain.colline),
       relief: normalizeText(terrain.relief),
     },
     control: {
@@ -132,12 +134,12 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
       publicPatch.cote = parseNullableBooleanPatchValue(publicFields.cote);
     }
 
-    if (hasOwnProperty(publicFields, "lac_majeur")) {
-      publicPatch.lac_majeur = parseNullableBooleanPatchValue(publicFields.lac_majeur);
+    if (hasOwnProperty(publicFields, "lac")) {
+      publicPatch.lac = parseNullableBooleanPatchValue(publicFields.lac);
     }
 
-    if (hasOwnProperty(publicFields, "cours_eau_majeur")) {
-      publicPatch.cours_eau_majeur = parseNullableBooleanPatchValue(publicFields.cours_eau_majeur);
+    if (hasOwnProperty(publicFields, "fluvial")) {
+      publicPatch.fluvial = parseNullableBooleanPatchValue(publicFields.fluvial);
     }
 
     if (Object.keys(publicPatch).length > 0) {
@@ -154,6 +156,14 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
 
     if (hasOwnProperty(terrain, "terrain_type")) {
       terrainPatch.terrain_type = normalizeNullableText(terrain.terrain_type);
+    }
+
+    if (hasOwnProperty(terrain, "terrain_secondaire")) {
+      terrainPatch.terrain_secondaire = normalizeNullableText(terrain.terrain_secondaire);
+    }
+
+    if (hasOwnProperty(terrain, "colline")) {
+      terrainPatch.colline = parseNullableBooleanPatchValue(terrain.colline);
     }
 
     if (hasOwnProperty(terrain, "relief")) {

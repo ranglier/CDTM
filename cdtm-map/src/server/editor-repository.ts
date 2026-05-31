@@ -28,6 +28,14 @@ import {
   MAP_ROUTE_GEOMETRY_MODES,
   MAP_ROUTE_STROKE_STYLES,
 } from "@/editor/types";
+import {
+  calculateCaseSlots,
+  countConsumedSlots,
+  type ContextualBonus,
+  type PeupleModifier,
+  type SlotConsumer,
+  validateSlotConsumption,
+} from "@/map/rules";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import {
   EditorConflictError,
@@ -126,6 +134,10 @@ type NormalizedEditorObjectInput = {
 };
 type EditorEntityPatch = EditorMapLocalityPatch | EditorMapLandmarkPatch | EditorMapForcePatch;
 type NormalizedEditorObjectPatch = Partial<Omit<NormalizedEditorObjectInput, "id">>;
+type SlotOverrideInput = {
+  force_slot_override?: boolean | null;
+  slot_override_reason?: string | null;
+};
 
 type NormalizedEditorRouteInput = {
   id_route: string;
@@ -496,6 +508,284 @@ async function validateEditorObjectReferences(
   }
 }
 
+function shouldForceSlotOverride(input: unknown): boolean {
+  return Boolean(
+    input &&
+      typeof input === "object" &&
+      "force_slot_override" in input &&
+      (input as SlotOverrideInput).force_slot_override === true,
+  );
+}
+
+async function getReferenceSlotConsumer(
+  client: PoolClient,
+  tableName: "reference_locality_types" | "reference_landmark_types",
+  typeKey: string,
+): Promise<SlotConsumer> {
+  const result = await client.query<SlotConsumer>(
+    `
+      SELECT consumes_slot, emp_requis
+      FROM ${tableName}
+      WHERE type_key = $1
+    `,
+    [typeKey],
+  );
+
+  return result.rows[0] ?? { consumes_slot: false, emp_requis: 0 };
+}
+
+async function listExistingCaseSlotConsumers(
+  client: PoolClient,
+  idCase: string,
+  exclude?: { tableName: "map_localities" | "map_landmarks"; idColumn: "id_locality" | "id_landmark"; id: string },
+): Promise<SlotConsumer[]> {
+  const result = await client.query<SlotConsumer>(
+    `
+      SELECT type_ref.consumes_slot, type_ref.emp_requis
+      FROM map_localities AS locality
+      INNER JOIN reference_locality_types AS type_ref ON type_ref.type_key = locality.type_key
+      WHERE locality.id_case_detected = $1
+        AND locality.status <> 'archived'
+        AND ($2::text IS NULL OR locality.id_locality <> $2)
+
+      UNION ALL
+
+      SELECT type_ref.consumes_slot, type_ref.emp_requis
+      FROM map_landmarks AS landmark
+      INNER JOIN reference_landmark_types AS type_ref ON type_ref.type_key = landmark.type_key
+      WHERE landmark.id_case_detected = $1
+        AND landmark.status <> 'archived'
+        AND ($3::text IS NULL OR landmark.id_landmark <> $3)
+    `,
+    [
+      idCase,
+      exclude?.tableName === "map_localities" ? exclude.id : null,
+      exclude?.tableName === "map_landmarks" ? exclude.id : null,
+    ],
+  );
+
+  return result.rows;
+}
+
+async function calculateCaseSlotCapacity(
+  client: PoolClient,
+  idCase: string,
+  emplacementsUtilises = 0,
+) {
+  const caseResult = await client.query<{
+    terrain_type: string | null;
+    cote: boolean | null;
+    lac: boolean | null;
+    fluvial: boolean | null;
+    colline: boolean | null;
+    peuple: string | null;
+  }>(
+    `
+      SELECT
+        terrain.terrain_type,
+        public_current.cote,
+        public_current.lac,
+        public_current.fluvial,
+        terrain.colline,
+        emplacements.peuple
+      FROM case_registry AS registry
+      LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
+      LEFT JOIN case_terrain_current AS terrain ON terrain.id_case = registry.id_case
+      LEFT JOIN case_emplacements_current AS emplacements ON emplacements.id_case = registry.id_case
+      WHERE registry.id_case = $1
+    `,
+    [idCase],
+  );
+  const row = caseResult.rows[0];
+
+  if (!row) {
+    return calculateCaseSlots({ terrain_type: null, emplacements_utilises: emplacementsUtilises });
+  }
+
+  const [modifierResult, bonusResult] = await Promise.all([
+    row.peuple
+      ? client.query<PeupleModifier>(
+          `
+            SELECT peuple_slug, type_declencheur, declencheur, valeur, groupe_logique, description
+            FROM reference_peuple_modificateurs
+            WHERE peuple_slug = $1
+            ORDER BY id ASC
+          `,
+          [row.peuple],
+        )
+      : Promise.resolve({ rows: [] as PeupleModifier[] }),
+    client.query<ContextualBonus>(
+      `
+        SELECT bonus.slug, bonus.label, bonus.valeur, bonus.description
+        FROM case_bonus_contextuels AS case_bonus
+        INNER JOIN bonus_contextuel AS bonus ON bonus.slug = case_bonus.bonus_slug
+        WHERE case_bonus.id_case = $1
+          AND bonus.active = TRUE
+        ORDER BY bonus.slug ASC
+      `,
+      [idCase],
+    ),
+  ]);
+
+  return calculateCaseSlots({
+    terrain_type: row.terrain_type,
+    peuple_slug: row.peuple,
+    attributes: {
+      cote: row.cote,
+      lac: row.lac,
+      fluvial: row.fluvial,
+      colline: row.colline,
+    },
+    peuple_modificateurs: modifierResult.rows,
+    bonus_contextuels: bonusResult.rows,
+    emplacements_utilises: emplacementsUtilises,
+  });
+}
+
+async function recalculateAndPersistEditorSlots(
+  client: PoolClient,
+  idCase: string | null,
+  userId: number | null,
+): Promise<void> {
+  if (!idCase) {
+    return;
+  }
+
+  const consumers = await listExistingCaseSlotConsumers(client, idCase);
+  const calculation = await calculateCaseSlotCapacity(client, idCase, countConsumedSlots(consumers));
+
+  if (!calculation.available) {
+    await client.query(
+      `
+        INSERT INTO case_emplacements_current (
+          id_case,
+          emplacements_base,
+          malus_colline,
+          modificateur_peuple,
+          bonus_contextuel,
+          emplacements_bruts,
+          emplacements_max,
+          emplacements_utilises,
+          emplacements_restants,
+          regle_version,
+          calcule_le,
+          updated_by_user_id
+        )
+        VALUES ($1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'v1', NOW(), $2)
+        ON CONFLICT (id_case) DO UPDATE
+        SET
+          emplacements_base = NULL,
+          malus_colline = NULL,
+          modificateur_peuple = NULL,
+          bonus_contextuel = NULL,
+          emplacements_bruts = NULL,
+          emplacements_max = NULL,
+          emplacements_utilises = NULL,
+          emplacements_restants = NULL,
+          regle_version = 'v1',
+          calcule_le = NOW(),
+          updated_by_user_id = EXCLUDED.updated_by_user_id,
+          updated_at = NOW()
+      `,
+      [idCase, userId],
+    );
+
+    return;
+  }
+
+  await client.query(
+    `
+      INSERT INTO case_emplacements_current (
+        id_case,
+        emplacements_base,
+        malus_colline,
+        modificateur_peuple,
+        bonus_contextuel,
+        emplacements_bruts,
+        emplacements_max,
+        emplacements_utilises,
+        emplacements_restants,
+        regle_version,
+        calcule_le,
+        updated_by_user_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'v1', NOW(), $10)
+      ON CONFLICT (id_case) DO UPDATE
+      SET
+        emplacements_base = EXCLUDED.emplacements_base,
+        malus_colline = EXCLUDED.malus_colline,
+        modificateur_peuple = EXCLUDED.modificateur_peuple,
+        bonus_contextuel = EXCLUDED.bonus_contextuel,
+        emplacements_bruts = EXCLUDED.emplacements_bruts,
+        emplacements_max = EXCLUDED.emplacements_max,
+        emplacements_utilises = EXCLUDED.emplacements_utilises,
+        emplacements_restants = EXCLUDED.emplacements_restants,
+        regle_version = 'v1',
+        calcule_le = NOW(),
+        updated_by_user_id = EXCLUDED.updated_by_user_id,
+        updated_at = NOW()
+    `,
+    [
+      idCase,
+      calculation.emplacements_base,
+      calculation.malus_colline,
+      calculation.modificateur_peuple,
+      calculation.bonus_contextuel,
+      calculation.emplacements_bruts,
+      calculation.emplacements_max,
+      calculation.emplacements_utilises,
+      calculation.emplacements_restants,
+      userId,
+    ],
+  );
+}
+
+async function assertSlotCapacityForEditorObject(
+  client: PoolClient,
+  config: EditorEntityConfig,
+  input: NormalizedEditorObjectInput,
+  rawInput: unknown,
+  existingId?: string,
+): Promise<void> {
+  if (!input.id_case_detected || (config.tableName !== "map_localities" && config.tableName !== "map_landmarks")) {
+    return;
+  }
+
+  const typeTable =
+    config.tableName === "map_localities" ? "reference_locality_types" : "reference_landmark_types";
+  const candidate = await getReferenceSlotConsumer(client, typeTable, input.type_key);
+
+  if (!candidate.consumes_slot || input.status === "archived") {
+    return;
+  }
+
+  const [calculation, existingConsumers] = await Promise.all([
+    calculateCaseSlotCapacity(client, input.id_case_detected),
+    listExistingCaseSlotConsumers(
+      client,
+      input.id_case_detected,
+      existingId
+        ? {
+            tableName: config.tableName as "map_localities" | "map_landmarks",
+            idColumn: config.idColumn as "id_locality" | "id_landmark",
+            id: existingId,
+          }
+        : undefined,
+    ),
+  ]);
+  const nextConsumers = [...existingConsumers, candidate];
+  const validation = validateSlotConsumption(calculation, nextConsumers, {
+    force: shouldForceSlotOverride(rawInput),
+  });
+
+  if (!validation.valid) {
+    throw new EditorValidationError(
+      validation.reason ??
+        `Emplacements insuffisants (${countConsumedSlots(nextConsumers)} requis).`,
+    );
+  }
+}
+
 async function validateEditorRouteReferences(
   client: PoolClient,
   input: NormalizedEditorRouteInput,
@@ -642,6 +932,8 @@ function getAllowedPatchFields(config: EditorEntityConfig): Set<string> {
     "controleur",
     "status",
     "description",
+    "force_slot_override",
+    "slot_override_reason",
     ...(config.dependsOnColumn ? [config.dependsOnColumn] : []),
   ]);
 }
@@ -742,6 +1034,9 @@ function normalizeEditorObjectPatch(
         break;
       case "description":
         patch.description = normalizeNullableText(value);
+        break;
+      case "force_slot_override":
+      case "slot_override_reason":
         break;
       case "depends_on_locality_id":
         patch.depends_on_locality_id = normalizeNullableText(value);
@@ -932,7 +1227,10 @@ async function listEditorLocalityTypeOptions(
       SELECT
         type_key AS value,
         COALESCE(label, type_key) AS label,
-        default_icon_key
+        default_icon_key,
+        consumes_slot,
+        emp_requis,
+        upgrades_from_type_id
       FROM reference_locality_types
       WHERE is_active = TRUE
       ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
@@ -951,7 +1249,9 @@ async function listEditorLandmarkTypeOptions(
         type_key AS value,
         COALESCE(label, type_key) AS label,
         category,
-        default_icon_key
+        default_icon_key,
+        consumes_slot,
+        emp_requis
       FROM reference_landmark_types
       WHERE is_active = TRUE
       ORDER BY
@@ -1050,6 +1350,7 @@ async function createEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
 ): Promise<T> {
   const normalized = normalizeEditorObjectInput(config, input);
   await validateEditorObjectReferences(client, config, normalized);
+  await assertSlotCapacityForEditorObject(client, config, normalized, input);
 
   const columns = [
     config.idColumn,
@@ -1121,6 +1422,7 @@ async function updateEditorEntity<T extends EditorLocalityRow | EditorLandmarkRo
   };
 
   await validateEditorObjectReferences(client, config, merged);
+  await assertSlotCapacityForEditorObject(client, config, merged, input, id);
 
   const assignments: string[] = [];
   const values: Array<string | number | null> = [id];
@@ -1420,6 +1722,7 @@ export async function createEditorLocality(
   try {
     await client.query("BEGIN");
     const row = await createEditorEntity<EditorLocalityRow>(client, LOCALITY_CONFIG, input, userId);
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
     await client.query("COMMIT");
     return mapLocalityRow(row);
   } catch (error) {
@@ -1440,7 +1743,12 @@ export async function updateEditorLocality(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const previousRow = await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id);
     const row = await updateEditorEntity<EditorLocalityRow>(client, LOCALITY_CONFIG, id, input, userId);
+    if (previousRow.id_case_detected !== row.id_case_detected) {
+      await recalculateAndPersistEditorSlots(client, previousRow.id_case_detected, userId);
+    }
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
     await client.query("COMMIT");
     return mapLocalityRow(row);
   } catch (error) {
@@ -1457,7 +1765,9 @@ export async function deleteEditorLocality(id: string): Promise<void> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const row = await getEditorEntityRow<EditorLocalityRow>(client, LOCALITY_CONFIG, id);
     await deleteEditorEntity(client, LOCALITY_CONFIG, id);
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, null);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1501,6 +1811,7 @@ export async function createEditorLandmark(
   try {
     await client.query("BEGIN");
     const row = await createEditorEntity<EditorLandmarkRow>(client, LANDMARK_CONFIG, input, userId);
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
     await client.query("COMMIT");
     return mapLandmarkRow(row);
   } catch (error) {
@@ -1521,7 +1832,12 @@ export async function updateEditorLandmark(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const previousRow = await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id);
     const row = await updateEditorEntity<EditorLandmarkRow>(client, LANDMARK_CONFIG, id, input, userId);
+    if (previousRow.id_case_detected !== row.id_case_detected) {
+      await recalculateAndPersistEditorSlots(client, previousRow.id_case_detected, userId);
+    }
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, userId);
     await client.query("COMMIT");
     return mapLandmarkRow(row);
   } catch (error) {
@@ -1538,7 +1854,9 @@ export async function deleteEditorLandmark(id: string): Promise<void> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const row = await getEditorEntityRow<EditorLandmarkRow>(client, LANDMARK_CONFIG, id);
     await deleteEditorEntity(client, LANDMARK_CONFIG, id);
+    await recalculateAndPersistEditorSlots(client, row.id_case_detected, null);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

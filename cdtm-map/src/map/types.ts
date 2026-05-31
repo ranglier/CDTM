@@ -4,10 +4,12 @@ export type StableCaseProperties = {
   region?: string | null;
   sous_region?: string | null;
   cote?: boolean | null;
-  lac_majeur?: boolean | null;
-  cours_eau_majeur?: boolean | null;
+  lac?: boolean | null;
+  fluvial?: boolean | null;
   terrain_cat?: string | null;
   terrain_type?: string | null;
+  terrain_secondaire?: string | null;
+  colline?: boolean | null;
   relief?: string | null;
   faction?: string | null;
   controleur?: string | null;
@@ -135,6 +137,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function readNullableBooleanAlias(
+  value: Record<string, unknown>,
+  primaryKey: string,
+  legacyKey: string,
+): boolean | null {
+  const primary = value[primaryKey];
+
+  if (primary === true || primary === false) {
+    return primary;
+  }
+
+  const legacy = value[legacyKey];
+
+  return legacy === true || legacy === false ? legacy : null;
+}
+
 function isStableCaseProperties(value: unknown): value is StableCaseProperties {
   if (!isPlainObject(value)) {
     return false;
@@ -147,10 +165,12 @@ function isStableCaseProperties(value: unknown): value is StableCaseProperties {
     isNullableString(value.region) &&
     isNullableString(value.sous_region) &&
     isNullableBoolean(value.cote) &&
-    isNullableBoolean(value.lac_majeur) &&
-    isNullableBoolean(value.cours_eau_majeur) &&
+    isNullableBoolean(value.lac) &&
+    isNullableBoolean(value.fluvial) &&
     isNullableString(value.terrain_cat) &&
     isNullableString(value.terrain_type) &&
+    isNullableString(value.terrain_secondaire) &&
+    isNullableBoolean(value.colline) &&
     isNullableString(value.relief) &&
     isNullableString(value.faction) &&
     isNullableString(value.controleur) &&
@@ -201,10 +221,12 @@ export function toStableCaseProperties(
     region: value.region ?? null,
     sous_region: value.sous_region ?? null,
     cote: value.cote ?? null,
-    lac_majeur: value.lac_majeur ?? null,
-    cours_eau_majeur: value.cours_eau_majeur ?? null,
+    lac: readNullableBooleanAlias(value, "lac", "lac_majeur"),
+    fluvial: readNullableBooleanAlias(value, "fluvial", "cours_eau_majeur"),
     terrain_cat: value.terrain_cat ?? null,
     terrain_type: value.terrain_type ?? null,
+    terrain_secondaire: value.terrain_secondaire ?? null,
+    colline: value.colline ?? null,
     relief: value.relief ?? null,
     faction: value.faction ?? null,
     controleur: value.controleur ?? null,

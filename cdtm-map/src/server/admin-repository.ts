@@ -9,6 +9,14 @@ import {
 } from "@/admin/types";
 import type { StableCaseProperties } from "@/map/types";
 import {
+  calculateCaseSlots,
+  countConsumedSlots,
+  type ContextualBonus,
+  type PeupleModifier,
+  type SlotCalculationResult,
+  type SlotConsumer,
+} from "@/map/rules";
+import {
   ensureDatabaseReady,
   getPool,
 } from "@/server/db";
@@ -27,12 +35,14 @@ type CaseLookupRow = {
   region: string | null;
   sous_region: string | null;
   cote: boolean | null;
-  lac_majeur: boolean | null;
-  cours_eau_majeur: boolean | null;
+  lac: boolean | null;
+  fluvial: boolean | null;
   public_updated_at: string | null;
   public_updated_by: string | null;
   terrain_cat: string | null;
   terrain_type: string | null;
+  terrain_secondaire: string | null;
+  colline: boolean | null;
   relief: string | null;
   terrain_updated_at: string | null;
   terrain_updated_by: string | null;
@@ -58,8 +68,8 @@ function createSourceFallback(idCase: string): StableCaseProperties {
     region: null,
     sous_region: null,
     cote: null,
-    lac_majeur: null,
-    cours_eau_majeur: null,
+    lac: null,
+    fluvial: null,
   };
 }
 
@@ -106,6 +116,207 @@ function getPresentEntries<T extends EditableSectionPatch>(
   );
 }
 
+async function listCaseContextualBonuses(
+  client: PoolClient,
+  idCase: string,
+): Promise<ContextualBonus[]> {
+  const result = await client.query<ContextualBonus>(
+    `
+      SELECT bonus.slug, bonus.label, bonus.valeur, bonus.description
+      FROM case_bonus_contextuels AS case_bonus
+      INNER JOIN bonus_contextuel AS bonus ON bonus.slug = case_bonus.bonus_slug
+      WHERE case_bonus.id_case = $1
+        AND bonus.active = TRUE
+      ORDER BY bonus.slug ASC
+    `,
+    [idCase],
+  );
+
+  return result.rows;
+}
+
+async function getCasePeupleSlug(client: PoolClient, idCase: string): Promise<string | null> {
+  const result = await client.query<{ peuple: string | null }>(
+    `
+      SELECT peuple
+      FROM case_emplacements_current
+      WHERE id_case = $1
+    `,
+    [idCase],
+  );
+
+  return result.rows[0]?.peuple ?? null;
+}
+
+async function listPeupleModifiers(
+  client: PoolClient,
+  peupleSlug: string | null,
+): Promise<PeupleModifier[]> {
+  if (!peupleSlug) {
+    return [];
+  }
+
+  const result = await client.query<PeupleModifier>(
+    `
+      SELECT peuple_slug, type_declencheur, declencheur, valeur, groupe_logique, description
+      FROM reference_peuple_modificateurs
+      WHERE peuple_slug = $1
+      ORDER BY id ASC
+    `,
+    [peupleSlug],
+  );
+
+  return result.rows;
+}
+
+async function listCaseSlotConsumers(client: PoolClient, idCase: string): Promise<SlotConsumer[]> {
+  const result = await client.query<SlotConsumer>(
+    `
+      SELECT type_ref.consumes_slot, type_ref.emp_requis
+      FROM map_localities AS locality
+      INNER JOIN reference_locality_types AS type_ref ON type_ref.type_key = locality.type_key
+      WHERE locality.id_case_detected = $1
+        AND locality.status <> 'archived'
+
+      UNION ALL
+
+      SELECT type_ref.consumes_slot, type_ref.emp_requis
+      FROM map_landmarks AS landmark
+      INNER JOIN reference_landmark_types AS type_ref ON type_ref.type_key = landmark.type_key
+      WHERE landmark.id_case_detected = $1
+        AND landmark.status <> 'archived'
+    `,
+    [idCase],
+  );
+
+  return result.rows;
+}
+
+async function calculateSlotsForCase(
+  client: PoolClient,
+  idCase: string,
+  fields: {
+    terrain_type: string | null;
+    cote: boolean | null;
+    lac: boolean | null;
+    fluvial: boolean | null;
+    colline: boolean | null;
+  },
+): Promise<SlotCalculationResult> {
+  const peupleSlug = await getCasePeupleSlug(client, idCase);
+  const [peupleModifiers, contextualBonuses, consumers] = await Promise.all([
+    listPeupleModifiers(client, peupleSlug),
+    listCaseContextualBonuses(client, idCase),
+    listCaseSlotConsumers(client, idCase),
+  ]);
+
+  return calculateCaseSlots({
+    terrain_type: fields.terrain_type,
+    peuple_slug: peupleSlug,
+    attributes: {
+      cote: fields.cote,
+      lac: fields.lac,
+      fluvial: fields.fluvial,
+      colline: fields.colline,
+    },
+    peuple_modificateurs: peupleModifiers,
+    bonus_contextuels: contextualBonuses,
+    emplacements_utilises: countConsumedSlots(consumers),
+  });
+}
+
+async function persistSlotCalculation(
+  client: PoolClient,
+  idCase: string,
+  calculation: SlotCalculationResult,
+  userId: number,
+): Promise<void> {
+  if (!calculation.available) {
+    await client.query(
+      `
+        INSERT INTO case_emplacements_current (
+          id_case,
+          emplacements_base,
+          malus_colline,
+          modificateur_peuple,
+          bonus_contextuel,
+          emplacements_bruts,
+          emplacements_max,
+          emplacements_utilises,
+          emplacements_restants,
+          regle_version,
+          calcule_le,
+          updated_by_user_id
+        )
+        VALUES ($1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'v1', NOW(), $2)
+        ON CONFLICT (id_case) DO UPDATE
+        SET
+          emplacements_base = NULL,
+          malus_colline = NULL,
+          modificateur_peuple = NULL,
+          bonus_contextuel = NULL,
+          emplacements_bruts = NULL,
+          emplacements_max = NULL,
+          emplacements_utilises = NULL,
+          emplacements_restants = NULL,
+          regle_version = 'v1',
+          calcule_le = NOW(),
+          updated_by_user_id = EXCLUDED.updated_by_user_id,
+          updated_at = NOW()
+      `,
+      [idCase, userId],
+    );
+
+    return;
+  }
+
+  await client.query(
+    `
+      INSERT INTO case_emplacements_current (
+        id_case,
+        emplacements_base,
+        malus_colline,
+        modificateur_peuple,
+        bonus_contextuel,
+        emplacements_bruts,
+        emplacements_max,
+        emplacements_utilises,
+        emplacements_restants,
+        regle_version,
+        calcule_le,
+        updated_by_user_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'v1', NOW(), $10)
+      ON CONFLICT (id_case) DO UPDATE
+      SET
+        emplacements_base = EXCLUDED.emplacements_base,
+        malus_colline = EXCLUDED.malus_colline,
+        modificateur_peuple = EXCLUDED.modificateur_peuple,
+        bonus_contextuel = EXCLUDED.bonus_contextuel,
+        emplacements_bruts = EXCLUDED.emplacements_bruts,
+        emplacements_max = EXCLUDED.emplacements_max,
+        emplacements_utilises = EXCLUDED.emplacements_utilises,
+        emplacements_restants = EXCLUDED.emplacements_restants,
+        regle_version = 'v1',
+        calcule_le = NOW(),
+        updated_by_user_id = EXCLUDED.updated_by_user_id,
+        updated_at = NOW()
+    `,
+    [
+      idCase,
+      calculation.emplacements_base,
+      calculation.malus_colline,
+      calculation.modificateur_peuple,
+      calculation.bonus_contextuel,
+      calculation.emplacements_bruts,
+      calculation.emplacements_max,
+      calculation.emplacements_utilises,
+      calculation.emplacements_restants,
+      userId,
+    ],
+  );
+}
+
 async function createEmptyAdminRecord(
   client: PoolClient,
   idCase: string,
@@ -125,10 +336,12 @@ async function createEmptyAdminRecord(
       region: sourceCase.region ?? null,
       sous_region: sourceCase.sous_region ?? null,
       cote: sourceCase.cote ?? null,
-      lac_majeur: sourceCase.lac_majeur ?? null,
-      cours_eau_majeur: sourceCase.cours_eau_majeur ?? null,
+      lac: sourceCase.lac ?? null,
+      fluvial: sourceCase.fluvial ?? null,
       terrain_cat: null,
       terrain_type: null,
+      terrain_secondaire: null,
+      colline: null,
       relief: null,
       faction: null,
       controleur: null,
@@ -138,6 +351,8 @@ async function createEmptyAdminRecord(
     terrain: {
       terrain_cat: draft.terrain.terrain_cat || null,
       terrain_type: draft.terrain.terrain_type || null,
+      terrain_secondaire: draft.terrain.terrain_secondaire || null,
+      colline: null,
       relief: draft.terrain.relief || null,
       meta: createEmptyPublicMeta(),
     },
@@ -146,6 +361,11 @@ async function createEmptyAdminRecord(
       controleur: draft.control.controleur || null,
       controle_type: draft.control.controle_type || null,
       meta: createEmptyPublicMeta(),
+    },
+    emplacements: {
+      available: false,
+      reason: "calcul indisponible : terrain principal non renseigné",
+      modifiers: [],
     },
     dynamic_sections: dynamicSections,
     reference_data: referenceData,
@@ -161,6 +381,13 @@ async function mapCaseLookupRow(
     getDynamicCaseSectionsForCase(client, row.id_case),
     getStaticAdminReferenceData(client),
   ]);
+  const emplacements = await calculateSlotsForCase(client, row.id_case, {
+    terrain_type: row.terrain_type,
+    cote: row.cote ?? sourceCase.cote ?? null,
+    lac: row.lac ?? sourceCase.lac ?? null,
+    fluvial: row.fluvial ?? sourceCase.fluvial ?? null,
+    colline: row.colline,
+  });
 
   return {
     id_case: row.id_case,
@@ -170,10 +397,12 @@ async function mapCaseLookupRow(
       region: row.region ?? sourceCase.region ?? null,
       sous_region: row.sous_region ?? sourceCase.sous_region ?? null,
       cote: row.cote ?? sourceCase.cote ?? null,
-      lac_majeur: row.lac_majeur ?? sourceCase.lac_majeur ?? null,
-      cours_eau_majeur: row.cours_eau_majeur ?? sourceCase.cours_eau_majeur ?? null,
+      lac: row.lac ?? sourceCase.lac ?? null,
+      fluvial: row.fluvial ?? sourceCase.fluvial ?? null,
       terrain_cat: row.terrain_cat,
       terrain_type: row.terrain_type,
+      terrain_secondaire: row.terrain_secondaire,
+      colline: row.colline,
       relief: row.relief,
       faction: row.faction,
       controleur: row.controleur,
@@ -186,6 +415,8 @@ async function mapCaseLookupRow(
     terrain: {
       terrain_cat: row.terrain_cat,
       terrain_type: row.terrain_type,
+      terrain_secondaire: row.terrain_secondaire,
+      colline: row.colline,
       relief: row.relief,
       meta: {
         updated_at: toIsoStringOrNull(row.terrain_updated_at),
@@ -201,6 +432,7 @@ async function mapCaseLookupRow(
         updated_by: row.control_updated_by,
       },
     },
+    emplacements,
     dynamic_sections: dynamicSections,
     reference_data: referenceData,
   };
@@ -291,12 +523,14 @@ async function selectAdminCaseRecord(client: PoolClient, idCase: string): Promis
         public_current.region,
         public_current.sous_region,
         public_current.cote,
-        public_current.lac_majeur,
-        public_current.cours_eau_majeur,
+        public_current.lac,
+        public_current.fluvial,
         public_current.updated_at AS public_updated_at,
         public_user.username AS public_updated_by,
         terrain.terrain_cat,
         terrain.terrain_type,
+        terrain.terrain_secondaire,
+        terrain.colline,
         terrain.relief,
         terrain.updated_at AS terrain_updated_at,
         terrain_user.username AS terrain_updated_by,
@@ -365,11 +599,11 @@ export async function saveAdminCaseRecord(
         region: normalizeNullableField(draft.public.region),
         sous_region: normalizeNullableField(draft.public.sous_region),
         cote: draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
-        lac_majeur:
-          draft.public.lac_majeur.length > 0 ? draft.public.lac_majeur === "true" : null,
-        cours_eau_majeur:
-          draft.public.cours_eau_majeur.length > 0
-            ? draft.public.cours_eau_majeur === "true"
+        lac:
+          draft.public.lac.length > 0 ? draft.public.lac === "true" : null,
+        fluvial:
+          draft.public.fluvial.length > 0
+            ? draft.public.fluvial === "true"
             : null,
       },
       userId,
@@ -382,6 +616,8 @@ export async function saveAdminCaseRecord(
       {
         terrain_cat: normalizeNullableField(draft.terrain.terrain_cat),
         terrain_type: normalizeNullableField(draft.terrain.terrain_type),
+        terrain_secondaire: normalizeNullableField(draft.terrain.terrain_secondaire),
+        colline: draft.terrain.colline.length > 0 ? draft.terrain.colline === "true" : null,
         relief: normalizeNullableField(draft.terrain.relief),
       },
       userId,
@@ -402,6 +638,7 @@ export async function saveAdminCaseRecord(
     await saveDynamicSectionsForCase(client, idCase, draft.dynamic, userId);
 
     const record = await selectAdminCaseRecord(client, idCase);
+    await persistSlotCalculation(client, idCase, record.emplacements, userId);
     await client.query("COMMIT");
 
     return record;
@@ -471,6 +708,9 @@ export async function saveAdminCaseBulkPatch(
           userId,
         );
       }
+
+      const record = await selectAdminCaseRecord(client, idCase);
+      await persistSlotCalculation(client, idCase, record.emplacements, userId);
     }
 
     await client.query("COMMIT");

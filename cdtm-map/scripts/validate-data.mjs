@@ -17,19 +17,24 @@ const ignoredRelativePrefixes = ["data/reference/", "data/schemas/"];
 const fallbackReservedBusinessFields = [
   "terrain_cat",
   "terrain_type",
-  "relief",
   "terrain_secondaire",
+  "colline",
   "faction",
   "peuple",
-  "bonus_speciaux",
-  "empl_base",
-  "empl_max",
+  "emplacements_base",
+  "malus_colline",
+  "modificateur_peuple",
+  "bonus_contextuel",
+  "emplacements_bruts",
+  "emplacements_max",
+  "emplacements_utilises",
+  "emplacements_restants",
   "controleur",
   "controle_type",
 ];
 
-const coreFields = ["id_case", "region", "sous_region", "cote", "lac_majeur", "cours_eau_majeur"];
-const waterBooleanFields = ["cote", "lac_majeur", "cours_eau_majeur"];
+const coreFields = ["id_case", "region", "sous_region", "cote", "lac", "fluvial"];
+const waterBooleanFields = ["cote", "lac", "fluvial"];
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);

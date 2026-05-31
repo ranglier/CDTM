@@ -1804,6 +1804,7 @@ export async function validateStaticAdminDraftSelections(
   const referenceData = await getStaticAdminReferenceData(client);
   const terrainCategory = normalizeNullableText(draft.terrain.terrain_cat);
   const terrainType = normalizeNullableText(draft.terrain.terrain_type);
+  const terrainSecondaire = normalizeNullableText(draft.terrain.terrain_secondaire);
   const relief = normalizeNullableText(draft.terrain.relief);
   const faction = normalizeNullableText(draft.control.faction);
   const controleur = normalizeNullableText(draft.control.controleur);
@@ -1822,6 +1823,13 @@ export async function validateStaticAdminDraftSelections(
     !isAllowedOption(referenceData.terrain_types_by_category[terrainCategory ?? ""] ?? [], terrainType)
   ) {
     throw new Error("La valeur du champ terrain_type est invalide.");
+  }
+
+  if (
+    terrainSecondaire &&
+    !isAllowedOption(Object.values(referenceData.terrain_types_by_category).flat(), terrainSecondaire)
+  ) {
+    throw new Error("La valeur du champ terrain_secondaire est invalide.");
   }
 
   if (!isAllowedOption(referenceData.relief_options, relief)) {
@@ -1844,7 +1852,13 @@ export async function validateStaticAdminDraftSelections(
 export async function validateStaticBulkPatchSelections(
   client: PoolClient,
   patch: {
-    terrain?: { terrain_cat?: string | null; terrain_type?: string | null; relief?: string | null };
+    terrain?: {
+      terrain_cat?: string | null;
+      terrain_type?: string | null;
+      terrain_secondaire?: string | null;
+      colline?: boolean | null;
+      relief?: string | null;
+    };
     control?: { faction?: string | null; controleur?: string | null; controle_type?: string | null };
   },
 ): Promise<void> {
@@ -1868,6 +1882,17 @@ export async function validateStaticBulkPatchSelections(
       )
     ) {
       throw new Error("La valeur du champ terrain_type est invalide.");
+    }
+  }
+
+  if (patch.terrain?.terrain_secondaire !== undefined) {
+    if (
+      !isAllowedOption(
+        Object.values(referenceData.terrain_types_by_category).flat(),
+        patch.terrain.terrain_secondaire ?? null,
+      )
+    ) {
+      throw new Error("La valeur du champ terrain_secondaire est invalide.");
     }
   }
 
