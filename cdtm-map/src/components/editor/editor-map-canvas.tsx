@@ -162,7 +162,12 @@ type RouteGeometryEditDraft = {
   points: Array<[number, number]>;
 };
 
-type RouteGeometryTool = "select-vertex" | "append-vertex" | "insert-vertex";
+type RouteGeometryTool =
+  | "select-vertex"
+  | "prepend-vertex"
+  | "append-vertex"
+  | "insert-before-vertex"
+  | "insert-after-vertex";
 
 type DragOrigin =
   | {
@@ -1451,6 +1456,20 @@ export function EditorMapCanvas() {
           }
         }
 
+        if (currentRouteGeometryTool === "prepend-vertex") {
+          const [x, y] = event.coordinate;
+
+          setRouteGeometryDraft({
+            ...currentRouteGeometryDraft,
+            points: [[x, y], ...currentRouteGeometryDraft.points],
+          });
+          setSelectedRouteVertexIndex(0);
+          setRouteGeometryTool("select-vertex");
+          setRouteGeometryError(null);
+          setHoverInfo(null);
+          return;
+        }
+
         if (currentRouteGeometryTool === "append-vertex") {
           const [x, y] = event.coordinate;
           const nextIndex = currentRouteGeometryDraft.points.length;
@@ -1467,7 +1486,27 @@ export function EditorMapCanvas() {
         }
 
         if (
-          currentRouteGeometryTool === "insert-vertex" &&
+          currentRouteGeometryTool === "insert-before-vertex" &&
+          currentSelectedRouteVertexIndex !== null
+        ) {
+          const [x, y] = event.coordinate;
+          const nextIndex = currentSelectedRouteVertexIndex;
+          const nextPoints = [...currentRouteGeometryDraft.points];
+
+          nextPoints.splice(nextIndex, 0, [x, y]);
+          setRouteGeometryDraft({
+            ...currentRouteGeometryDraft,
+            points: nextPoints,
+          });
+          setSelectedRouteVertexIndex(nextIndex);
+          setRouteGeometryTool("select-vertex");
+          setRouteGeometryError(null);
+          setHoverInfo(null);
+          return;
+        }
+
+        if (
+          currentRouteGeometryTool === "insert-after-vertex" &&
           currentSelectedRouteVertexIndex !== null
         ) {
           const [x, y] = event.coordinate;
@@ -2672,11 +2711,15 @@ export function EditorMapCanvas() {
           {routeGeometryDraft ? (
             <p className="mt-2 text-xs text-muted-foreground">
               Edition geometrique active :{" "}
-              {routeGeometryTool === "append-vertex"
-                ? "ajout en fin"
-                : routeGeometryTool === "insert-vertex"
-                  ? "insertion apres le sommet selectionne"
-                  : "selection et deplacement des sommets"}
+              {routeGeometryTool === "prepend-vertex"
+                ? "ajout au debut"
+                : routeGeometryTool === "append-vertex"
+                  ? "ajout en fin"
+                  : routeGeometryTool === "insert-before-vertex"
+                    ? "insertion avant le sommet selectionne"
+                    : routeGeometryTool === "insert-after-vertex"
+                      ? "insertion apres le sommet selectionne"
+                      : "selection et deplacement des sommets"}
             </p>
           ) : null}
           <p className="mt-2 text-xs text-muted-foreground">
@@ -2937,6 +2980,18 @@ export function EditorMapCanvas() {
                   <>
                     <Button
                       type="button"
+                      variant={routeGeometryTool === "prepend-vertex" ? "secondary" : "outline"}
+                      size="sm"
+                      disabled={routeGeometrySaving}
+                      onClick={() => {
+                        setRouteGeometryTool("prepend-vertex");
+                        setRouteGeometryError(null);
+                      }}
+                    >
+                      Ajouter un sommet au debut
+                    </Button>
+                    <Button
+                      type="button"
                       variant={routeGeometryTool === "append-vertex" ? "secondary" : "outline"}
                       size="sm"
                       disabled={routeGeometrySaving}
@@ -2949,11 +3004,27 @@ export function EditorMapCanvas() {
                     </Button>
                     <Button
                       type="button"
-                      variant={routeGeometryTool === "insert-vertex" ? "secondary" : "outline"}
+                      variant={
+                        routeGeometryTool === "insert-before-vertex" ? "secondary" : "outline"
+                      }
                       size="sm"
                       disabled={routeGeometrySaving || selectedRouteVertexIndex === null}
                       onClick={() => {
-                        setRouteGeometryTool("insert-vertex");
+                        setRouteGeometryTool("insert-before-vertex");
+                        setRouteGeometryError(null);
+                      }}
+                    >
+                      Inserer avant ce sommet
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={
+                        routeGeometryTool === "insert-after-vertex" ? "secondary" : "outline"
+                      }
+                      size="sm"
+                      disabled={routeGeometrySaving || selectedRouteVertexIndex === null}
+                      onClick={() => {
+                        setRouteGeometryTool("insert-after-vertex");
                         setRouteGeometryError(null);
                       }}
                     >
