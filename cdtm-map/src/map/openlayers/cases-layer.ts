@@ -42,13 +42,28 @@ const fallbackInfluenceCaseStyle = new Style({
   fill: new Fill({ color: "rgba(220, 193, 130, 0.06)" }),
   stroke: new Stroke({ color: "rgba(220, 193, 130, 0.35)", width: 1 }),
 });
+const selectedFallbackInfluenceCaseStyle = new Style({
+  fill: new Fill({ color: "rgba(220, 193, 130, 0.16)" }),
+  stroke: new Stroke({ color: "rgba(240, 210, 140, 0.94)", width: 2.2 }),
+  zIndex: 8,
+});
+const activeFallbackInfluenceCaseStyle = new Style({
+  fill: new Fill({ color: "rgba(220, 193, 130, 0.24)" }),
+  stroke: new Stroke({ color: "rgba(255, 228, 145, 1)", width: 3 }),
+  zIndex: 10,
+});
 
 export function createCasesVectorSource(): VectorSource {
   return new VectorSource();
 }
 
-function resolveCaseLookupId(properties: Record<string, unknown>): string | null {
-  if (typeof properties.registry_id_case === "string" && properties.registry_id_case.length > 0) {
+function resolveCaseLookupId(
+  properties: Record<string, unknown>,
+): string | null {
+  if (
+    typeof properties.registry_id_case === "string" &&
+    properties.registry_id_case.length > 0
+  ) {
     return properties.registry_id_case;
   }
 
@@ -82,11 +97,15 @@ export function resolveCaseFeatureProperties(
   feature: Feature<Geometry>,
   casePropertiesById: Record<string, StableCaseProperties>,
 ): StableCaseProperties | null {
-  const idCase = resolveCaseLookupId(feature.getProperties() as Record<string, unknown>);
+  const idCase = resolveCaseLookupId(
+    feature.getProperties() as Record<string, unknown>,
+  );
 
   return (
     (idCase ? casePropertiesById[idCase] : null) ??
-    toStableCaseProperties(feature.getProperties() as Record<string, unknown>) ??
+    toStableCaseProperties(
+      feature.getProperties() as Record<string, unknown>,
+    ) ??
     null
   );
 }
@@ -96,11 +115,7 @@ export function createCasesVectorLayer(
   context: CaseLayerStyleContext,
   options: CreateCasesVectorLayerOptions = {},
 ): VectorLayer {
-  const {
-    visible = true,
-    opacity,
-    fallbackWhenUnstyled = false,
-  } = options;
+  const { visible = true, opacity, fallbackWhenUnstyled = false } = options;
 
   return new VectorLayer({
     source,
@@ -111,21 +126,34 @@ export function createCasesVectorLayer(
         return undefined;
       }
 
-      const styles = context.getPublicMapStyles() ?? createEmptyPublicMapStyles();
+      const styles =
+        context.getPublicMapStyles() ?? createEmptyPublicMapStyles();
       const properties = resolveCaseFeatureProperties(
         candidateFeature as Feature<Geometry>,
         context.getCasePropertiesById(),
       );
       const displayMode = context.getDisplayMode();
+      const idCase = candidateFeature.getId();
+      const selectionState =
+        context.getSelectionState?.(
+          typeof idCase === "string" ? idCase : null,
+        ) ?? "default";
 
-      if (fallbackWhenUnstyled && displayMode === "influence" && !hasInfluenceStyle(properties, styles)) {
+      if (
+        fallbackWhenUnstyled &&
+        displayMode === "influence" &&
+        !hasInfluenceStyle(properties, styles)
+      ) {
+        if (selectionState === "active") {
+          return activeFallbackInfluenceCaseStyle;
+        }
+
+        if (selectionState === "selected") {
+          return selectedFallbackInfluenceCaseStyle;
+        }
+
         return fallbackInfluenceCaseStyle;
       }
-
-      const idCase = candidateFeature.getId();
-      const selectionState = context.getSelectionState?.(
-        typeof idCase === "string" ? idCase : null,
-      ) ?? "default";
 
       return getCaseStyle({
         selectionState,
@@ -147,7 +175,9 @@ export function readCaseFeatures(
   }) as Feature<Geometry>[];
 
   for (const feature of features) {
-    const idCase = resolveCaseLookupId(feature.getProperties() as Record<string, unknown>);
+    const idCase = resolveCaseLookupId(
+      feature.getProperties() as Record<string, unknown>,
+    );
 
     if (idCase) {
       feature.setId(idCase);

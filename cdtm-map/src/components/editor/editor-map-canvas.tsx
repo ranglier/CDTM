@@ -11,6 +11,7 @@ import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 import type { EventsKey } from "ol/events";
 import Translate from "ol/interaction/Translate";
+import { ChevronDown } from "lucide-react";
 
 import {
   createEmptyAdminBulkEditDraft,
@@ -108,6 +109,8 @@ import {
   CASES_DATA_URL,
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
+  normalizeMapDisplayMode,
+  type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
   type StableCaseProperties,
@@ -601,6 +604,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const localitiesVisibleRef = useRef(true);
   const landmarksVisibleRef = useRef(true);
   const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
+  const mapDisplayModeRef = useRef<MapDisplayMode>("influence");
   const activeCaseIdRef = useRef<string | null>(null);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set());
   const caseAdminDirtyRef = useRef(false);
@@ -657,6 +661,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [localityDisplayMode, setLocalityDisplayMode] =
     useState<LocalityDisplayMode>("icons");
+  const [mapDisplayMode, setMapDisplayMode] =
+    useState<MapDisplayMode>("influence");
   const [editorTool, setEditorTool] = useState<EditorTool>("select");
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
@@ -838,6 +844,20 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     localityDisplayModeRef.current = localityDisplayMode;
     pointsLayerRef.current?.changed();
   }, [localityDisplayMode]);
+
+  useEffect(() => {
+    mapDisplayModeRef.current = normalizeMapDisplayMode(mapDisplayMode);
+    casesLayerRef.current?.changed();
+    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
+
+    const frame = requestAnimationFrame(() => {
+      setHoverInfo(null);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [mapDisplayMode]);
 
   useEffect(() => {
     editorToolRef.current = editorTool;
@@ -1176,16 +1196,13 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     [],
   );
 
-  const confirmDiscardCaseChanges = useCallback(
-    (message: string) => {
-      if (!caseAdminDirtyRef.current) {
-        return true;
-      }
+  const confirmDiscardCaseChanges = useCallback((message: string) => {
+    if (!caseAdminDirtyRef.current) {
+      return true;
+    }
 
-      return window.confirm(message);
-    },
-    [],
-  );
+    return window.confirm(message);
+  }, []);
 
   const fetchAdminRecords = useCallback(
     async (idCases: string[]): Promise<AdminCaseRecord[]> => {
@@ -1690,7 +1707,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     const casesLayer = createCasesVectorLayer(
       casesSource,
       {
-        getDisplayMode: () => "influence",
+        getDisplayMode: () => mapDisplayModeRef.current,
         getCasePropertiesById: () => casePropertiesByIdRef.current,
         getPublicMapStyles: () => publicMapStylesRef.current,
         getSelectionState: (idCase) =>
@@ -2403,7 +2420,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         feature as Feature<Geometry>,
         casePropertiesByIdRef.current,
       );
-      const rows = buildCaseHoverRows("influence", resolvedCase);
+      const rows = buildCaseHoverRows(mapDisplayModeRef.current, resolvedCase);
 
       if (rows.length === 0) {
         target.style.cursor = "";
@@ -2850,6 +2867,37 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     },
     [],
   );
+
+  const handleToggleCasesVisibility = useCallback(() => {
+    if (
+      casesVisible &&
+      !confirmDiscardCaseChanges(
+        "Masquer les cases fermera la selection courante et abandonnera le brouillon de case non enregistre. Continuer ?",
+      )
+    ) {
+      return;
+    }
+
+    if (casesVisible) {
+      setHoverInfo(null);
+      clearCaseSelection();
+    }
+
+    setCasesVisible((visible) => !visible);
+  }, [casesVisible, clearCaseSelection, confirmDiscardCaseChanges]);
+
+  const handleToggleAllObjects = useCallback(() => {
+    const nextVisible = !(
+      localitiesVisible ||
+      landmarksVisible ||
+      routesVisible
+    );
+
+    setLocalitiesVisible(nextVisible);
+    setLandmarksVisible(nextVisible);
+    setRoutesVisible(nextVisible);
+    setHoverInfo(null);
+  }, [landmarksVisible, localitiesVisible, routesVisible]);
 
   const handleCancelCaseEdit = useCallback(() => {
     if (isCaseMultiSelection) {
@@ -3528,6 +3576,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     referenceError,
     localityMoveError,
   ].filter((message): message is string => Boolean(message));
+  const objectsVisible = localitiesVisible || landmarksVisible || routesVisible;
 
   return (
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
@@ -3537,10 +3586,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             <div className="flex flex-wrap items-center gap-2">
               <details className="group relative">
                 <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-                  <span>Filtres</span>
-                  <span className="text-xs text-muted-foreground transition group-open:rotate-180">
-                    ▾
-                  </span>
+                  <span>Cases</span>
+                  <ChevronDown className="size-4 transition group-open:rotate-180" />
                 </summary>
                 <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
                   <div className="flex flex-col gap-2">
@@ -3549,82 +3596,109 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                       size="sm"
                       variant={casesVisible ? "secondary" : "outline"}
                       className="justify-start"
-                      onClick={() =>
-                        setCasesVisible((visible) => {
-                          if (visible) {
-                            setHoverInfo(null);
-                          }
-
-                          return !visible;
-                        })
-                      }
+                      onClick={handleToggleCasesVisibility}
                     >
-                      {casesVisible ? "Cases visibles" : "Cases masquees"}
+                      {casesVisible
+                        ? "Masquer les cases"
+                        : "Afficher les cases"}
                     </Button>
-                    {canEditMapObjects ? (
-                      <>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={localitiesVisible ? "secondary" : "outline"}
-                          className="justify-start"
-                          onClick={() =>
-                            setLocalitiesVisible((visible) => {
-                              if (visible) {
-                                setHoverInfo(null);
-                              }
-
-                              return !visible;
-                            })
-                          }
-                        >
-                          {localitiesVisible
-                            ? "Localites visibles"
-                            : "Localites masquees"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={landmarksVisible ? "secondary" : "outline"}
-                          className="justify-start"
-                          onClick={() =>
-                            setLandmarksVisible((visible) => {
-                              if (visible) {
-                                setHoverInfo(null);
-                              }
-
-                              return !visible;
-                            })
-                          }
-                        >
-                          {landmarksVisible
-                            ? "Landmarks visibles"
-                            : "Landmarks masques"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={routesVisible ? "secondary" : "outline"}
-                          className="justify-start"
-                          onClick={() =>
-                            setRoutesVisible((visible) => {
-                              if (visible) {
-                                setHoverInfo(null);
-                              }
-
-                              return !visible;
-                            })
-                          }
-                        >
-                          {routesVisible
-                            ? "Routes visibles"
-                            : "Routes masquees"}
-                        </Button>
-                      </>
-                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        mapDisplayMode === "faction" ? "secondary" : "outline"
+                      }
+                      className="justify-start"
+                      onClick={() => setMapDisplayMode("faction")}
+                    >
+                      Faction
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        mapDisplayMode === "influence" ? "secondary" : "outline"
+                      }
+                      className="justify-start"
+                      onClick={() => setMapDisplayMode("influence")}
+                    >
+                      Influence
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        mapDisplayMode === "topographic"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="justify-start"
+                      onClick={() => setMapDisplayMode("topographic")}
+                    >
+                      Topo
+                    </Button>
                   </div>
                 </div>
               </details>
+              {canEditMapObjects ? (
+                <details className="group relative">
+                  <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+                    <span>Objets</span>
+                    <ChevronDown className="size-4 transition group-open:rotate-180" />
+                  </summary>
+                  <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={objectsVisible ? "secondary" : "outline"}
+                        className="justify-start"
+                        onClick={handleToggleAllObjects}
+                      >
+                        {objectsVisible
+                          ? "Masquer les objets"
+                          : "Afficher les objets"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={localitiesVisible ? "secondary" : "outline"}
+                        className="justify-start"
+                        onClick={() => {
+                          setLocalitiesVisible((visible) => !visible);
+                          setHoverInfo(null);
+                        }}
+                      >
+                        Localites
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={landmarksVisible ? "secondary" : "outline"}
+                        className="justify-start"
+                        onClick={() => {
+                          setLandmarksVisible((visible) => !visible);
+                          setHoverInfo(null);
+                        }}
+                      >
+                        Landmarks
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={routesVisible ? "secondary" : "outline"}
+                        className="justify-start"
+                        onClick={() => {
+                          setRoutesVisible((visible) => !visible);
+                          setHoverInfo(null);
+                        }}
+                      >
+                        Routes
+                      </Button>
+                    </div>
+                  </div>
+                </details>
+              ) : null}
               {canEditMapObjects ? (
                 <Button
                   type="button"
@@ -3636,7 +3710,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     )
                   }
                 >
-                  {localityDisplayMode === "icons" ? "Icones" : "Points"}
+                  {localityDisplayMode === "icons"
+                    ? "Objets : icones"
+                    : "Objets : points"}
                 </Button>
               ) : null}
             </div>
