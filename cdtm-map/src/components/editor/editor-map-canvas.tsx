@@ -11,7 +11,6 @@ import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 import type { EventsKey } from "ol/events";
 import Translate from "ol/interaction/Translate";
-import { ChevronDown } from "lucide-react";
 
 import {
   createEmptyAdminBulkEditDraft,
@@ -38,6 +37,7 @@ import {
   updateSingleDynamicAdminDraftField,
 } from "@/admin/case-editing";
 import { CaseAdminEditor } from "@/components/admin/case-admin-editor";
+import { MapToolbar } from "@/components/map/map-toolbar";
 import { Button } from "@/components/ui/button";
 import { loadJsonData } from "@/data/loaders";
 import type {
@@ -60,24 +60,17 @@ import {
   mergeStableCases,
 } from "@/map/case-data";
 import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
-import { MAP_MAX_ZOOM } from "@/map/config";
 import {
-  createCasesVectorLayer,
-  createCasesVectorSource,
   readCaseFeatures,
   resolveCaseFeatureProperties,
-  syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
-  createEditorPointsVectorLayer,
-  createEditorPointsVectorSource,
   getEditorLandmarkFromPointFeature,
   getEditorLocalityFromPointFeature,
   getEditorPointFamilyFromFeature,
   getEditorPointFeatureCoordinates,
   replaceEditorPointFeatures,
   setEditorPointFeatureCoordinates,
-  syncEditorPointsLayerVisibility,
   updateEditorPointFeature,
   upsertEditorPointFeature,
 } from "@/map/openlayers/editor-points-layer";
@@ -92,26 +85,16 @@ import {
   clearEditorRoutePreview,
   createEditorRoutePreviewVectorLayer,
   createEditorRoutePreviewVectorSource,
-  createEditorRoutesVectorLayer,
-  createEditorRoutesVectorSource,
   getEditorRouteFromFeature,
   replaceEditorRoutePreviewFeatures,
   replaceEditorRouteFeatures,
-  syncEditorRoutesLayerVisibility,
   upsertEditorRouteFeature,
 } from "@/map/openlayers/editor-routes-layer";
-import {
-  cdtmProjection,
-  createCdtmBackgroundLayer,
-  createCdtmMap,
-  fitCdtmCasesExtent,
-  preloadCdtmBackgroundImage,
-} from "@/map/openlayers/map-core";
+import { cdtmProjection } from "@/map/openlayers/map-core";
 import {
   CASES_DATA_URL,
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
-  normalizeMapDisplayMode,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
@@ -119,23 +102,21 @@ import {
 } from "@/map/types";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
+  attachCdtmPointerMoveLifecycle,
+  createCdtmResizeObserver,
+  getFeatureAtPixel,
+  isToggleSelectionEvent,
+  useCdtmMapRuntime,
+  type CdtmMapObjectDisplayMode,
+} from "@/map/use-cdtm-map-runtime";
+import {
   buildCaseSearchTargets,
   buildEditorObjectSearchTargets,
   resolveMapSearchTarget,
 } from "@/map/search";
 
-type HoverInfo = {
-  x: number;
-  y: number;
-  title: string | null;
-  rows: Array<{
-    label: string;
-    value: string;
-  }>;
-};
-
 type EditorTool = "select" | "create-point" | "create-route";
-type LocalityDisplayMode = "icons" | "points";
+type LocalityDisplayMode = CdtmMapObjectDisplayMode;
 type EditorCreateObjectFamily = "locality" | "landmark" | "unique";
 
 type MapObjectCreateDraft = {
@@ -595,20 +576,6 @@ function isPublishedPointFeatureLocked(
 }
 
 export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
-  const mapElementRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<Map | null>(null);
-  const casesSourceRef = useRef<ReturnType<
-    typeof createCasesVectorSource
-  > | null>(null);
-  const casesLayerRef = useRef<ReturnType<
-    typeof createCasesVectorLayer
-  > | null>(null);
-  const routesSourceRef = useRef<ReturnType<
-    typeof createEditorRoutesVectorSource
-  > | null>(null);
-  const routesLayerRef = useRef<ReturnType<
-    typeof createEditorRoutesVectorLayer
-  > | null>(null);
   const routePreviewSourceRef = useRef<ReturnType<
     typeof createEditorRoutePreviewVectorSource
   > | null>(null);
@@ -621,20 +588,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const routeVerticesLayerRef = useRef<ReturnType<
     typeof createEditorRouteVerticesVectorLayer
   > | null>(null);
-  const pointsSourceRef = useRef<ReturnType<
-    typeof createEditorPointsVectorSource
-  > | null>(null);
-  const pointsLayerRef = useRef<ReturnType<
-    typeof createEditorPointsVectorLayer
-  > | null>(null);
-  const casesVisibleRef = useRef(true);
-  const routesVisibleRef = useRef(true);
-  const localitiesVisibleRef = useRef(true);
-  const landmarksVisibleRef = useRef(true);
-  const localityDisplayModeRef = useRef<LocalityDisplayMode>("points");
-  const mapDisplayModeRef = useRef<MapDisplayMode>("influence");
-  const activeCaseIdRef = useRef<string | null>(null);
-  const selectedCaseIdsRef = useRef<Set<string>>(new Set());
   const caseAdminDirtyRef = useRef(false);
   const selectedLocalityIdRef = useRef<string | null>(null);
   const selectedLandmarkIdRef = useRef<string | null>(null);
@@ -656,19 +609,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const localityDragOriginRef = useRef<DragOrigin | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
   const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
-  const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
-  const localityDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
-  const landmarkDefaultIconKeyByTypeRef = useRef<Record<string, string>>({});
-  const landmarkCategoryByTypeRef = useRef<
-    Record<string, "landmark" | "unique">
-  >({});
-  const casePropertiesByIdRef = useRef<Record<string, StableCaseProperties>>(
-    {},
-  );
-  const publicMapStylesRef = useRef<PublicMapStyles>(
+  const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
+  const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(
     createEmptyPublicMapStyles(),
   );
-  const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
   const [casesVisible, setCasesVisible] = useState(true);
   const [, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
@@ -708,7 +652,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [selectedRoute, setSelectedRoute] = useState<EditorMapRoute | null>(
     null,
   );
-  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [pointDraft, setPointDraft] = useState<MapObjectCreateDraft | null>(
     null,
   );
@@ -801,6 +744,56 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const routeEditColorValid = routeEditDraft
     ? isValidRouteColor(routeEditDraft.stroke_color)
     : true;
+  const casePropertiesById = useMemo(
+    () => buildCasePropertiesById(stableCases),
+    [stableCases],
+  );
+  const runtime = useCdtmMapRuntime({
+    activeCaseId,
+    selectedCaseIds,
+    casePropertiesById,
+    publicMapStyles,
+    displayMode: mapDisplayMode,
+    casesVisible,
+    localitiesVisible,
+    landmarksVisible,
+    routesVisible,
+    objectDisplayMode: localityDisplayMode,
+  });
+  const {
+    mapElementRef,
+    mapRef,
+    casesSourceRef,
+    casesLayerRef,
+    pointsSourceRef,
+    pointsLayerRef,
+    routesSourceRef,
+    casesVisibleRef,
+    localitiesVisibleRef,
+    landmarksVisibleRef,
+    routesVisibleRef,
+    activeCaseIdRef,
+    selectedCaseIdsRef,
+    casePropertiesByIdRef,
+    displayModeRef: mapDisplayModeRef,
+    mapIconSourceByKeyRef,
+    localityDefaultIconKeyByTypeRef,
+    landmarkDefaultIconKeyByTypeRef,
+    landmarkCategoryByTypeRef,
+    hoverInfo,
+    setHoverInfo,
+    clearHover,
+    getTooltipPosition,
+    createStandardLayers,
+    createMap,
+    bindStandardHandles,
+    resetStandardHandles,
+    fitCasesExtent,
+    focusCaseById,
+    focusCasesByIds,
+    focusPoint,
+    focusRoute,
+  } = runtime;
   const stableCasesById = useMemo(
     () =>
       new globalThis.Map(
@@ -842,69 +835,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   useEffect(() => {
     caseAdminDirtyRef.current = caseAdminDirty;
   }, [caseAdminDirty]);
-
-  useEffect(() => {
-    casesVisibleRef.current = casesVisible;
-    syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
-
-    if (!casesVisible) {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    }
-  }, [casesVisible]);
-
-  useEffect(() => {
-    routesVisibleRef.current = routesVisible;
-    syncEditorRoutesLayerVisibility(routesLayerRef.current, routesVisible);
-
-    if (!routesVisible) {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    }
-  }, [routesVisible]);
-
-  useEffect(() => {
-    localitiesVisibleRef.current = localitiesVisible;
-    syncEditorPointsLayerVisibility(
-      pointsLayerRef.current,
-      localitiesVisible || landmarksVisible,
-    );
-
-    if (!localitiesVisible) {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    }
-    pointsLayerRef.current?.changed();
-  }, [localitiesVisible, landmarksVisible]);
-
-  useEffect(() => {
-    landmarksVisibleRef.current = landmarksVisible;
-    syncEditorPointsLayerVisibility(
-      pointsLayerRef.current,
-      localitiesVisible || landmarksVisible,
-    );
-
-    if (!landmarksVisible) {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    }
-    pointsLayerRef.current?.changed();
-  }, [landmarksVisible, localitiesVisible]);
-
-  useEffect(() => {
-    localityDisplayModeRef.current = localityDisplayMode;
-    pointsLayerRef.current?.changed();
-  }, [localityDisplayMode]);
-
-  useEffect(() => {
-    mapDisplayModeRef.current = normalizeMapDisplayMode(mapDisplayMode);
-    casesLayerRef.current?.changed();
-    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-
-    const frame = requestAnimationFrame(() => {
-      setHoverInfo(null);
-    });
-
-    return () => {
-      cancelAnimationFrame(frame);
-    };
-  }, [mapDisplayMode]);
 
   useEffect(() => {
     editorToolRef.current = editorTool;
@@ -1061,7 +991,14 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     return () => {
       cancelled = true;
     };
-  }, [referenceData]);
+  }, [
+    landmarkCategoryByTypeRef,
+    landmarkDefaultIconKeyByTypeRef,
+    localityDefaultIconKeyByTypeRef,
+    mapIconSourceByKeyRef,
+    pointsLayerRef,
+    referenceData,
+  ]);
 
   useEffect(() => {
     selectedLocalityIdRef.current = selectedLocality?.id_locality ?? null;
@@ -1095,42 +1032,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   useEffect(() => {
     routeGeometryDraggingRef.current = routeGeometryDragging;
   }, [routeGeometryDragging]);
-
-  useEffect(() => {
-    const previousActiveCaseId = activeCaseIdRef.current;
-    const previousSelectedCaseIds = selectedCaseIdsRef.current;
-    const nextSelectedCaseIds = new Set(selectedCaseIds);
-
-    activeCaseIdRef.current = activeCaseId;
-    selectedCaseIdsRef.current = nextSelectedCaseIds;
-
-    const source = casesSourceRef.current;
-    if (!source) {
-      return;
-    }
-
-    const changedIds = new Set<string>();
-
-    if (previousActiveCaseId) {
-      changedIds.add(previousActiveCaseId);
-    }
-
-    if (activeCaseId) {
-      changedIds.add(activeCaseId);
-    }
-
-    for (const idCase of previousSelectedCaseIds) {
-      changedIds.add(idCase);
-    }
-
-    for (const idCase of nextSelectedCaseIds) {
-      changedIds.add(idCase);
-    }
-
-    for (const idCase of changedIds) {
-      source.getFeatureById(idCase)?.changed();
-    }
-  }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
     const interaction = localityTranslateInteractionRef.current;
@@ -1387,108 +1288,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         return nextSelectedCaseIds;
       });
     },
-    [applyCaseSelectionState, confirmDiscardCaseChanges],
-  );
-
-  const focusCaseById = useCallback((idCase: string, duration = 250) => {
-    const source = casesSourceRef.current;
-    const map = mapRef.current;
-
-    if (!source || !map) {
-      return;
-    }
-
-    const feature = source.getFeatureById(idCase);
-    const geometry = feature?.getGeometry();
-
-    if (!geometry) {
-      return;
-    }
-
-    map.getView().fit(geometry.getExtent(), {
-      duration,
-      padding: [70, 70, 70, 70],
-      maxZoom: MAP_MAX_ZOOM,
-    });
-  }, []);
-
-  const focusCasesByIds = useCallback((idCases: string[], duration = 250) => {
-    const source = casesSourceRef.current;
-    const map = mapRef.current;
-
-    if (!source || !map || idCases.length === 0) {
-      return;
-    }
-
-    let combinedExtent: [number, number, number, number] | null = null;
-
-    for (const idCase of idCases) {
-      const geometry = source.getFeatureById(idCase)?.getGeometry();
-
-      if (!geometry) {
-        continue;
-      }
-
-      const extent = geometry.getExtent();
-
-      combinedExtent = combinedExtent
-        ? [
-            Math.min(combinedExtent[0], extent[0]),
-            Math.min(combinedExtent[1], extent[1]),
-            Math.max(combinedExtent[2], extent[2]),
-            Math.max(combinedExtent[3], extent[3]),
-          ]
-        : [extent[0], extent[1], extent[2], extent[3]];
-    }
-
-    if (!combinedExtent) {
-      return;
-    }
-
-    map.getView().fit(combinedExtent, {
-      duration,
-      padding: [70, 70, 70, 70],
-      maxZoom: MAP_MAX_ZOOM,
-    });
-  }, []);
-
-  const focusPoint = useCallback((x: number, y: number, duration = 250) => {
-    const map = mapRef.current;
-
-    if (!map) {
-      return;
-    }
-
-    map.getView().fit([x - 20, y - 20, x + 20, y + 20], {
-      duration,
-      padding: [80, 80, 80, 80],
-      maxZoom: MAP_MAX_ZOOM,
-    });
-  }, []);
-
-  const focusRoute = useCallback(
-    (points: Array<[number, number]>, duration = 250) => {
-      const map = mapRef.current;
-
-      if (!map || points.length === 0) {
-        return;
-      }
-
-      const xs = points.map(([x]) => x);
-      const ys = points.map(([, y]) => y);
-
-      map
-        .getView()
-        .fit(
-          [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
-          {
-            duration,
-            padding: [80, 80, 80, 80],
-            maxZoom: MAP_MAX_ZOOM,
-          },
-        );
-    },
-    [],
+    [
+      activeCaseIdRef,
+      applyCaseSelectionState,
+      confirmDiscardCaseChanges,
+      selectedCaseIdsRef,
+    ],
   );
 
   function handleToolChangeBlockedByRouteGeometry(): boolean {
@@ -1756,7 +1561,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
       return typeof id === "string" ? id : null;
     },
-    [],
+    [casesLayerRef, casesVisibleRef],
   );
 
   const handleLocalityTranslateEnd = useCallback(
@@ -1941,7 +1746,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         setLocalityMoveSaving(false);
       }
     },
-    [detectCaseIdAtCoordinate],
+    [detectCaseIdAtCoordinate, mapRef, pointsSourceRef],
   );
 
   const handleRouteVertexTranslateEnd = useCallback((rawEvent: unknown) => {
@@ -2001,52 +1806,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       return;
     }
 
-    void preloadCdtmBackgroundImage();
-
-    const backgroundLayer = createCdtmBackgroundLayer();
-    const casesSource = createCasesVectorSource();
-    const routesSource = createEditorRoutesVectorSource();
+    const standardLayers = createStandardLayers();
     const routePreviewSource = createEditorRoutePreviewVectorSource();
     const routeVerticesSource = createEditorRouteVerticesVectorSource();
-    const pointsSource = createEditorPointsVectorSource();
-    const casesLayer = createCasesVectorLayer(
-      casesSource,
-      {
-        getDisplayMode: () => mapDisplayModeRef.current,
-        getCasePropertiesById: () => casePropertiesByIdRef.current,
-        getPublicMapStyles: () => publicMapStylesRef.current,
-        getSelectionState: (idCase) =>
-          idCase && idCase === activeCaseIdRef.current
-            ? "active"
-            : idCase !== null && selectedCaseIdsRef.current.has(idCase)
-              ? "selected"
-              : "default",
-      },
-      {
-        visible: casesVisibleRef.current,
-      },
-    );
-    const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
-      context: {
-        getIconImagePath: (iconKey) =>
-          iconKey ? (mapIconSourceByKeyRef.current[iconKey] ?? null) : null,
-        getLocalityDefaultIconKeyForType: (typeKey) =>
-          localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getLandmarkDefaultIconKeyForType: (typeKey) =>
-          landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getLandmarkTypeCategory: (typeKey) =>
-          landmarkCategoryByTypeRef.current[typeKey] ?? null,
-        getDisplayMode: () => localityDisplayModeRef.current,
-        isFamilyVisible: (family) =>
-          family === "locality"
-            ? localitiesVisibleRef.current
-            : landmarksVisibleRef.current,
-      },
-      visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
-    });
-    const routesLayer = createEditorRoutesVectorLayer(routesSource, {
-      visible: routesVisibleRef.current,
-    });
     const routePreviewLayer = createEditorRoutePreviewVectorLayer(
       routePreviewSource,
       {
@@ -2059,16 +1821,16 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         visible: false,
       },
     );
-    const map = createCdtmMap(mapElementRef.current, [
-      backgroundLayer,
-      casesLayer,
-      routesLayer,
+    const map = createMap(mapElementRef.current, [
+      standardLayers.backgroundLayer,
+      standardLayers.casesLayer,
+      standardLayers.routesLayer,
       routePreviewLayer,
-      pointsLayer,
+      standardLayers.pointsLayer,
       routeVerticesLayer,
     ]);
     const translateInteraction = new Translate({
-      layers: [pointsLayer],
+      layers: [standardLayers.pointsLayer],
       filter: (candidateFeature) =>
         !(
           candidateFeature instanceof Feature &&
@@ -2082,29 +1844,27 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       layers: [routeVerticesLayer],
     });
 
-    casesSourceRef.current = casesSource;
-    casesLayerRef.current = casesLayer;
-    routesSourceRef.current = routesSource;
-    routesLayerRef.current = routesLayer;
+    bindStandardHandles({
+      map,
+      casesSource: standardLayers.casesSource,
+      casesLayer: standardLayers.casesLayer,
+      routesSource: standardLayers.routesSource,
+      routesLayer: standardLayers.routesLayer,
+      pointsSource: standardLayers.pointsSource,
+      pointsLayer: standardLayers.pointsLayer,
+    });
     routePreviewSourceRef.current = routePreviewSource;
     routePreviewLayerRef.current = routePreviewLayer;
     routeVerticesSourceRef.current = routeVerticesSource;
     routeVerticesLayerRef.current = routeVerticesLayer;
-    pointsSourceRef.current = pointsSource;
-    pointsLayerRef.current = pointsLayer;
     localityTranslateInteractionRef.current = translateInteraction;
     routeVertexTranslateInteractionRef.current =
       routeVertexTranslateInteraction;
-    mapRef.current = map;
-    fitCdtmCasesExtent(map, 0);
+    fitCasesExtent(0);
     map.addInteraction(translateInteraction);
     map.addInteraction(routeVertexTranslateInteraction);
 
-    const resizeObserver = new ResizeObserver(() => {
-      map.updateSize();
-    });
-
-    resizeObserver.observe(mapElementRef.current);
+    const resizeObserver = createCdtmResizeObserver(map, mapElementRef.current);
 
     const translateStartKey = translateInteraction.on(
       "translatestart",
@@ -2257,18 +2017,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
       if (canEditMapObjects && editorToolRef.current === "create-point") {
         const [x, y] = event.coordinate;
-        const caseFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === casesLayer,
-          },
+        const caseFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.casesLayer,
         );
         const caseId = caseFeature?.getId();
         setPointDraft(
@@ -2400,19 +2152,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         canEditMapObjects &&
         (landmarksVisibleRef.current || localitiesVisibleRef.current)
       ) {
-        const pointFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
-            hitTolerance: 10,
-          },
+        const pointFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.pointsLayer,
+          10,
         );
 
         if (pointFeature) {
@@ -2441,19 +2185,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       }
 
       if (canEditMapObjects && routesVisibleRef.current) {
-        const routeFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === routesLayer,
-            hitTolerance: 6,
-          },
+        const routeFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.routesLayer,
+          6,
         );
 
         if (routeFeature) {
@@ -2475,18 +2211,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         return;
       }
 
-      const feature = map.forEachFeatureAtPixel(
-        event.pixel,
-        (candidate) => {
-          if (candidate instanceof Feature) {
-            return candidate as Feature<Geometry>;
-          }
-
-          return null;
-        },
-        {
-          layerFilter: (candidateLayer) => candidateLayer === casesLayer,
-        },
+      const feature = getFeatureAtPixel(
+        map,
+        event,
+        standardLayers.casesLayer,
       );
 
       if (!feature) {
@@ -2501,40 +2229,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       const id = feature.getId();
       handleCaseSelectionChange(
         typeof id === "string" ? id : null,
-        event.originalEvent.shiftKey ||
-          event.originalEvent.ctrlKey ||
-          event.originalEvent.metaKey
-          ? "toggle"
-          : "replace",
+        isToggleSelectionEvent(event.originalEvent) ? "toggle" : "replace",
       );
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
-
-    function getTooltipPosition(originalEvent: PointerEvent): {
-      x: number;
-      y: number;
-    } {
-      const viewportWidth =
-        typeof window !== "undefined" ? window.innerWidth : 0;
-      const viewportHeight =
-        typeof window !== "undefined" ? window.innerHeight : 0;
-      const preferredX = originalEvent.clientX + 18;
-      const preferredY = originalEvent.clientY + 18;
-      const tooltipWidth = 240;
-      const tooltipHeight = 120;
-
-      return {
-        x:
-          viewportWidth > 0
-            ? Math.min(preferredX, viewportWidth - tooltipWidth)
-            : preferredX,
-        y:
-          viewportHeight > 0
-            ? Math.min(preferredY, viewportHeight - tooltipHeight)
-            : preferredY,
-      };
-    }
 
     const runPointerMoveHitTests = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -2569,20 +2268,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       }
 
       if (canEditMapObjects && routeGeometryDraftRef.current) {
-        const vertexFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) =>
-              candidateLayer === routeVerticesLayer,
-            hitTolerance: 10,
-          },
+        const vertexFeature = getFeatureAtPixel(
+          map,
+          event,
+          routeVerticesLayer,
+          10,
         );
 
         if (vertexFeature) {
@@ -2609,19 +2299,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         canEditMapObjects &&
         (landmarksVisibleRef.current || localitiesVisibleRef.current)
       ) {
-        const pointFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
-            hitTolerance: 10,
-          },
+        const pointFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.pointsLayer,
+          10,
         );
 
         if (pointFeature) {
@@ -2670,19 +2352,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       }
 
       if (canEditMapObjects && routesVisibleRef.current) {
-        const routeFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === routesLayer,
-            hitTolerance: 6,
-          },
+        const routeFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.routesLayer,
+          6,
         );
 
         if (routeFeature) {
@@ -2724,18 +2398,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         return;
       }
 
-      const feature = map.forEachFeatureAtPixel(
-        event.pixel,
-        (candidate) => {
-          if (candidate instanceof Feature) {
-            return candidate as Feature<Geometry>;
-          }
-
-          return null;
-        },
-        {
-          layerFilter: (candidateLayer) => candidateLayer === casesLayer,
-        },
+      const feature = getFeatureAtPixel(
+        map,
+        event,
+        standardLayers.casesLayer,
       );
 
       if (!feature) {
@@ -2767,54 +2433,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       });
     };
 
-    let mapInteracting = false;
-    let pointerMoveFrame: number | null = null;
-    let latestPointerMoveEvent: unknown = null;
-    const clearPointerHover = () => {
-      map.getTargetElement().style.cursor = "";
-      setHoverInfo(null);
-    };
-    const cancelPointerMoveFrame = () => {
-      if (pointerMoveFrame !== null) {
-        window.cancelAnimationFrame(pointerMoveFrame);
-        pointerMoveFrame = null;
-      }
-      latestPointerMoveEvent = null;
-    };
-    const pointerMoveHandler = (rawEvent: unknown) => {
-      latestPointerMoveEvent = rawEvent;
-
-      if (pointerMoveFrame !== null) {
-        return;
-      }
-
-      pointerMoveFrame = window.requestAnimationFrame(() => {
-        pointerMoveFrame = null;
-        const event = latestPointerMoveEvent;
-        latestPointerMoveEvent = null;
-
-        if (!event) {
-          return;
-        }
-
-        if (mapInteracting) {
-          clearPointerHover();
-          return;
-        }
-
-        runPointerMoveHitTests(event);
-      });
-    };
-    const moveStartKey = map.on("movestart", () => {
-      mapInteracting = true;
-      cancelPointerMoveFrame();
-      clearPointerHover();
+    const pointerMoveCleanup = attachCdtmPointerMoveLifecycle({
+      map,
+      runHitTests: runPointerMoveHitTests,
+      clearHover,
     });
-    const moveEndKey = map.on("moveend", () => {
-      mapInteracting = false;
-    });
-
-    const pointerMoveKey = map.on("pointermove", pointerMoveHandler);
 
     let cancelled = false;
 
@@ -2861,7 +2484,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         const nextCasePropertiesById = buildCasePropertiesById(nextStableCases);
 
         casePropertiesByIdRef.current = nextCasePropertiesById;
-        publicMapStylesRef.current = publicCases.styles;
+        setPublicMapStyles(publicCases.styles);
 
         casesSourceRef.current.clear(true);
         casesSourceRef.current.addFeatures(features);
@@ -2881,7 +2504,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           }
         }
         setCasesCount(features.length);
-        fitCdtmCasesExtent(mapRef.current, 0);
+        fitCasesExtent(0);
       } catch (error) {
         if (cancelled) {
           return;
@@ -3069,43 +2692,56 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
-      cancelPointerMoveFrame();
+      pointerMoveCleanup();
       unByKey(translateStartKey);
       unByKey(translateEndKey);
       unByKey(routeVertexTranslateStartKey);
       unByKey(routeVertexTranslateEndKey);
       unByKey(singleClickKey);
-      unByKey(pointerMoveKey);
-      unByKey(moveStartKey);
-      unByKey(moveEndKey);
       map.removeInteraction(translateInteraction);
       map.removeInteraction(routeVertexTranslateInteraction);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
-      casesSourceRef.current = null;
-      casesLayerRef.current = null;
-      routesSourceRef.current = null;
-      routesLayerRef.current = null;
+      resetStandardHandles();
       routePreviewSourceRef.current = null;
       routePreviewLayerRef.current = null;
       routeVerticesSourceRef.current = null;
       routeVerticesLayerRef.current = null;
-      pointsSourceRef.current = null;
-      pointsLayerRef.current = null;
       localityTranslateInteractionRef.current = null;
       routeVertexTranslateInteractionRef.current = null;
-      mapRef.current = null;
     };
   }, [
+    bindStandardHandles,
     canEditMapObjects,
+    casesVisibleRef,
+    clearHover,
+    createMap,
+    createStandardLayers,
+    fitCasesExtent,
+    getTooltipPosition,
     handleCaseSelectionChange,
     handleCloseLocalitySelection,
     handleCloseRouteSelection,
     handleLocalityTranslateEnd,
     handleRouteVertexTranslateEnd,
+    landmarksVisibleRef,
+    localitiesVisibleRef,
+    mapDisplayModeRef,
+    mapRef,
+    pointsSourceRef,
+    mapElementRef,
+    activeCaseIdRef,
+    casePropertiesByIdRef,
+    casesLayerRef,
+    casesSourceRef,
+    resetStandardHandles,
+    routesSourceRef,
+    routesVisibleRef,
     selectLandmark,
     selectLocality,
     selectRoute,
+    selectedCaseIdsRef,
+    setHoverInfo,
   ]);
 
   useEffect(() => {
@@ -3266,7 +2902,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     }
 
     setCasesVisible((visible) => !visible);
-  }, [casesVisible, clearCaseSelection, confirmDiscardCaseChanges]);
+  }, [
+    casesVisible,
+    clearCaseSelection,
+    confirmDiscardCaseChanges,
+    setHoverInfo,
+  ]);
 
   const handleToggleAllObjects = useCallback(() => {
     const nextVisible = !(
@@ -3279,7 +2920,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     setLandmarksVisible(nextVisible);
     setRoutesVisible(nextVisible);
     setHoverInfo(null);
-  }, [landmarksVisible, localitiesVisible, routesVisible]);
+  }, [landmarksVisible, localitiesVisible, routesVisible, setHoverInfo]);
 
   const handleCancelCaseEdit = useCallback(() => {
     if (isCaseMultiSelection) {
@@ -3382,6 +3023,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     refreshAdminRecords,
     resetBulkAdminEditor,
     resetSingleAdminEditor,
+    casePropertiesByIdRef,
+    casesLayerRef,
     selectedCaseIds,
     singleDraft,
   ]);
@@ -4075,7 +3718,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       ? "Nouveau point"
       : selectedRoute
         ? "Route selectionnee"
-        : selectedLocality
+      : selectedLocality
           ? "Localite selectionnee"
           : selectedLandmark
             ? "Landmark selectionne"
@@ -4095,7 +3738,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     referenceError,
     localityMoveError,
   ].filter((message): message is string => Boolean(message));
-  const objectsVisible = localitiesVisible || landmarksVisible || routesVisible;
   const selectedRoutePublishedLocked =
     publishedObjectsLocked && selectedRoute?.status === "published";
 
@@ -4103,229 +3745,129 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
         <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 sm:left-24">
-          <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)] lg:flex-nowrap">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <details className="group relative">
-                <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-                  <span>Cases</span>
-                  <ChevronDown className="size-4 transition group-open:rotate-180" />
-                </summary>
-                <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-                  <div className="flex flex-col gap-2">
+          <div className="pointer-events-auto">
+            <MapToolbar
+              casesVisible={casesVisible}
+              localitiesVisible={localitiesVisible}
+              landmarksVisible={landmarksVisible}
+              routesVisible={routesVisible}
+              objectDisplayMode={localityDisplayMode}
+              panelVisible
+              displayMode={mapDisplayMode}
+              showObjectControls={canEditMapObjects}
+              showPanelToggle={false}
+              className="w-full bg-background/92 px-3 py-2 lg:flex-nowrap"
+              onDisplayModeChange={setMapDisplayMode}
+              onToggleCases={handleToggleCasesVisibility}
+              onToggleLocalities={() => {
+                setLocalitiesVisible((visible) => !visible);
+                setHoverInfo(null);
+              }}
+              onToggleLandmarks={() => {
+                setLandmarksVisible((visible) => !visible);
+                setHoverInfo(null);
+              }}
+              onToggleRoutes={() => {
+                setRoutesVisible((visible) => !visible);
+                setHoverInfo(null);
+              }}
+              onToggleObjectDisplayMode={() =>
+                setLocalityDisplayMode((mode) =>
+                  mode === "icons" ? "points" : "icons",
+                )
+              }
+              onToggleAllObjects={handleToggleAllObjects}
+              onTogglePanel={() => undefined}
+              rightActions={
+                canEditMapObjects ? (
+                  <>
                     <Button
                       type="button"
                       size="sm"
-                      variant={casesVisible ? "secondary" : "outline"}
-                      className="justify-start"
-                      onClick={handleToggleCasesVisibility}
+                      variant={publishedObjectsLocked ? "secondary" : "outline"}
+                      title="Verrouille ou deverrouille le deplacement des objets publies"
+                      onClick={() => {
+                        setPublishedObjectsLocked((locked) => !locked);
+                        setLocalityMoveError(null);
+                        setRouteGeometryError(null);
+                        setHoverInfo(null);
+                      }}
                     >
-                      {casesVisible
-                        ? "Masquer les cases"
-                        : "Afficher les cases"}
+                      {publishedObjectsLocked ? "Lock publies" : "Publies libres"}
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       variant={
-                        mapDisplayMode === "faction" ? "secondary" : "outline"
+                        editorTool === "create-point" ? "secondary" : "outline"
                       }
-                      className="justify-start"
-                      onClick={() => setMapDisplayMode("faction")}
-                    >
-                      Faction
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        mapDisplayMode === "influence" ? "secondary" : "outline"
+                      disabled={
+                        !referenceData ||
+                        (referenceData.locality_types.length === 0 &&
+                          referenceData.landmark_types.length === 0)
                       }
-                      className="justify-start"
-                      onClick={() => setMapDisplayMode("influence")}
-                    >
-                      Influence
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        mapDisplayMode === "topographic"
-                          ? "secondary"
-                          : "outline"
-                      }
-                      className="justify-start"
-                      onClick={() => setMapDisplayMode("topographic")}
-                    >
-                      Topo
-                    </Button>
-                  </div>
-                </div>
-              </details>
-              {canEditMapObjects ? (
-                <details className="group relative">
-                  <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-                    <span>Objets</span>
-                    <ChevronDown className="size-4 transition group-open:rotate-180" />
-                  </summary>
-                  <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-                    <div className="flex flex-col gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={objectsVisible ? "secondary" : "outline"}
-                        className="justify-start"
-                        onClick={handleToggleAllObjects}
-                      >
-                        {objectsVisible
-                          ? "Masquer les objets"
-                          : "Afficher les objets"}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={localitiesVisible ? "secondary" : "outline"}
-                        className="justify-start"
-                        onClick={() => {
-                          setLocalitiesVisible((visible) => !visible);
-                          setHoverInfo(null);
-                        }}
-                      >
-                        Localites
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={landmarksVisible ? "secondary" : "outline"}
-                        className="justify-start"
-                        onClick={() => {
-                          setLandmarksVisible((visible) => !visible);
-                          setHoverInfo(null);
-                        }}
-                      >
-                        Landmarks
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={routesVisible ? "secondary" : "outline"}
-                        className="justify-start"
-                        onClick={() => {
-                          setRoutesVisible((visible) => !visible);
-                          setHoverInfo(null);
-                        }}
-                      >
-                        Routes
-                      </Button>
-                    </div>
-                  </div>
-                </details>
-              ) : null}
-              {canEditMapObjects ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setLocalityDisplayMode((mode) =>
-                      mode === "icons" ? "points" : "icons",
-                    )
-                  }
-                >
-                  {localityDisplayMode === "icons"
-                    ? "Objets : icones"
-                    : "Objets : points"}
-                </Button>
-              ) : null}
-              {canEditMapObjects ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={publishedObjectsLocked ? "secondary" : "outline"}
-                  title="Verrouille ou deverrouille le deplacement des objets publies"
-                  onClick={() => {
-                    setPublishedObjectsLocked((locked) => !locked);
-                    setLocalityMoveError(null);
-                    setRouteGeometryError(null);
-                    setHoverInfo(null);
-                  }}
-                >
-                  {publishedObjectsLocked ? "Lock publies" : "Publies libres"}
-                </Button>
-              ) : null}
-            </div>
-            {canEditMapObjects ? (
-              <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={
-                    editorTool === "create-point" ? "secondary" : "outline"
-                  }
-                  disabled={
-                    !referenceData ||
-                    (referenceData.locality_types.length === 0 &&
-                      referenceData.landmark_types.length === 0)
-                  }
-                  onClick={() => {
-                    if (handleToolChangeBlockedByRouteGeometry()) {
-                      return;
-                    }
-                    handleCloseLocalitySelection();
-                    handleCloseRouteSelection();
-                    setRouteDraft(null);
-                    setRouteSaveError(null);
-                    if (routePreviewSourceRef.current) {
-                      clearEditorRoutePreview(routePreviewSourceRef.current);
-                    }
-                    setEditorTool((tool) =>
-                      tool === "create-point" ? "select" : "create-point",
-                    );
-                    setPointDraft(null);
-                    setLocalitySaveError(null);
-                  }}
-                >
-                  {editorTool === "create-point"
-                    ? "Annuler point"
-                    : "Creer un point"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={
-                    editorTool === "create-route" ? "secondary" : "outline"
-                  }
-                  onClick={() => {
-                    if (handleToolChangeBlockedByRouteGeometry()) {
-                      return;
-                    }
-                    handleCloseLocalitySelection();
-                    handleCloseRouteSelection();
-                    setPointDraft(null);
-                    setLocalitySaveError(null);
-                    setEditorTool((tool) => {
-                      if (tool === "create-route") {
+                      onClick={() => {
+                        if (handleToolChangeBlockedByRouteGeometry()) {
+                          return;
+                        }
+                        handleCloseLocalitySelection();
+                        handleCloseRouteSelection();
                         setRouteDraft(null);
                         setRouteSaveError(null);
                         if (routePreviewSourceRef.current) {
-                          clearEditorRoutePreview(
-                            routePreviewSourceRef.current,
-                          );
+                          clearEditorRoutePreview(routePreviewSourceRef.current);
                         }
-                        return "select";
+                        setEditorTool((tool) =>
+                          tool === "create-point" ? "select" : "create-point",
+                        );
+                        setPointDraft(null);
+                        setLocalitySaveError(null);
+                      }}
+                    >
+                      {editorTool === "create-point"
+                        ? "Annuler point"
+                        : "Creer un point"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        editorTool === "create-route" ? "secondary" : "outline"
                       }
+                      onClick={() => {
+                        if (handleToolChangeBlockedByRouteGeometry()) {
+                          return;
+                        }
+                        handleCloseLocalitySelection();
+                        handleCloseRouteSelection();
+                        setPointDraft(null);
+                        setLocalitySaveError(null);
+                        setEditorTool((tool) => {
+                          if (tool === "create-route") {
+                            setRouteDraft(null);
+                            setRouteSaveError(null);
+                            if (routePreviewSourceRef.current) {
+                              clearEditorRoutePreview(
+                                routePreviewSourceRef.current,
+                              );
+                            }
+                            return "select";
+                          }
 
-                      setRouteDraft(createEmptyRouteDraft());
-                      setRouteSaveError(null);
-                      return "create-route";
-                    });
-                  }}
-                >
-                  {editorTool === "create-route"
-                    ? "Annuler route"
-                    : "Creer une route"}
-                </Button>
-              </div>
-            ) : null}
+                          setRouteDraft(createEmptyRouteDraft());
+                          setRouteSaveError(null);
+                          return "create-route";
+                        });
+                      }}
+                    >
+                      {editorTool === "create-route"
+                        ? "Annuler route"
+                        : "Creer une route"}
+                    </Button>
+                  </>
+                ) : null
+              }
+            />
           </div>
         </div>
         {mapStatusMessages.length > 0 || panelErrors.length > 0 ? (

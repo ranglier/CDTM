@@ -2,16 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Feature from "ol/Feature";
-import type Geometry from "ol/geom/Geometry";
-import Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
 import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
-import { MAP_MAX_ZOOM } from "@/map/config";
 import {
   buildPublicLandmarkHoverRows,
   buildPublicLocalityHoverRows,
@@ -26,36 +22,29 @@ import {
   toRenderablePublicRoutes,
 } from "@/map/public-objects";
 import {
-  createCasesVectorLayer,
-  createCasesVectorSource,
   readCaseFeatures,
   resolveCaseFeatureProperties,
-  syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
-  createEditorPointsVectorLayer,
-  createEditorPointsVectorSource,
   getEditorLandmarkFromPointFeature,
   getEditorLocalityFromPointFeature,
   getEditorPointFamilyFromFeature,
   replaceEditorPointFeatures,
-  syncEditorPointsLayerVisibility,
 } from "@/map/openlayers/editor-points-layer";
 import {
-  createEditorRoutesVectorLayer,
-  createEditorRoutesVectorSource,
   getEditorRouteFromFeature,
   replaceEditorRouteFeatures,
-  syncEditorRoutesLayerVisibility,
 } from "@/map/openlayers/editor-routes-layer";
-import {
-  cdtmProjection,
-  createCdtmBackgroundLayer,
-  createCdtmMap,
-  fitCdtmCasesExtent,
-  preloadCdtmBackgroundImage,
-} from "@/map/openlayers/map-core";
+import { cdtmProjection } from "@/map/openlayers/map-core";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
+import {
+  attachCdtmPointerMoveLifecycle,
+  createCdtmResizeObserver,
+  getFeatureAtPixel,
+  isToggleSelectionEvent,
+  useCdtmMapRuntime,
+  type CdtmMapObjectDisplayMode,
+} from "@/map/use-cdtm-map-runtime";
 import {
   type CaseSelectionIntent,
   type MapDisplayMode,
@@ -63,7 +52,6 @@ import {
   type StableCaseFeatureCollection,
   type StableCaseProperties,
   isStableCaseFeatureCollection,
-  normalizeMapDisplayMode,
 } from "@/map/types";
 import type { MapSearchTarget } from "@/map/search";
 
@@ -93,18 +81,6 @@ type CasesMapProps = {
   onFeaturesLoad?: (count: number) => void;
 };
 
-type HoverInfo = {
-  x: number;
-  y: number;
-  title: string | null;
-  rows: Array<{
-    label: string;
-    value: string;
-  }>;
-};
-
-type PublicObjectDisplayMode = "icons" | "points";
-
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
 
@@ -113,20 +89,6 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 
   return (await response.json()) as T;
-}
-
-function areStringSetsEqual(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) {
-    return false;
-  }
-
-  for (const value of left) {
-    if (!right.has(value)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export function CasesMap({
@@ -151,51 +113,9 @@ export function CasesMap({
   onPanelVisibilityChange,
   onFeaturesLoad,
 }: CasesMapProps) {
-  const mapElementRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<Map | null>(null);
-  const sourceRef = useRef<ReturnType<typeof createCasesVectorSource> | null>(
-    null,
-  );
-  const layerRef = useRef<ReturnType<typeof createCasesVectorLayer> | null>(
-    null,
-  );
-  const pointsSourceRef = useRef<ReturnType<
-    typeof createEditorPointsVectorSource
-  > | null>(null);
-  const pointsLayerRef = useRef<ReturnType<
-    typeof createEditorPointsVectorLayer
-  > | null>(null);
-  const routesSourceRef = useRef<ReturnType<
-    typeof createEditorRoutesVectorSource
-  > | null>(null);
-  const routesLayerRef = useRef<ReturnType<
-    typeof createEditorRoutesVectorLayer
-  > | null>(null);
-  const casesVisibleRef = useRef(casesVisible);
-  const localitiesVisibleRef = useRef(true);
-  const landmarksVisibleRef = useRef(true);
-  const routesVisibleRef = useRef(true);
-  const activeCaseIdRef = useRef<string | null>(activeCaseId);
-  const selectedCaseIdsRef = useRef<Set<string>>(new Set(selectedCaseIds));
-  const casePropertiesByIdRef = useRef(casePropertiesById);
-  const publicMapStylesRef = useRef<PublicMapStyles>(publicMapStyles);
-  const displayModeRef = useRef<MapDisplayMode>(
-    normalizeMapDisplayMode(displayMode),
-  );
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
   const onFeaturesLoadRef = useRef(onFeaturesLoad);
   const focusCaseIdRef = useRef(focusCaseId);
-  const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
-  const localityDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>(
-    {},
-  );
-  const landmarkDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>(
-    {},
-  );
-  const landmarkCategoryByTypeRef = useRef<
-    Record<string, "landmark" | "unique" | null>
-  >({});
-  const objectDisplayModeRef = useRef<PublicObjectDisplayMode>("points");
   const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
   const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
@@ -203,123 +123,57 @@ export function CasesMap({
   const [landmarksVisible, setLandmarksVisible] = useState(true);
   const [routesVisible, setRoutesVisible] = useState(true);
   const [objectDisplayMode, setObjectDisplayMode] =
-    useState<PublicObjectDisplayMode>("points");
-  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-
-  function fitCasesExtent(duration = 200) {
-    if (!mapRef.current) {
-      return;
-    }
-
-    fitCdtmCasesExtent(mapRef.current, duration);
-  }
-
-  const focusCaseById = useCallback((idCase: string, duration = 250) => {
-    const source = sourceRef.current;
-    const map = mapRef.current;
-
-    if (!source || !map) {
-      return;
-    }
-
-    const feature = source.getFeatureById(idCase);
-
-    if (!feature) {
-      return;
-    }
-
-    const geometry = feature.getGeometry();
-
-    if (!geometry) {
-      return;
-    }
-
-    map.getView().fit(geometry.getExtent(), {
-      duration,
-      padding: [60, 60, 60, 60],
-      maxZoom: MAP_MAX_ZOOM,
-    });
+    useState<CdtmMapObjectDisplayMode>("points");
+  const handleCasesHidden = useCallback(() => {
+    onCaseSelectionChangeRef.current(null, "replace");
   }, []);
-
-  const focusCasesByIds = useCallback((idCases: string[], duration = 250) => {
-    const source = sourceRef.current;
-    const map = mapRef.current;
-
-    if (!source || !map || idCases.length === 0) {
-      return;
-    }
-
-    let combinedExtent: [number, number, number, number] | null = null;
-
-    for (const idCase of idCases) {
-      const geometry = source.getFeatureById(idCase)?.getGeometry();
-
-      if (!geometry) {
-        continue;
-      }
-
-      const extent = geometry.getExtent();
-
-      combinedExtent = combinedExtent
-        ? [
-            Math.min(combinedExtent[0], extent[0]),
-            Math.min(combinedExtent[1], extent[1]),
-            Math.max(combinedExtent[2], extent[2]),
-            Math.max(combinedExtent[3], extent[3]),
-          ]
-        : [extent[0], extent[1], extent[2], extent[3]];
-    }
-
-    if (!combinedExtent) {
-      return;
-    }
-
-    map.getView().fit(combinedExtent, {
-      duration,
-      padding: [70, 70, 70, 70],
-      maxZoom: MAP_MAX_ZOOM,
-    });
-  }, []);
-
-  const focusPoint = useCallback((x: number, y: number, duration = 250) => {
-    const map = mapRef.current;
-
-    if (!map) {
-      return;
-    }
-
-    map.getView().fit([x - 20, y - 20, x + 20, y + 20], {
-      duration,
-      padding: [80, 80, 80, 80],
-      maxZoom: MAP_MAX_ZOOM,
-    });
-  }, []);
-
-  const focusRoute = useCallback(
-    (points: Array<[number, number]>, duration = 250) => {
-      const map = mapRef.current;
-
-      if (!map || points.length === 0) {
-        return;
-      }
-
-      const xs = points.map(([x]) => x);
-      const ys = points.map(([, y]) => y);
-      const extent: [number, number, number, number] = [
-        Math.min(...xs),
-        Math.min(...ys),
-        Math.max(...xs),
-        Math.max(...ys),
-      ];
-
-      map.getView().fit(extent, {
-        duration,
-        padding: [80, 80, 80, 80],
-        maxZoom: MAP_MAX_ZOOM,
-      });
-    },
-    [],
-  );
+  const runtime = useCdtmMapRuntime({
+    activeCaseId,
+    selectedCaseIds,
+    casePropertiesById,
+    publicMapStyles,
+    displayMode,
+    casesVisible,
+    localitiesVisible,
+    landmarksVisible,
+    routesVisible,
+    objectDisplayMode,
+    clearHoverRequest,
+    onCasesHidden: handleCasesHidden,
+  });
+  const {
+    mapElementRef,
+    mapRef,
+    casesSourceRef,
+    pointsSourceRef,
+    pointsLayerRef,
+    routesSourceRef,
+    routesLayerRef,
+    casesVisibleRef,
+    localitiesVisibleRef,
+    landmarksVisibleRef,
+    routesVisibleRef,
+    casePropertiesByIdRef,
+    displayModeRef,
+    mapIconSourceByKeyRef,
+    localityDefaultIconKeyByTypeRef,
+    landmarkDefaultIconKeyByTypeRef,
+    landmarkCategoryByTypeRef,
+    hoverInfo,
+    setHoverInfo,
+    clearHover,
+    getTooltipPosition,
+    showTooltipAtCoordinate,
+    createStandardLayers,
+    createMap,
+    bindStandardHandles,
+    resetStandardHandles,
+    fitCasesExtent,
+    focusCaseById,
+    focusCasesByIds,
+    focusPoint,
+    focusRoute,
+  } = runtime;
 
   const showSearchTargetTooltip = useCallback((target: MapSearchTarget) => {
     if (target.kind === "case") {
@@ -369,20 +223,8 @@ export function CasesMap({
       return;
     }
 
-    const pixel = map.getPixelFromCoordinate(coordinate);
-    const mapRect = map.getTargetElement().getBoundingClientRect();
-    const tooltipWidth = 260;
-    const tooltipHeight = rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
-    const preferredX = mapRect.left + pixel[0] + 18;
-    const preferredY = mapRect.top + pixel[1] + 18;
-
-    setHoverInfo({
-      x: Math.min(preferredX, window.innerWidth - tooltipWidth),
-      y: Math.min(preferredY, window.innerHeight - tooltipHeight),
-      title,
-      rows,
-    });
-  }, []);
+    showTooltipAtCoordinate(coordinate, title, rows);
+  }, [mapRef, showTooltipAtCoordinate]);
 
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
@@ -395,83 +237,6 @@ export function CasesMap({
   useEffect(() => {
     focusCaseIdRef.current = focusCaseId;
   }, [focusCaseId]);
-
-  useEffect(() => {
-    casePropertiesByIdRef.current = casePropertiesById;
-    layerRef.current?.changed();
-  }, [casePropertiesById]);
-
-  useEffect(() => {
-    publicMapStylesRef.current = publicMapStyles;
-    layerRef.current?.changed();
-  }, [publicMapStyles]);
-
-  useEffect(() => {
-    displayModeRef.current = normalizeMapDisplayMode(displayMode);
-    layerRef.current?.changed();
-    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-
-    const frame = requestAnimationFrame(() => {
-      setHoverInfo(null);
-    });
-
-    return () => {
-      cancelAnimationFrame(frame);
-    };
-  }, [displayMode]);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setHoverInfo(null);
-    });
-
-    return () => {
-      cancelAnimationFrame(frame);
-    };
-  }, [clearHoverRequest]);
-
-  useEffect(() => {
-    const previousActiveCaseId = activeCaseIdRef.current;
-    activeCaseIdRef.current = activeCaseId;
-    const previousSelectedIds = selectedCaseIdsRef.current;
-    const nextSelectedIds = new Set(selectedCaseIds);
-    selectedCaseIdsRef.current = nextSelectedIds;
-
-    if (
-      previousActiveCaseId === activeCaseId &&
-      areStringSetsEqual(previousSelectedIds, nextSelectedIds)
-    ) {
-      return;
-    }
-
-    const source = sourceRef.current;
-
-    if (!source) {
-      return;
-    }
-
-    const changedIds = new Set<string>();
-
-    if (activeCaseId) {
-      changedIds.add(activeCaseId);
-    }
-
-    if (previousActiveCaseId) {
-      changedIds.add(previousActiveCaseId);
-    }
-
-    for (const idCase of previousSelectedIds) {
-      changedIds.add(idCase);
-    }
-
-    for (const idCase of nextSelectedIds) {
-      changedIds.add(idCase);
-    }
-
-    for (const idCase of changedIds) {
-      source.getFeatureById(idCase)?.changed();
-    }
-  }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
     if (!focusCaseId) {
@@ -539,50 +304,6 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
-    casesVisibleRef.current = casesVisible;
-    syncCaseLayerVisibility(layerRef.current, casesVisible);
-
-    if (!casesVisible) {
-      mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-      onCaseSelectionChangeRef.current(null, "replace");
-      const frame = requestAnimationFrame(() => {
-        setHoverInfo(null);
-      });
-
-      return () => {
-        cancelAnimationFrame(frame);
-      };
-    }
-  }, [casesVisible]);
-
-  useEffect(() => {
-    localitiesVisibleRef.current = localitiesVisible;
-    landmarksVisibleRef.current = landmarksVisible;
-    routesVisibleRef.current = routesVisible;
-
-    syncEditorPointsLayerVisibility(
-      pointsLayerRef.current,
-      localitiesVisible || landmarksVisible,
-    );
-    syncEditorRoutesLayerVisibility(routesLayerRef.current, routesVisible);
-    pointsLayerRef.current?.changed();
-    routesLayerRef.current?.changed();
-    mapRef.current?.getTargetElement().style.setProperty("cursor", "");
-    const frame = requestAnimationFrame(() => {
-      setHoverInfo(null);
-    });
-
-    return () => {
-      cancelAnimationFrame(frame);
-    };
-  }, [landmarksVisible, localitiesVisible, routesVisible]);
-
-  useEffect(() => {
-    objectDisplayModeRef.current = objectDisplayMode;
-    pointsLayerRef.current?.changed();
-  }, [objectDisplayMode]);
-
-  useEffect(() => {
     const map = mapRef.current;
 
     if (!map) {
@@ -596,63 +317,19 @@ export function CasesMap({
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [panelVisible]);
+  }, [mapRef, panelVisible]);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) {
       return;
     }
 
-    void preloadCdtmBackgroundImage();
-
-    const backgroundLayer = createCdtmBackgroundLayer();
-    const source = createCasesVectorSource();
-    const routesSource = createEditorRoutesVectorSource();
-    const pointsSource = createEditorPointsVectorSource();
-    const layer = createCasesVectorLayer(
-      source,
-      {
-        getDisplayMode: () => displayModeRef.current,
-        getCasePropertiesById: () => casePropertiesByIdRef.current,
-        getPublicMapStyles: () => publicMapStylesRef.current,
-        getSelectionState: (idCase) =>
-          idCase === activeCaseIdRef.current
-            ? "active"
-            : idCase !== null && selectedCaseIdsRef.current.has(idCase)
-              ? "selected"
-              : "default",
-      },
-      {
-        visible: casesVisibleRef.current,
-      },
-    );
-    const routesLayer = createEditorRoutesVectorLayer(routesSource, {
-      visible: routesVisibleRef.current,
-    });
-    const pointsLayer = createEditorPointsVectorLayer(pointsSource, {
-      visible: localitiesVisibleRef.current || landmarksVisibleRef.current,
-      context: {
-        getIconImagePath: (iconKey) =>
-          iconKey ? (mapIconSourceByKeyRef.current[iconKey] ?? null) : null,
-        getLocalityDefaultIconKeyForType: (typeKey) =>
-          localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getLandmarkDefaultIconKeyForType: (typeKey) =>
-          landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
-        getLandmarkTypeCategory: (typeKey) =>
-          landmarkCategoryByTypeRef.current[typeKey] ?? null,
-        getDisplayMode: () => objectDisplayModeRef.current,
-        isFamilyVisible: (family) =>
-          family === "locality"
-            ? localitiesVisibleRef.current
-            : landmarksVisibleRef.current,
-      },
-    });
-
-    const map = createCdtmMap(mapElementRef.current, [
-      backgroundLayer,
-      layer,
-      routesLayer,
-      pointsLayer,
+    const standardLayers = createStandardLayers();
+    const map = createMap(mapElementRef.current, [
+      standardLayers.backgroundLayer,
+      standardLayers.casesLayer,
+      standardLayers.routesLayer,
+      standardLayers.pointsLayer,
     ]);
 
     const singleClickHandler = (rawEvent: unknown) => {
@@ -662,25 +339,11 @@ export function CasesMap({
         return;
       }
 
-      const originalEvent = event.originalEvent;
-      const isToggleSelection =
-        originalEvent instanceof MouseEvent &&
-        (originalEvent.shiftKey ||
-          originalEvent.ctrlKey ||
-          originalEvent.metaKey);
-
-      const feature = map.forEachFeatureAtPixel(
-        event.pixel,
-        (candidate) => {
-          if (candidate instanceof Feature) {
-            return candidate as Feature<Geometry>;
-          }
-
-          return null;
-        },
-        {
-          layerFilter: (candidateLayer) => candidateLayer === layer,
-        },
+      const isToggleSelection = isToggleSelectionEvent(event.originalEvent);
+      const feature = getFeatureAtPixel(
+        map,
+        event,
+        standardLayers.casesLayer,
       );
 
       if (!feature) {
@@ -691,7 +354,7 @@ export function CasesMap({
       }
 
       const resolvedCase = resolveCaseFeatureProperties(
-        feature as Feature<Geometry>,
+        feature,
         casePropertiesByIdRef.current,
       );
 
@@ -704,54 +367,33 @@ export function CasesMap({
     const runPointerMoveHitTests = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
-      const viewportWidth =
-        typeof window !== "undefined" ? window.innerWidth : 0;
-      const viewportHeight =
-        typeof window !== "undefined" ? window.innerHeight : 0;
-      const originalEvent = event.originalEvent;
-      const preferredX = originalEvent.clientX + 18;
-      const preferredY = originalEvent.clientY + 18;
 
       const setTooltip = (
         title: string | null,
         rows: Array<{ label: string; value: string }>,
       ) => {
         target.style.cursor = "pointer";
-        const tooltipWidth = 260;
-        const tooltipHeight =
-          rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
+        const position = getTooltipPosition(event.originalEvent, {
+          height: rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140,
+        });
 
         setHoverInfo({
-          x:
-            viewportWidth > 0
-              ? Math.min(preferredX, viewportWidth - tooltipWidth)
-              : preferredX,
-          y:
-            viewportHeight > 0
-              ? Math.min(preferredY, viewportHeight - tooltipHeight)
-              : preferredY,
+          x: position.x,
+          y: position.y,
           title,
           rows,
         });
       };
 
       if (localitiesVisibleRef.current || landmarksVisibleRef.current) {
-        const pointFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === pointsLayer,
-            hitTolerance: 10,
-          },
+        const pointFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.pointsLayer,
+          10,
         );
 
-        if (pointFeature instanceof Feature) {
+        if (pointFeature) {
           const family = getEditorPointFamilyFromFeature(pointFeature);
 
           if (family === "locality" && localitiesVisibleRef.current) {
@@ -782,22 +424,14 @@ export function CasesMap({
       }
 
       if (routesVisibleRef.current) {
-        const routeFeature = map.forEachFeatureAtPixel(
-          event.pixel,
-          (candidate) => {
-            if (candidate instanceof Feature) {
-              return candidate as Feature<Geometry>;
-            }
-
-            return null;
-          },
-          {
-            layerFilter: (candidateLayer) => candidateLayer === routesLayer,
-            hitTolerance: 8,
-          },
+        const routeFeature = getFeatureAtPixel(
+          map,
+          event,
+          standardLayers.routesLayer,
+          8,
         );
 
-        if (routeFeature instanceof Feature) {
+        if (routeFeature) {
           const route = getEditorRouteFromFeature(routeFeature);
           const publicRoute =
             route && publicRoutesByIdRef.current[route.id_route];
@@ -814,27 +448,19 @@ export function CasesMap({
 
       if (!casesVisibleRef.current) {
         target.style.cursor = "";
-        setHoverInfo(null);
+        clearHover();
         return;
       }
 
-      const caseFeature = map.forEachFeatureAtPixel(
-        event.pixel,
-        (candidate) => {
-          if (candidate instanceof Feature) {
-            return candidate as Feature<Geometry>;
-          }
-
-          return null;
-        },
-        {
-          layerFilter: (candidateLayer) => candidateLayer === layer,
-        },
+      const caseFeature = getFeatureAtPixel(
+        map,
+        event,
+        standardLayers.casesLayer,
       );
 
-      if (!(caseFeature instanceof Feature)) {
+      if (!caseFeature) {
         target.style.cursor = "";
-        setHoverInfo(null);
+        clearHover();
         return;
       }
 
@@ -846,100 +472,61 @@ export function CasesMap({
 
       if (rows.length === 0) {
         target.style.cursor = "";
-        setHoverInfo(null);
+        clearHover();
         return;
       }
 
       setTooltip(getCaseHoverTitle(displayModeRef.current), rows);
     };
 
-    let mapInteracting = false;
-    let pointerMoveFrame: number | null = null;
-    let latestPointerMoveEvent: unknown = null;
-    const clearPointerHover = () => {
-      map.getTargetElement().style.cursor = "";
-      setHoverInfo(null);
-    };
-    const cancelPointerMoveFrame = () => {
-      if (pointerMoveFrame !== null) {
-        window.cancelAnimationFrame(pointerMoveFrame);
-        pointerMoveFrame = null;
-      }
-      latestPointerMoveEvent = null;
-    };
-    const pointerMoveHandler = (rawEvent: unknown) => {
-      latestPointerMoveEvent = rawEvent;
-
-      if (pointerMoveFrame !== null) {
-        return;
-      }
-
-      pointerMoveFrame = window.requestAnimationFrame(() => {
-        pointerMoveFrame = null;
-        const event = latestPointerMoveEvent;
-        latestPointerMoveEvent = null;
-
-        if (!event) {
-          return;
-        }
-
-        if (mapInteracting) {
-          clearPointerHover();
-          return;
-        }
-
-        runPointerMoveHitTests(event);
-      });
-    };
-    const moveStartKey = map.on("movestart", () => {
-      mapInteracting = true;
-      cancelPointerMoveFrame();
-      clearPointerHover();
-    });
-    const moveEndKey = map.on("moveend", () => {
-      mapInteracting = false;
-    });
-
     const singleClickKey = map.on("singleclick", singleClickHandler);
-    const pointerMoveKey = map.on("pointermove", pointerMoveHandler);
-
-    sourceRef.current = source;
-    layerRef.current = layer;
-    pointsSourceRef.current = pointsSource;
-    pointsLayerRef.current = pointsLayer;
-    routesSourceRef.current = routesSource;
-    routesLayerRef.current = routesLayer;
-    mapRef.current = map;
-
-    const resizeObserver = new ResizeObserver(() => {
-      map.updateSize();
+    const pointerMoveCleanup = attachCdtmPointerMoveLifecycle({
+      map,
+      runHitTests: runPointerMoveHitTests,
+      clearHover,
     });
-    resizeObserver.observe(mapElementRef.current);
+    bindStandardHandles({
+      map,
+      casesSource: standardLayers.casesSource,
+      casesLayer: standardLayers.casesLayer,
+      routesSource: standardLayers.routesSource,
+      routesLayer: standardLayers.routesLayer,
+      pointsSource: standardLayers.pointsSource,
+      pointsLayer: standardLayers.pointsLayer,
+    });
+    const resizeObserver = createCdtmResizeObserver(map, mapElementRef.current);
 
     return () => {
       resizeObserver.disconnect();
-      cancelPointerMoveFrame();
+      pointerMoveCleanup();
       unByKey(singleClickKey);
-      unByKey(pointerMoveKey);
-      unByKey(moveStartKey);
-      unByKey(moveEndKey);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
-      sourceRef.current = null;
-      layerRef.current = null;
-      pointsSourceRef.current = null;
-      pointsLayerRef.current = null;
-      routesSourceRef.current = null;
-      routesLayerRef.current = null;
-      mapRef.current = null;
+      resetStandardHandles();
     };
-  }, []);
+  }, [
+    bindStandardHandles,
+    casePropertiesByIdRef,
+    casesVisibleRef,
+    clearHover,
+    createMap,
+    createStandardLayers,
+    displayModeRef,
+    getTooltipPosition,
+    localitiesVisibleRef,
+    landmarksVisibleRef,
+    mapElementRef,
+    mapRef,
+    resetStandardHandles,
+    routesVisibleRef,
+    setHoverInfo,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadCases() {
-      if (!sourceRef.current || !mapRef.current) {
+      if (!casesSourceRef.current || !mapRef.current) {
         return;
       }
 
@@ -953,14 +540,14 @@ export function CasesMap({
           );
         }
 
-        if (cancelled || !sourceRef.current || !mapRef.current) {
+        if (cancelled || !casesSourceRef.current || !mapRef.current) {
           return;
         }
 
         const features = readCaseFeatures(collection, cdtmProjection);
 
-        sourceRef.current.clear(true);
-        sourceRef.current.addFeatures(features);
+        casesSourceRef.current.clear(true);
+        casesSourceRef.current.addFeatures(features);
         onFeaturesLoadRef.current?.(features.length);
         fitCasesExtent(0);
 
@@ -983,7 +570,7 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, focusCaseById]);
+  }, [casesSourceRef, dataUrl, fitCasesExtent, focusCaseById, mapRef]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1094,7 +681,16 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [
+    landmarkCategoryByTypeRef,
+    landmarkDefaultIconKeyByTypeRef,
+    localityDefaultIconKeyByTypeRef,
+    mapIconSourceByKeyRef,
+    pointsLayerRef,
+    pointsSourceRef,
+    routesLayerRef,
+    routesSourceRef,
+  ]);
 
   return (
     <section className="relative h-[72svh] min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 xl:h-[calc(100svh-6rem)] xl:min-h-0">

@@ -1,7 +1,9 @@
 import { ChevronDown, PanelRightClose, PanelRightOpen } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { MapDisplayMode } from "@/map/types";
 
 type MapToolbarProps = {
@@ -12,6 +14,10 @@ type MapToolbarProps = {
   objectDisplayMode: "icons" | "points";
   panelVisible: boolean;
   displayMode: MapDisplayMode;
+  showObjectControls?: boolean;
+  showPanelToggle?: boolean;
+  rightActions?: ReactNode;
+  className?: string;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
   onToggleCases: () => void;
   onToggleLocalities: () => void;
@@ -30,6 +36,10 @@ export function MapToolbar({
   objectDisplayMode,
   panelVisible,
   displayMode,
+  showObjectControls = true,
+  showPanelToggle = true,
+  rightActions,
+  className,
   onDisplayModeChange,
   onToggleCases,
   onToggleLocalities,
@@ -42,118 +52,140 @@ export function MapToolbar({
   const objectsVisible = localitiesVisible || landmarksVisible || routesVisible;
 
   return (
-    <div className="flex items-center gap-2 rounded-full border border-border/80 bg-background/78 p-1.5 shadow-[0_18px_40px_hsl(var(--shadow)/0.45)] backdrop-blur-md">
-      <details className="group relative">
-        <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-          <span>Cases</span>
-          <ChevronDown className="size-4 transition group-open:rotate-180" />
-        </summary>
-        <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={casesVisible ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={onToggleCases}
-            >
-              {casesVisible ? "Masquer les cases" : "Afficher les cases"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={displayMode === "faction" ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={() => onDisplayModeChange("faction")}
-            >
-              Faction
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={displayMode === "influence" ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={() => onDisplayModeChange("influence")}
-            >
-              Influence
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={displayMode === "topographic" ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={() => onDisplayModeChange("topographic")}
-            >
-              Topo
-            </Button>
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/82 p-1.5 shadow-[0_18px_40px_hsl(var(--shadow)/0.45)] backdrop-blur-md",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <details className="group relative">
+          <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+            <span>Cases</span>
+            <ChevronDown className="size-4 transition group-open:rotate-180" />
+          </summary>
+          <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={casesVisible ? "secondary" : "outline"}
+                className="justify-start"
+                onClick={onToggleCases}
+              >
+                {casesVisible ? "Masquer les cases" : "Afficher les cases"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={displayMode === "faction" ? "secondary" : "outline"}
+                className="justify-start"
+                onClick={() => onDisplayModeChange("faction")}
+              >
+                Faction
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={displayMode === "influence" ? "secondary" : "outline"}
+                className="justify-start"
+                onClick={() => onDisplayModeChange("influence")}
+              >
+                Influence
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={displayMode === "topographic" ? "secondary" : "outline"}
+                className="justify-start"
+                onClick={() => onDisplayModeChange("topographic")}
+              >
+                Topo
+              </Button>
+            </div>
           </div>
+        </details>
+        {showObjectControls ? (
+          <details className="group relative">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+              <span>Objets</span>
+              <ChevronDown className="size-4 transition group-open:rotate-180" />
+            </summary>
+            <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={objectsVisible ? "secondary" : "outline"}
+                  className="justify-start"
+                  onClick={onToggleAllObjects}
+                >
+                  {objectsVisible ? "Masquer les objets" : "Afficher les objets"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={localitiesVisible ? "secondary" : "outline"}
+                  className="justify-start"
+                  onClick={onToggleLocalities}
+                >
+                  Localites
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={landmarksVisible ? "secondary" : "outline"}
+                  className="justify-start"
+                  onClick={onToggleLandmarks}
+                >
+                  Landmarks
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={routesVisible ? "secondary" : "outline"}
+                  className="justify-start"
+                  onClick={onToggleRoutes}
+                >
+                  Routes
+                </Button>
+              </div>
+            </div>
+          </details>
+        ) : null}
+        {showObjectControls ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onToggleObjectDisplayMode}
+          >
+            {objectDisplayMode === "icons"
+              ? "Objets : icones"
+              : "Objets : points"}
+          </Button>
+        ) : null}
+      </div>
+      {rightActions || showPanelToggle ? (
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {rightActions}
+          {showPanelToggle ? (
+            <>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onTogglePanel}
+                aria-pressed={panelVisible}
+              >
+                {panelVisible ? <PanelRightClose /> : <PanelRightOpen />}
+                {panelVisible ? "Masquer le panneau" : "Afficher le panneau"}
+              </Button>
+            </>
+          ) : null}
         </div>
-      </details>
-      <details className="group relative">
-        <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
-          <span>Objets</span>
-          <ChevronDown className="size-4 transition group-open:rotate-180" />
-        </summary>
-        <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={objectsVisible ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={onToggleAllObjects}
-            >
-              {objectsVisible ? "Masquer les objets" : "Afficher les objets"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={localitiesVisible ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={onToggleLocalities}
-            >
-              Localites
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={landmarksVisible ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={onToggleLandmarks}
-            >
-              Landmarks
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={routesVisible ? "secondary" : "outline"}
-              className="justify-start"
-              onClick={onToggleRoutes}
-            >
-              Routes
-            </Button>
-          </div>
-        </div>
-      </details>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={onToggleObjectDisplayMode}
-      >
-        {objectDisplayMode === "icons" ? "Objets : icones" : "Objets : points"}
-      </Button>
-      <Separator orientation="vertical" className="mx-1 h-6" />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={onTogglePanel}
-        aria-pressed={panelVisible}
-      >
-        {panelVisible ? <PanelRightClose /> : <PanelRightOpen />}
-        {panelVisible ? "Masquer le panneau" : "Afficher le panneau"}
-      </Button>
+      ) : null}
     </div>
   );
 }
