@@ -89,7 +89,12 @@ export async function GET(
       error instanceof Error
         ? error.message
         : "Lecture du referentiel impossible.";
-    const status = message.includes("inconnue") ? 404 : 500;
+    const status = message.includes("inconnue")
+      ? 404
+      : message.includes("Impossible de supprimer") ||
+          message.includes("referencee")
+        ? 400
+        : 500;
 
     return NextResponse.json(
       {

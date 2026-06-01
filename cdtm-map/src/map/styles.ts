@@ -38,6 +38,10 @@ const PATTERN_STEP = 12;
 const SPACED_PATTERN_STEP = 22;
 const PATTERN_LINE_WIDTH = 1.25;
 const MIN_VISIBLE_PATTERN_STEP = 7;
+const MIN_VISIBLE_PATTERN_LINE_WIDTH = 1.45;
+const MIN_VISIBLE_PATTERN_DOT_RADIUS = 1.45;
+const CONTROL_SPLIT_MIN_VISIBLE_STEP = 18;
+const CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH = 5;
 const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
 const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
 const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
@@ -630,8 +634,14 @@ function drawAnchoredPattern(
   const spec = getPatternSpec(patternType);
   const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
   const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
-  const lineWidth = spec.lineWidth * ratio;
-  const dotRadius = spec.dotRadius * ratio;
+  const lineWidth = Math.max(
+    MIN_VISIBLE_PATTERN_LINE_WIDTH * ratio,
+    spec.lineWidth * ratio,
+  );
+  const dotRadius = Math.max(
+    MIN_VISIBLE_PATTERN_DOT_RADIUS * ratio,
+    spec.dotRadius * ratio,
+  );
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
@@ -724,12 +734,22 @@ function drawControlSplitBands(
 ) {
   const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
   const spec = getPatternSpec(overlay.patternType);
-  const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
+  const step = Math.max(
+    CONTROL_SPLIT_MIN_VISIBLE_STEP * ratio,
+    spec.step * ratio,
+  );
   const hasEmptySecondaryBands =
     overlay.secondaryColor === TRANSPARENT_CONTROL_COLOR;
-  const bandWidth = hasEmptySecondaryBands
+  const rawBandWidth = hasEmptySecondaryBands
     ? step * (1 - overlay.secondaryRatio)
     : step * overlay.secondaryRatio;
+  const bandWidth =
+    rawBandWidth <= 0
+      ? 0
+      : Math.min(
+          step,
+          Math.max(CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH * ratio, rawBandWidth),
+        );
   const [minX, minY, maxX, maxY] = extent;
   const padding = Math.max(maxX - minX, maxY - minY) + step * 2;
 

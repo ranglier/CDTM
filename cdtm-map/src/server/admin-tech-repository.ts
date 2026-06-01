@@ -51,6 +51,31 @@ const MAP_STYLE_TARGET_TYPES: MapStyleTargetType[] = [
   "case_attribute",
   "controle_type",
 ];
+type ReferenceUsageGuard = {
+  usageTable: "map_localities" | "map_landmarks" | "map_forces";
+  entitySingular: string;
+  entityPlural: string;
+};
+
+const REFERENCE_USAGE_GUARDS: Partial<
+  Record<ReferenceTableKey, ReferenceUsageGuard>
+> = {
+  locality_types: {
+    usageTable: "map_localities",
+    entitySingular: "localite",
+    entityPlural: "localites",
+  },
+  landmark_types: {
+    usageTable: "map_landmarks",
+    entitySingular: "landmark",
+    entityPlural: "landmarks",
+  },
+  force_types: {
+    usageTable: "map_forces",
+    entitySingular: "force",
+    entityPlural: "forces",
+  },
+};
 
 function assertSafeSqlIdentifier(identifier: string): string {
   if (!/^[a-z][a-z0-9_]*$/.test(identifier)) {
@@ -1450,6 +1475,72 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
   return styles;
 }
 
+function isPostgresErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === code
+  );
+}
+
+function buildReferenceUsageMessage(
+  guard: ReferenceUsageGuard,
+  count: number,
+  examples: string[],
+): string {
+  const entityLabel = count === 1 ? guard.entitySingular : guard.entityPlural;
+  const examplesLabel =
+    examples.length > 0
+      ? ` (${examples.join(", ")}${count > examples.length ? ", ..." : ""})`
+      : "";
+
+  return `Impossible de supprimer ce type de ${guard.entitySingular} : il est utilise par ${count} ${entityLabel}${examplesLabel}. Supprime ou modifie les objets concernes avant de supprimer ce referentiel.`;
+}
+
+async function assertReferenceTableRowCanBeDeleted(
+  client: PoolClient,
+  tableKey: ReferenceTableKey,
+  primaryKeyValue: string,
+): Promise<void> {
+  const guard = REFERENCE_USAGE_GUARDS[tableKey];
+
+  if (!guard) {
+    return;
+  }
+
+  const result = await client.query<{
+    usage_count: string;
+    examples: string[] | null;
+  }>(
+    `
+      WITH matching AS (
+        SELECT name
+        FROM ${guard.usageTable}
+        WHERE type_key = $1
+      ),
+      examples AS (
+        SELECT name
+        FROM matching
+        ORDER BY LOWER(name) ASC, name ASC
+        LIMIT 3
+      )
+      SELECT
+        (SELECT COUNT(*)::text FROM matching) AS usage_count,
+        COALESCE((SELECT ARRAY_AGG(name) FROM examples), ARRAY[]::text[]) AS examples
+    `,
+    [primaryKeyValue],
+  );
+  const row = result.rows[0];
+  const count = Number.parseInt(row?.usage_count ?? "0", 10);
+
+  if (count > 0) {
+    throw new Error(
+      buildReferenceUsageMessage(guard, count, row?.examples ?? []),
+    );
+  }
+}
+
 export async function saveReferenceTableRow(
   tableKey: ReferenceTableKey,
   row: unknown,
@@ -1512,12 +1603,7 @@ export async function saveReferenceTableRow(
   } catch (error) {
     await client.query("ROLLBACK");
 
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: string }).code === "23505"
-    ) {
+    if (isPostgresErrorCode(error, "23505")) {
       throw new Error(
         "La cle primaire ou une valeur unique est deja utilisee.",
       );
@@ -1543,6 +1629,11 @@ export async function deleteReferenceTableRow(
   const client = await getPool().connect();
 
   try {
+    await assertReferenceTableRowCanBeDeleted(
+      client,
+      tableKey,
+      primaryKeyValue,
+    );
     await client.query(
       `
         DELETE FROM ${definition.physical_name}
@@ -1550,6 +1641,14 @@ export async function deleteReferenceTableRow(
       `,
       [primaryKeyValue],
     );
+  } catch (error) {
+    if (isPostgresErrorCode(error, "23503")) {
+      throw new Error(
+        "Suppression impossible : cette ligne est encore referencee par des donnees existantes.",
+      );
+    }
+
+    throw error;
   } finally {
     client.release();
   }

@@ -1097,7 +1097,7 @@ export function CasesMap({
   }, []);
 
   return (
-    <section className="relative h-full min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0">
+    <section className="relative h-[72svh] min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 xl:h-[calc(100svh-6rem)] xl:min-h-0">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
         <div className="pointer-events-auto">
           <MapToolbar
@@ -1136,7 +1136,7 @@ export function CasesMap({
       </div>
       <div
         ref={mapElementRef}
-        className="h-full min-h-[72svh] w-full xl:min-h-0"
+        className="h-[72svh] w-full xl:h-[calc(100svh-6rem)]"
         aria-label="Carte des cases publiques"
       />
       {hoverInfo &&
