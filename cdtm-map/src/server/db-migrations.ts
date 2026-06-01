@@ -386,6 +386,10 @@ const databaseMigrations: DatabaseMigration[] = [
           faction TEXT,
           controleur TEXT,
           controle_type TEXT,
+          controle_principal_type TEXT,
+          controle_principal_id TEXT,
+          controle_secondaire_type TEXT,
+          controle_secondaire_id TEXT,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1561,6 +1565,31 @@ const databaseMigrations: DatabaseMigration[] = [
         WHERE cible_type = 'controle_type'
           AND secondary_ratio IS NULL
           AND cible_id IN ('conteste', 'vassalise', 'occupe', 'partiel')
+      `);
+    },
+  },
+  {
+    version: "013",
+    name: "case_control_relation_actors",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE case_control_current
+        ADD COLUMN IF NOT EXISTS controle_principal_type TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE case_control_current
+        ADD COLUMN IF NOT EXISTS controle_principal_id TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE case_control_current
+        ADD COLUMN IF NOT EXISTS controle_secondaire_type TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE case_control_current
+        ADD COLUMN IF NOT EXISTS controle_secondaire_id TEXT
       `);
     },
   },

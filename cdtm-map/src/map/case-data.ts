@@ -51,6 +51,10 @@ export function mergeStableCases(
       faction: publicCase.faction,
       controleur: publicCase.controleur,
       controle_type: publicCase.controle_type,
+      controle_principal_type: publicCase.controle_principal_type,
+      controle_principal_id: publicCase.controle_principal_id,
+      controle_secondaire_type: publicCase.controle_secondaire_type,
+      controle_secondaire_id: publicCase.controle_secondaire_id,
     };
   });
 }

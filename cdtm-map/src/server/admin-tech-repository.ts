@@ -1059,6 +1059,34 @@ function isAllowedOption(
   return options.some((option) => option.value === value);
 }
 
+function assertControlActorSelection(
+  referenceData: AdminReferenceData,
+  actorType: string | null,
+  actorId: string | null,
+  label: string,
+) {
+  if (!actorType && !actorId) {
+    return;
+  }
+
+  if (actorType !== "faction" && actorType !== "controleur") {
+    throw new Error(`Le type du champ ${label} est invalide.`);
+  }
+
+  if (!actorId) {
+    throw new Error(`${label} requiert un acteur.`);
+  }
+
+  const options =
+    actorType === "faction"
+      ? referenceData.faction_options
+      : referenceData.controller_options;
+
+  if (!isAllowedOption(options, actorId)) {
+    throw new Error(`La valeur du champ ${label} est invalide.`);
+  }
+}
+
 export async function getStaticAdminReferenceData(
   clientArg?: PoolClient,
 ): Promise<AdminReferenceData> {
@@ -2049,6 +2077,18 @@ export async function validateStaticAdminDraftSelections(
   const faction = normalizeNullableText(draft.control.faction);
   const controleur = normalizeNullableText(draft.control.controleur);
   const controlType = normalizeNullableText(draft.control.controle_type);
+  const principalType = normalizeNullableText(
+    draft.control.controle_principal_type,
+  );
+  const principalId = normalizeNullableText(
+    draft.control.controle_principal_id,
+  );
+  const secondaryType = normalizeNullableText(
+    draft.control.controle_secondaire_type,
+  );
+  const secondaryId = normalizeNullableText(
+    draft.control.controle_secondaire_id,
+  );
 
   if (!isAllowedOption(referenceData.terrain_categories, terrainCategory)) {
     throw new Error("La valeur du champ terrain_cat est invalide.");
@@ -2093,6 +2133,19 @@ export async function validateStaticAdminDraftSelections(
   if (!isAllowedOption(referenceData.control_type_options, controlType)) {
     throw new Error("La valeur du champ controle_type est invalide.");
   }
+
+  assertControlActorSelection(
+    referenceData,
+    principalType,
+    principalId,
+    "acteur principal",
+  );
+  assertControlActorSelection(
+    referenceData,
+    secondaryType,
+    secondaryId,
+    "acteur secondaire",
+  );
 }
 
 export async function validateStaticBulkPatchSelections(
@@ -2110,6 +2163,10 @@ export async function validateStaticBulkPatchSelections(
       faction?: string | null;
       controleur?: string | null;
       controle_type?: string | null;
+      controle_principal_type?: string | null;
+      controle_principal_id?: string | null;
+      controle_secondaire_type?: string | null;
+      controle_secondaire_id?: string | null;
     };
   },
 ): Promise<void> {
@@ -2197,5 +2254,29 @@ export async function validateStaticBulkPatchSelections(
     ) {
       throw new Error("La valeur du champ controle_type est invalide.");
     }
+  }
+
+  if (
+    patch.control?.controle_principal_type !== undefined ||
+    patch.control?.controle_principal_id !== undefined
+  ) {
+    assertControlActorSelection(
+      referenceData,
+      patch.control.controle_principal_type ?? null,
+      patch.control.controle_principal_id ?? null,
+      "acteur principal",
+    );
+  }
+
+  if (
+    patch.control?.controle_secondaire_type !== undefined ||
+    patch.control?.controle_secondaire_id !== undefined
+  ) {
+    assertControlActorSelection(
+      referenceData,
+      patch.control.controle_secondaire_type ?? null,
+      patch.control.controle_secondaire_id ?? null,
+      "acteur secondaire",
+    );
   }
 }

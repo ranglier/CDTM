@@ -43,6 +43,10 @@ const fallbackReservedBusinessFields = [
   "emplacements_restants",
   "controleur",
   "controle_type",
+  "controle_principal_type",
+  "controle_principal_id",
+  "controle_secondaire_type",
+  "controle_secondaire_id",
 ];
 
 const coreFields = [

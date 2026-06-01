@@ -107,6 +107,10 @@ export function parseAdminCaseDraft(value: unknown): AdminCaseDraft {
       faction: normalizeText(control.faction),
       controleur: normalizeText(control.controleur),
       controle_type: normalizeText(control.controle_type),
+      controle_principal_type: normalizeText(control.controle_principal_type),
+      controle_principal_id: normalizeText(control.controle_principal_id),
+      controle_secondaire_type: normalizeText(control.controle_secondaire_type),
+      controle_secondaire_id: normalizeText(control.controle_secondaire_id),
     },
     bonus_contextuels: hasOwnProperty(payload, "bonus_contextuels")
       ? normalizeStringArray(payload.bonus_contextuels)
@@ -221,6 +225,30 @@ export function parseAdminBulkPatch(value: unknown): AdminBulkPatch {
 
     if (hasOwnProperty(control, "controle_type")) {
       controlPatch.controle_type = normalizeNullableText(control.controle_type);
+    }
+
+    if (hasOwnProperty(control, "controle_principal_type")) {
+      controlPatch.controle_principal_type = normalizeNullableText(
+        control.controle_principal_type,
+      );
+    }
+
+    if (hasOwnProperty(control, "controle_principal_id")) {
+      controlPatch.controle_principal_id = normalizeNullableText(
+        control.controle_principal_id,
+      );
+    }
+
+    if (hasOwnProperty(control, "controle_secondaire_type")) {
+      controlPatch.controle_secondaire_type = normalizeNullableText(
+        control.controle_secondaire_type,
+      );
+    }
+
+    if (hasOwnProperty(control, "controle_secondaire_id")) {
+      controlPatch.controle_secondaire_id = normalizeNullableText(
+        control.controle_secondaire_id,
+      );
     }
 
     if (Object.keys(controlPatch).length > 0) {

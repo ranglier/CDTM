@@ -31,6 +31,10 @@ type PublicCaseRow = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+  controle_principal_type: string | null;
+  controle_principal_id: string | null;
+  controle_secondaire_type: string | null;
+  controle_secondaire_id: string | null;
 };
 
 type PublicMapLocalityRow = {
@@ -87,6 +91,10 @@ function createEmptyPublicCase(idCase: string): PublicCaseProperties {
     faction: null,
     controleur: null,
     controle_type: null,
+    controle_principal_type: null,
+    controle_principal_id: null,
+    controle_secondaire_type: null,
+    controle_secondaire_id: null,
   };
 }
 
@@ -110,6 +118,10 @@ function mergePublicCase(
     faction: row.faction,
     controleur: row.controleur,
     controle_type: row.controle_type,
+    controle_principal_type: row.controle_principal_type,
+    controle_principal_id: row.controle_principal_id,
+    controle_secondaire_type: row.controle_secondaire_type,
+    controle_secondaire_id: row.controle_secondaire_id,
   };
 }
 
@@ -157,6 +169,10 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
       faction: null,
       controleur: null,
       controle_type: null,
+      controle_principal_type: null,
+      controle_principal_id: null,
+      controle_secondaire_type: null,
+      controle_secondaire_id: null,
     }),
   );
 
@@ -183,7 +199,11 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
         control_current.peuple,
         control_current.faction,
         control_current.controleur,
-        control_current.controle_type
+        control_current.controle_type,
+        control_current.controle_principal_type,
+        control_current.controle_principal_id,
+        control_current.controle_secondaire_type,
+        control_current.controle_secondaire_id
       FROM case_registry AS registry
       LEFT JOIN case_public_current AS public_current ON public_current.id_case = registry.id_case
       LEFT JOIN case_terrain_current AS terrain ON terrain.id_case = registry.id_case
@@ -211,6 +231,10 @@ export async function getPublicCaseIndex(): Promise<PublicCaseProperties[]> {
           faction: null,
           controleur: null,
           controle_type: null,
+          controle_principal_type: null,
+          controle_principal_id: null,
+          controle_secondaire_type: null,
+          controle_secondaire_id: null,
         }
       : createEmptyPublicCase(row.id_case);
 

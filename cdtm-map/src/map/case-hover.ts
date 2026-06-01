@@ -3,6 +3,7 @@ import type { MapDisplayMode, StableCaseProperties } from "@/map/types";
 const BLANK_CASE_ROW = [{ label: "Etat", value: "Case vierge" }];
 
 type CaseHoverRow = { label: string; value: string };
+type ControlActorType = "faction" | "controleur";
 
 function normalizeControlType(value: string): string {
   return value
@@ -26,8 +27,63 @@ function formatCaseActor(value: string | null | undefined): string | null {
     .join(" ");
 }
 
+function normalizeControlActorType(
+  value: string | null | undefined,
+): ControlActorType | null {
+  const normalized = value?.trim().toLowerCase();
+
+  return normalized === "faction" || normalized === "controleur"
+    ? normalized
+    : null;
+}
+
+function getExplicitControlActorLabel(
+  properties: StableCaseProperties,
+  role: "principal" | "secondaire",
+): string | null {
+  const actorType = normalizeControlActorType(
+    role === "principal"
+      ? properties.controle_principal_type
+      : properties.controle_secondaire_type,
+  );
+  const actorId =
+    role === "principal"
+      ? properties.controle_principal_id
+      : properties.controle_secondaire_id;
+
+  return actorType ? formatCaseActor(actorId) : null;
+}
+
+function getCurrentControlActorLabel(
+  displayMode: MapDisplayMode,
+  properties: StableCaseProperties,
+): string | null {
+  const faction = formatCaseActor(properties.faction);
+  const controller = formatCaseActor(properties.controleur);
+
+  return displayMode === "faction"
+    ? (faction ?? controller)
+    : (controller ?? faction);
+}
+
+function getOtherCurrentControlActorLabel(
+  properties: StableCaseProperties,
+  primaryActor: string | null,
+): string | null {
+  const candidates = [
+    formatCaseActor(properties.faction),
+    formatCaseActor(properties.controleur),
+  ];
+
+  return (
+    candidates.find((candidate) => candidate && candidate !== primaryActor) ??
+    null
+  );
+}
+
 function buildControlTypeHoverRow(
   properties: StableCaseProperties,
+  displayMode: MapDisplayMode,
 ): CaseHoverRow | null {
   const controlType = properties.controle_type?.trim();
 
@@ -41,36 +97,57 @@ function buildControlTypeHoverRow(
     return null;
   }
 
-  const faction = formatCaseActor(properties.faction);
+  const primaryActor =
+    getExplicitControlActorLabel(properties, "principal") ??
+    getCurrentControlActorLabel(displayMode, properties);
+  const explicitSecondaryActor = getExplicitControlActorLabel(
+    properties,
+    "secondaire",
+  );
+  const fallbackSecondaryActor = getOtherCurrentControlActorLabel(
+    properties,
+    primaryActor,
+  );
   const controller = formatCaseActor(properties.controleur);
 
   switch (normalizedControlType) {
     case "occupe":
-    case "occupation":
+    case "occupation": {
+      const occupant =
+        explicitSecondaryActor ?? controller ?? fallbackSecondaryActor;
+
       return {
         label: "Controle",
-        value: controller ? `Occupe par ${controller}` : "Occupe",
+        value: occupant ? `Occupe par ${occupant}` : "Occupe",
       };
+    }
     case "vassal":
     case "vassalite":
-    case "vassalise":
+    case "vassalise": {
+      const suzerain =
+        explicitSecondaryActor ?? controller ?? fallbackSecondaryActor;
+
       return {
         label: "Controle",
-        value: controller ? `Vassal de ${controller}` : "Vassalite",
+        value: suzerain ? `Vassal de ${suzerain}` : "Vassalite",
       };
-    case "conteste":
+    }
+    case "conteste": {
+      const contender = explicitSecondaryActor ?? fallbackSecondaryActor;
+
       return {
         label: "Controle",
         value:
-          faction && controller && faction !== controller
-            ? `Conflit entre ${faction} et ${controller}`
+          primaryActor && contender && primaryActor !== contender
+            ? `Conflit entre ${primaryActor} et ${contender}`
             : "Conflit",
       };
+    }
     case "partiel":
       return {
         label: "Controle",
-        value: controller
-          ? `Controle partiel de ${controller}`
+        value: primaryActor
+          ? `Controle partiel de ${primaryActor}`
           : "Controle partiel",
       };
     default:
@@ -81,8 +158,9 @@ function buildControlTypeHoverRow(
 function appendControlTypeRow(
   rows: CaseHoverRow[],
   properties: StableCaseProperties,
+  displayMode: MapDisplayMode,
 ): CaseHoverRow[] {
-  const controlTypeRow = buildControlTypeHoverRow(properties);
+  const controlTypeRow = buildControlTypeHoverRow(properties, displayMode);
 
   return controlTypeRow ? [...rows, controlTypeRow] : rows;
 }
@@ -104,7 +182,7 @@ export function buildCaseHoverRows(
       ? [{ label: "Faction", value: properties.faction }]
       : [];
 
-    const hoverRows = appendControlTypeRow(rows, properties);
+    const hoverRows = appendControlTypeRow(rows, properties, displayMode);
 
     return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
   }
@@ -116,7 +194,7 @@ export function buildCaseHoverRows(
         ? [{ label: "Faction", value: properties.faction }]
         : [];
 
-    const hoverRows = appendControlTypeRow(rows, properties);
+    const hoverRows = appendControlTypeRow(rows, properties, displayMode);
 
     return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
   }
@@ -128,7 +206,7 @@ export function buildCaseHoverRows(
     properties.colline ? { label: "Attribut", value: "Colline" } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 
-  const hoverRows = appendControlTypeRow(rows, properties);
+  const hoverRows = appendControlTypeRow(rows, properties, displayMode);
 
   return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
 }

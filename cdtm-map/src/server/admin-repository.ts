@@ -47,6 +47,10 @@ type CaseLookupRow = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+  controle_principal_type: string | null;
+  controle_principal_id: string | null;
+  controle_secondaire_type: string | null;
+  controle_secondaire_id: string | null;
   control_updated_at: string | null;
   control_updated_by: string | null;
 };
@@ -417,6 +421,10 @@ async function createEmptyAdminRecord(
       faction: null,
       controleur: null,
       controle_type: null,
+      controle_principal_type: null,
+      controle_principal_id: null,
+      controle_secondaire_type: null,
+      controle_secondaire_id: null,
       meta: createEmptyPublicMeta(),
     },
     terrain: {
@@ -432,6 +440,10 @@ async function createEmptyAdminRecord(
       faction: draft.control.faction || null,
       controleur: draft.control.controleur || null,
       controle_type: draft.control.controle_type || null,
+      controle_principal_type: draft.control.controle_principal_type || null,
+      controle_principal_id: draft.control.controle_principal_id || null,
+      controle_secondaire_type: draft.control.controle_secondaire_type || null,
+      controle_secondaire_id: draft.control.controle_secondaire_id || null,
       meta: createEmptyPublicMeta(),
     },
     emplacements: {
@@ -481,6 +493,10 @@ async function mapCaseLookupRow(
       faction: row.faction,
       controleur: row.controleur,
       controle_type: row.controle_type,
+      controle_principal_type: row.controle_principal_type,
+      controle_principal_id: row.controle_principal_id,
+      controle_secondaire_type: row.controle_secondaire_type,
+      controle_secondaire_id: row.controle_secondaire_id,
       meta: {
         updated_at: toIsoStringOrNull(row.public_updated_at),
         updated_by: row.public_updated_by,
@@ -502,6 +518,10 @@ async function mapCaseLookupRow(
       faction: row.faction,
       controleur: row.controleur,
       controle_type: row.controle_type,
+      controle_principal_type: row.controle_principal_type,
+      controle_principal_id: row.controle_principal_id,
+      controle_secondaire_type: row.controle_secondaire_type,
+      controle_secondaire_id: row.controle_secondaire_id,
       meta: {
         updated_at: toIsoStringOrNull(row.control_updated_at),
         updated_by: row.control_updated_by,
@@ -626,6 +646,10 @@ async function selectAdminCaseRecord(
         control_current.faction,
         control_current.controleur,
         control_current.controle_type,
+        control_current.controle_principal_type,
+        control_current.controle_principal_id,
+        control_current.controle_secondaire_type,
+        control_current.controle_secondaire_id,
         control_current.updated_at AS control_updated_at,
         control_user.username AS control_updated_by
       FROM case_registry AS registry
@@ -727,6 +751,18 @@ export async function saveAdminCaseRecord(
         faction: normalizeNullableField(draft.control.faction),
         controleur: normalizeNullableField(draft.control.controleur),
         controle_type: normalizeNullableField(draft.control.controle_type),
+        controle_principal_type: normalizeNullableField(
+          draft.control.controle_principal_type,
+        ),
+        controle_principal_id: normalizeNullableField(
+          draft.control.controle_principal_id,
+        ),
+        controle_secondaire_type: normalizeNullableField(
+          draft.control.controle_secondaire_type,
+        ),
+        controle_secondaire_id: normalizeNullableField(
+          draft.control.controle_secondaire_id,
+        ),
         peuple: normalizeNullableField(draft.control.peuple),
       },
       userId,

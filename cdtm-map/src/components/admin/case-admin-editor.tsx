@@ -60,6 +60,8 @@ const booleanOptions = [
   { label: "Non", value: "false" },
 ] as const;
 
+const controlActorTypeOptions = ["faction", "controleur"] as const;
+
 function formatMeta(meta: AdminBlockMeta | null | undefined): string {
   if (!meta?.updated_at) {
     return "Aucune sauvegarde";
@@ -128,6 +130,22 @@ function formatBonusOption(option: AdminBonusContextuel): string {
   const signedValue =
     option.valeur > 0 ? `+${option.valeur}` : String(option.valeur);
   return `${option.label} (${signedValue})`;
+}
+
+function getControlActorIdOptions(
+  actorType: string,
+  factionOptions: string[],
+  controllerOptions: string[],
+): string[] {
+  if (actorType === "faction") {
+    return factionOptions;
+  }
+
+  if (actorType === "controleur") {
+    return controllerOptions;
+  }
+
+  return [];
 }
 
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
@@ -458,6 +476,22 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
     activeAdminRecord?.reference_data.control_type_options.map(
       (option) => option.value,
     ) ?? [];
+  const selectedPrincipalActorType = isMultiSelection
+    ? bulkDraft.control.controle_principal_type.value
+    : singleDraft.control.controle_principal_type;
+  const selectedSecondaryActorType = isMultiSelection
+    ? bulkDraft.control.controle_secondaire_type.value
+    : singleDraft.control.controle_secondaire_type;
+  const principalActorOptions = getControlActorIdOptions(
+    selectedPrincipalActorType,
+    factionOptions,
+    controllerOptions,
+  );
+  const secondaryActorOptions = getControlActorIdOptions(
+    selectedSecondaryActorType,
+    factionOptions,
+    controllerOptions,
+  );
   const publicMeta = isMultiSelection
     ? summarizeMeta(selectedAdminRecords.map((record) => record.public.meta))
     : formatMeta(activeAdminRecord?.public.meta);
@@ -834,6 +868,146 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
                   : onSingleFieldChange("control", "controle_type", value)
               }
               disabled={adminLoading || adminSaving}
+            />
+          </FormRow>
+          <FormRow
+            label="Acteur principal"
+            mixed={
+              isMultiSelection
+                ? bulkDraft.control.controle_principal_type.mixed
+                : false
+            }
+            helper={
+              isMultiSelection
+                ? renderBulkHelper(bulkDraft.control.controle_principal_type)
+                : undefined
+            }
+          >
+            <SelectField
+              value={selectedPrincipalActorType}
+              options={controlActorTypeOptions}
+              onChange={(value) =>
+                isMultiSelection
+                  ? onBulkFieldChange(
+                      "control",
+                      "controle_principal_type",
+                      value,
+                    )
+                  : onSingleFieldChange(
+                      "control",
+                      "controle_principal_type",
+                      value,
+                    )
+              }
+              disabled={adminLoading || adminSaving}
+            />
+          </FormRow>
+          <FormRow
+            label="Reference principale"
+            mixed={
+              isMultiSelection
+                ? bulkDraft.control.controle_principal_id.mixed
+                : false
+            }
+            helper={
+              isMultiSelection
+                ? renderBulkHelper(bulkDraft.control.controle_principal_id)
+                : undefined
+            }
+          >
+            <SelectField
+              value={
+                isMultiSelection
+                  ? bulkDraft.control.controle_principal_id.value
+                  : singleDraft.control.controle_principal_id
+              }
+              options={principalActorOptions}
+              onChange={(value) =>
+                isMultiSelection
+                  ? onBulkFieldChange("control", "controle_principal_id", value)
+                  : onSingleFieldChange(
+                      "control",
+                      "controle_principal_id",
+                      value,
+                    )
+              }
+              disabled={
+                adminLoading ||
+                adminSaving ||
+                selectedPrincipalActorType.length === 0
+              }
+            />
+          </FormRow>
+          <FormRow
+            label="Acteur relationnel"
+            mixed={
+              isMultiSelection
+                ? bulkDraft.control.controle_secondaire_type.mixed
+                : false
+            }
+            helper={
+              isMultiSelection
+                ? renderBulkHelper(bulkDraft.control.controle_secondaire_type)
+                : undefined
+            }
+          >
+            <SelectField
+              value={selectedSecondaryActorType}
+              options={controlActorTypeOptions}
+              onChange={(value) =>
+                isMultiSelection
+                  ? onBulkFieldChange(
+                      "control",
+                      "controle_secondaire_type",
+                      value,
+                    )
+                  : onSingleFieldChange(
+                      "control",
+                      "controle_secondaire_type",
+                      value,
+                    )
+              }
+              disabled={adminLoading || adminSaving}
+            />
+          </FormRow>
+          <FormRow
+            label="Reference relationnelle"
+            mixed={
+              isMultiSelection
+                ? bulkDraft.control.controle_secondaire_id.mixed
+                : false
+            }
+            helper={
+              isMultiSelection
+                ? renderBulkHelper(bulkDraft.control.controle_secondaire_id)
+                : undefined
+            }
+          >
+            <SelectField
+              value={
+                isMultiSelection
+                  ? bulkDraft.control.controle_secondaire_id.value
+                  : singleDraft.control.controle_secondaire_id
+              }
+              options={secondaryActorOptions}
+              onChange={(value) =>
+                isMultiSelection
+                  ? onBulkFieldChange(
+                      "control",
+                      "controle_secondaire_id",
+                      value,
+                    )
+                  : onSingleFieldChange(
+                      "control",
+                      "controle_secondaire_id",
+                      value,
+                    )
+              }
+              disabled={
+                adminLoading ||
+                adminSaving ||
+                selectedSecondaryActorType.length === 0
+              }
             />
           </FormRow>
         </div>

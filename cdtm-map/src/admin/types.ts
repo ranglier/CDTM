@@ -22,6 +22,10 @@ export type PublicCaseProperties = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+  controle_principal_type: string | null;
+  controle_principal_id: string | null;
+  controle_secondaire_type: string | null;
+  controle_secondaire_id: string | null;
 };
 
 export type PublicCaseIndexResponse = {
@@ -70,6 +74,10 @@ type AdminControlRecord = {
   faction: string | null;
   controleur: string | null;
   controle_type: string | null;
+  controle_principal_type: string | null;
+  controle_principal_id: string | null;
+  controle_secondaire_type: string | null;
+  controle_secondaire_id: string | null;
   meta: AdminBlockMeta;
 };
 
@@ -120,6 +128,10 @@ export type AdminCaseDraft = {
     faction: string;
     controleur: string;
     controle_type: string;
+    controle_principal_type: string;
+    controle_principal_id: string;
+    controle_secondaire_type: string;
+    controle_secondaire_id: string;
   };
   bonus_contextuels?: string[];
   dynamic: Record<string, Record<string, string>>;
@@ -157,6 +169,10 @@ export type AdminBulkEditDraft = {
     faction: AdminBulkEditFieldState;
     controleur: AdminBulkEditFieldState;
     controle_type: AdminBulkEditFieldState;
+    controle_principal_type: AdminBulkEditFieldState;
+    controle_principal_id: AdminBulkEditFieldState;
+    controle_secondaire_type: AdminBulkEditFieldState;
+    controle_secondaire_id: AdminBulkEditFieldState;
   };
   bonus_contextuels: AdminBulkEditListState;
 };
@@ -181,6 +197,10 @@ export type AdminBulkPatch = {
     faction?: string | null;
     controleur?: string | null;
     controle_type?: string | null;
+    controle_principal_type?: string | null;
+    controle_principal_id?: string | null;
+    controle_secondaire_type?: string | null;
+    controle_secondaire_id?: string | null;
   };
   bonus_contextuels?: string[];
 };
@@ -259,6 +279,10 @@ export function createEmptyAdminCaseDraft(): AdminCaseDraft {
       faction: "",
       controleur: "",
       controle_type: "",
+      controle_principal_type: "",
+      controle_principal_id: "",
+      controle_secondaire_type: "",
+      controle_secondaire_id: "",
     },
     bonus_contextuels: [],
     dynamic: {},
@@ -286,6 +310,10 @@ export function createEmptyAdminBulkEditDraft(): AdminBulkEditDraft {
       faction: createEmptyBulkFieldState(),
       controleur: createEmptyBulkFieldState(),
       controle_type: createEmptyBulkFieldState(),
+      controle_principal_type: createEmptyBulkFieldState(),
+      controle_principal_id: createEmptyBulkFieldState(),
+      controle_secondaire_type: createEmptyBulkFieldState(),
+      controle_secondaire_id: createEmptyBulkFieldState(),
     },
     bonus_contextuels: createEmptyBulkListState(),
   };
@@ -319,6 +347,10 @@ export function toAdminCaseDraft(
       faction: record.control.faction ?? "",
       controleur: record.control.controleur ?? "",
       controle_type: record.control.controle_type ?? "",
+      controle_principal_type: record.control.controle_principal_type ?? "",
+      controle_principal_id: record.control.controle_principal_id ?? "",
+      controle_secondaire_type: record.control.controle_secondaire_type ?? "",
+      controle_secondaire_id: record.control.controle_secondaire_id ?? "",
     },
     bonus_contextuels: record.bonus_contextuels.map((bonus) => bonus.slug),
     dynamic: Object.fromEntries(

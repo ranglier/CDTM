@@ -110,6 +110,10 @@ export function applyPersistedRecordToStableCase(
     faction: record.public.faction,
     controleur: record.public.controleur,
     controle_type: record.public.controle_type,
+    controle_principal_type: record.public.controle_principal_type,
+    controle_principal_id: record.public.controle_principal_id,
+    controle_secondaire_type: record.public.controle_secondaire_type,
+    controle_secondaire_id: record.public.controle_secondaire_id,
   };
 }
 
@@ -146,6 +150,10 @@ export function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
       draft.control.faction,
       draft.control.controleur,
       draft.control.controle_type,
+      draft.control.controle_principal_type,
+      draft.control.controle_principal_id,
+      draft.control.controle_secondaire_type,
+      draft.control.controle_secondaire_id,
     ].some((fieldState) => fieldState.touched) ||
     draft.bonus_contextuels.touched
   );
@@ -246,6 +254,18 @@ export function buildBulkEditDraft(
       controle_type: buildBulkFieldState(
         records.map((record) => record.control.controle_type),
       ),
+      controle_principal_type: buildBulkFieldState(
+        records.map((record) => record.control.controle_principal_type),
+      ),
+      controle_principal_id: buildBulkFieldState(
+        records.map((record) => record.control.controle_principal_id),
+      ),
+      controle_secondaire_type: buildBulkFieldState(
+        records.map((record) => record.control.controle_secondaire_type),
+      ),
+      controle_secondaire_id: buildBulkFieldState(
+        records.map((record) => record.control.controle_secondaire_id),
+      ),
     },
     bonus_contextuels: buildBulkListState(
       records.map((record) =>
@@ -342,7 +362,11 @@ export function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
     draft.control.peuple.touched ||
     draft.control.faction.touched ||
     draft.control.controleur.touched ||
-    draft.control.controle_type.touched
+    draft.control.controle_type.touched ||
+    draft.control.controle_principal_type.touched ||
+    draft.control.controle_principal_id.touched ||
+    draft.control.controle_secondaire_type.touched ||
+    draft.control.controle_secondaire_id.touched
   ) {
     patch.control = {};
 
@@ -371,6 +395,34 @@ export function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
       patch.control.controle_type =
         draft.control.controle_type.value.trim().length > 0
           ? draft.control.controle_type.value.trim()
+          : null;
+    }
+
+    if (draft.control.controle_principal_type.touched) {
+      patch.control.controle_principal_type =
+        draft.control.controle_principal_type.value.trim().length > 0
+          ? draft.control.controle_principal_type.value.trim()
+          : null;
+    }
+
+    if (draft.control.controle_principal_id.touched) {
+      patch.control.controle_principal_id =
+        draft.control.controle_principal_id.value.trim().length > 0
+          ? draft.control.controle_principal_id.value.trim()
+          : null;
+    }
+
+    if (draft.control.controle_secondaire_type.touched) {
+      patch.control.controle_secondaire_type =
+        draft.control.controle_secondaire_type.value.trim().length > 0
+          ? draft.control.controle_secondaire_type.value.trim()
+          : null;
+    }
+
+    if (draft.control.controle_secondaire_id.touched) {
+      patch.control.controle_secondaire_id =
+        draft.control.controle_secondaire_id.value.trim().length > 0
+          ? draft.control.controle_secondaire_id.value.trim()
           : null;
     }
   }
@@ -420,6 +472,20 @@ export function updateSingleAdminDraftField(
     nextDraft.terrain = {
       ...nextDraft.terrain,
       terrain_type: "",
+    };
+  }
+
+  if (section === "control" && field === "controle_principal_type") {
+    nextDraft.control = {
+      ...nextDraft.control,
+      controle_principal_id: "",
+    };
+  }
+
+  if (section === "control" && field === "controle_secondaire_type") {
+    nextDraft.control = {
+      ...nextDraft.control,
+      controle_secondaire_id: "",
     };
   }
 
@@ -494,6 +560,24 @@ export function updateBulkAdminDraftField(
   ) {
     nextDraft.terrain.terrain_cat = {
       ...nextDraft.terrain.terrain_cat,
+      touched: true,
+      mixed: false,
+    };
+  }
+
+  if (section === "control" && field === "controle_principal_type") {
+    nextDraft.control.controle_principal_id = {
+      ...nextDraft.control.controle_principal_id,
+      value: "",
+      touched: true,
+      mixed: false,
+    };
+  }
+
+  if (section === "control" && field === "controle_secondaire_type") {
+    nextDraft.control.controle_secondaire_id = {
+      ...nextDraft.control.controle_secondaire_id,
+      value: "",
       touched: true,
       mixed: false,
     };

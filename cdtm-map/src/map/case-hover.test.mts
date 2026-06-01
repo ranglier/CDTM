@@ -38,11 +38,13 @@ test("les controles occupes, vassaux et contestes sont explicites au survol", ()
   assert.deepEqual(
     buildCaseHoverRows("influence", {
       id_case: "case_vassale",
-      controleur: "gondor",
+      controleur: "deorl",
       controle_type: "vassalise",
+      controle_secondaire_type: "controleur",
+      controle_secondaire_id: "gondor",
     }),
     [
-      { label: "Controleur", value: "gondor" },
+      { label: "Controleur", value: "deorl" },
       { label: "Controle", value: "Vassal de Gondor" },
     ],
   );
@@ -50,6 +52,25 @@ test("les controles occupes, vassaux et contestes sont explicites au survol", ()
   assert.deepEqual(
     buildCaseHoverRows("faction", {
       id_case: "case_contestee",
+      faction: "royaume_des_hommes",
+      controle_type: "conteste",
+      controle_secondaire_type: "faction",
+      controle_secondaire_id: "mordor",
+    }),
+    [
+      { label: "Faction", value: "royaume_des_hommes" },
+      {
+        label: "Controle",
+        value: "Conflit entre Royaume Des Hommes et Mordor",
+      },
+    ],
+  );
+});
+
+test("le controle conteste conserve un repli historique faction plus controleur", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("faction", {
+      id_case: "case_contestee_legacy",
       faction: "angmar",
       controleur: "fealnir",
       controle_type: "conteste",

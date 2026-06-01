@@ -14,6 +14,10 @@ export type StableCaseProperties = {
   faction?: string | null;
   controleur?: string | null;
   controle_type?: string | null;
+  controle_principal_type?: string | null;
+  controle_principal_id?: string | null;
+  controle_secondaire_type?: string | null;
+  controle_secondaire_id?: string | null;
 };
 
 export type MapStyleTargetType =
@@ -189,7 +193,11 @@ function isStableCaseProperties(value: unknown): value is StableCaseProperties {
     isNullableString(value.peuple) &&
     isNullableString(value.faction) &&
     isNullableString(value.controleur) &&
-    isNullableString(value.controle_type)
+    isNullableString(value.controle_type) &&
+    isNullableString(value.controle_principal_type) &&
+    isNullableString(value.controle_principal_id) &&
+    isNullableString(value.controle_secondaire_type) &&
+    isNullableString(value.controle_secondaire_id)
   );
 }
 
@@ -252,5 +260,9 @@ export function toStableCaseProperties(
     faction: value.faction ?? null,
     controleur: value.controleur ?? null,
     controle_type: value.controle_type ?? null,
+    controle_principal_type: value.controle_principal_type ?? null,
+    controle_principal_id: value.controle_principal_id ?? null,
+    controle_secondaire_type: value.controle_secondaire_type ?? null,
+    controle_secondaire_id: value.controle_secondaire_id ?? null,
   };
 }

@@ -40,10 +40,18 @@ const PATTERN_LINE_WIDTH = 1.25;
 const MIN_VISIBLE_PATTERN_STEP = 7;
 const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
 const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
+const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
 
 const styleCache = new Map<string, Style>();
 const patternOverlayCache = new Map<string, Style>();
 const controlSplitOverlayCache = new Map<string, Style>();
+
+type ControlActorType = "faction" | "controleur";
+
+type ControlActorTarget = {
+  targetType: ControlActorType;
+  id: string;
+};
 
 type ControlSplitOverlay = {
   primaryColor: string;
@@ -114,9 +122,129 @@ function normalizeControlActor(
   return normalized && normalized.length > 0 ? normalized : null;
 }
 
+function normalizeControlActorType(
+  value: string | null | undefined,
+): ControlActorType | null {
+  const normalized = normalizeControlActor(value);
+
+  return normalized === "faction" || normalized === "controleur"
+    ? normalized
+    : null;
+}
+
+function createControlActorTarget(
+  targetType: ControlActorType,
+  id: string | null | undefined,
+): ControlActorTarget | null {
+  const normalizedId = normalizeControlActor(id);
+
+  return normalizedId ? { targetType, id: normalizedId } : null;
+}
+
+function getExplicitControlActor(
+  properties: StableCaseProperties,
+  role: "principal" | "secondaire",
+): ControlActorTarget | null {
+  const targetType = normalizeControlActorType(
+    role === "principal"
+      ? properties.controle_principal_type
+      : properties.controle_secondaire_type,
+  );
+  const id =
+    role === "principal"
+      ? properties.controle_principal_id
+      : properties.controle_secondaire_id;
+
+  return targetType ? createControlActorTarget(targetType, id) : null;
+}
+
+function getCurrentControlActor(
+  displayMode: MapDisplayMode,
+  properties: StableCaseProperties,
+): ControlActorTarget | null {
+  const factionActor = createControlActorTarget("faction", properties.faction);
+  const controllerActor = createControlActorTarget(
+    "controleur",
+    properties.controleur,
+  );
+
+  return displayMode === "faction"
+    ? (factionActor ?? controllerActor)
+    : (controllerActor ?? factionActor);
+}
+
+function areControlActorsEqual(
+  left: ControlActorTarget | null,
+  right: ControlActorTarget | null,
+): boolean {
+  return Boolean(
+    left &&
+    right &&
+    left.targetType === right.targetType &&
+    left.id === right.id,
+  );
+}
+
+function getOtherCurrentControlActor(
+  properties: StableCaseProperties,
+  primaryActor: ControlActorTarget,
+): ControlActorTarget | null {
+  const candidates = [
+    createControlActorTarget("faction", properties.faction),
+    createControlActorTarget("controleur", properties.controleur),
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        candidate && !areControlActorsEqual(candidate, primaryActor),
+    ) ?? null
+  );
+}
+
+function getFallbackPrimaryControlActor(
+  displayMode: MapDisplayMode,
+  properties: StableCaseProperties,
+  controlType: string,
+): ControlActorTarget | null {
+  if (controlType === "partiel") {
+    return getCurrentControlActor(displayMode, properties);
+  }
+
+  return (
+    createControlActorTarget("faction", properties.faction) ??
+    createControlActorTarget("controleur", properties.controleur)
+  );
+}
+
+function getFallbackSecondaryControlActor(
+  properties: StableCaseProperties,
+  primaryActor: ControlActorTarget,
+  controlType: string,
+): ControlActorTarget | null {
+  const controllerActor = createControlActorTarget(
+    "controleur",
+    properties.controleur,
+  );
+
+  if (
+    (controlType === "vassal" ||
+      controlType === "vassalite" ||
+      controlType === "vassalise" ||
+      controlType === "occupe" ||
+      controlType === "occupation") &&
+    controllerActor &&
+    !areControlActorsEqual(controllerActor, primaryActor)
+  ) {
+    return controllerActor;
+  }
+
+  return getOtherCurrentControlActor(properties, primaryActor);
+}
+
 function getControlActorStyle(
   styles: PublicMapStyles,
-  preferredTargetType: "faction" | "controleur",
+  preferredTargetType: ControlActorType,
   targetId: string | null | undefined,
 ): ResolvedStyle | null {
   if (preferredTargetType === "faction") {
@@ -183,27 +311,38 @@ function resolveControlSplitOverlay(
     return null;
   }
 
-  const faction = normalizeControlActor(properties.faction);
-  const controller = normalizeControlActor(properties.controleur);
+  const primaryActor =
+    getExplicitControlActor(properties, "principal") ??
+    getFallbackPrimaryControlActor(displayMode, properties, controlType);
 
-  if (!controller || faction === controller) {
+  if (!primaryActor) {
     return null;
   }
 
-  const factionStyle = getControlActorStyle(
+  const secondaryActor =
+    controlType === "partiel"
+      ? null
+      : (getExplicitControlActor(properties, "secondaire") ??
+        getFallbackSecondaryControlActor(
+          properties,
+          primaryActor,
+          controlType,
+        ));
+  const primaryStyle = getControlActorStyle(
     styles,
-    "faction",
-    properties.faction,
+    primaryActor.targetType,
+    primaryActor.id,
   );
-  const controllerStyle = getControlActorStyle(
-    styles,
-    "controleur",
-    properties.controleur,
-  );
-  const primaryColor = factionStyle?.fill ?? TRANSPARENT_CONTROL_COLOR;
-  const secondaryColor = controllerStyle?.fill;
+  const secondaryStyle = secondaryActor
+    ? getControlActorStyle(styles, secondaryActor.targetType, secondaryActor.id)
+    : null;
+  const primaryColor = primaryStyle?.fill;
+  const secondaryColor =
+    controlType === "partiel"
+      ? TRANSPARENT_CONTROL_COLOR
+      : secondaryStyle?.fill;
 
-  if (!secondaryColor || primaryColor === secondaryColor) {
+  if (!primaryColor || !secondaryColor || primaryColor === secondaryColor) {
     return null;
   }
 
@@ -395,29 +534,6 @@ function getFirstAlignedPosition(
   return min - positiveModulo(min - anchor, step);
 }
 
-function getPatternAnchor(
-  pixelCoordinates: unknown,
-  worldCoordinates: unknown,
-  resolution: number,
-): PixelAnchor {
-  const pixels: Array<[number, number]> = [];
-  const worlds: Array<[number, number]> = [];
-  flattenCoordinates(pixelCoordinates, pixels);
-  flattenCoordinates(worldCoordinates, worlds);
-
-  const firstPixel = pixels[0];
-  const firstWorld = worlds[0];
-
-  if (!firstPixel || !firstWorld) {
-    return { x: 0, y: 0 };
-  }
-
-  return {
-    x: firstPixel[0] - firstWorld[0] / resolution,
-    y: firstPixel[1] + firstWorld[1] / resolution,
-  };
-}
-
 function drawHorizontalLines(
   context: CanvasRenderingContext2D,
   extent: PixelExtent,
@@ -568,23 +684,12 @@ function getPatternOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    const safeResolution =
-      Number.isFinite(state.resolution) && state.resolution > 0
-        ? state.resolution
-        : 1;
     const screenCoordinates = coordinates;
     const screenExtent = getPixelExtent(screenCoordinates);
 
     if (!screenExtent) {
       return;
     }
-
-    const worldCoordinates = state.geometry.getCoordinates();
-    const anchor = getPatternAnchor(
-      screenCoordinates,
-      worldCoordinates,
-      safeResolution,
-    );
 
     state.context.save();
     state.context.setTransform(1, 0, 0, 1, 0, 0);
@@ -594,7 +699,7 @@ function getPatternOverlayStyle(
     drawAnchoredPattern(
       state.context,
       screenExtent,
-      anchor,
+      SCREEN_PATTERN_ANCHOR,
       patternType,
       patternColor,
       state.pixelRatio,
@@ -620,30 +725,33 @@ function drawControlSplitBands(
   const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
   const spec = getPatternSpec(overlay.patternType);
   const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
-  const secondaryWidth = step * overlay.secondaryRatio;
+  const hasEmptySecondaryBands =
+    overlay.secondaryColor === TRANSPARENT_CONTROL_COLOR;
+  const bandWidth = hasEmptySecondaryBands
+    ? step * (1 - overlay.secondaryRatio)
+    : step * overlay.secondaryRatio;
   const [minX, minY, maxX, maxY] = extent;
   const padding = Math.max(maxX - minX, maxY - minY) + step * 2;
 
-  context.fillStyle = overlay.primaryColor;
-  context.fillRect(
-    minX - padding,
-    minY - padding,
-    maxX - minX + padding * 2,
-    maxY - minY + padding * 2,
-  );
+  if (!hasEmptySecondaryBands) {
+    context.fillStyle = overlay.primaryColor;
+    context.fillRect(
+      minX - padding,
+      minY - padding,
+      maxX - minX + padding * 2,
+      maxY - minY + padding * 2,
+    );
+  }
 
-  context.fillStyle = overlay.secondaryColor;
+  context.fillStyle = hasEmptySecondaryBands
+    ? overlay.primaryColor
+    : overlay.secondaryColor;
 
   function fillHorizontalBands() {
     const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
 
     for (let y = startY; y <= maxY + padding; y += step) {
-      context.fillRect(
-        minX - padding,
-        y,
-        maxX - minX + padding * 2,
-        secondaryWidth,
-      );
+      context.fillRect(minX - padding, y, maxX - minX + padding * 2, bandWidth);
     }
   }
 
@@ -651,23 +759,22 @@ function drawControlSplitBands(
     const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
 
     for (let x = startX; x <= maxX + padding; x += step) {
-      context.fillRect(
-        x,
-        minY - padding,
-        secondaryWidth,
-        maxY - minY + padding * 2,
-      );
+      context.fillRect(x, minY - padding, bandWidth, maxY - minY + padding * 2);
     }
   }
 
   function fillDiagonalBands(reverse = false) {
+    if (bandWidth <= 0) {
+      return;
+    }
+
     const minConstant = reverse ? minY - maxX - padding : minX + minY - padding;
     const maxConstant = reverse ? maxY - minX + padding : maxX + maxY + padding;
     const anchorConstant = reverse ? anchor.y - anchor.x : anchor.x + anchor.y;
     const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
 
     for (let constant = start; constant <= maxConstant; constant += step) {
-      const nextConstant = constant + secondaryWidth;
+      const nextConstant = constant + bandWidth;
 
       context.beginPath();
 
@@ -731,23 +838,12 @@ function getControlSplitOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    const safeResolution =
-      Number.isFinite(state.resolution) && state.resolution > 0
-        ? state.resolution
-        : 1;
     const screenCoordinates = coordinates;
     const screenExtent = getPixelExtent(screenCoordinates);
 
     if (!screenExtent) {
       return;
     }
-
-    const worldCoordinates = state.geometry.getCoordinates();
-    const anchor = getPatternAnchor(
-      screenCoordinates,
-      worldCoordinates,
-      safeResolution,
-    );
 
     state.context.save();
     state.context.setTransform(1, 0, 0, 1, 0, 0);
@@ -758,7 +854,7 @@ function getControlSplitOverlayStyle(
     drawControlSplitBands(
       state.context,
       screenExtent,
-      anchor,
+      SCREEN_PATTERN_ANCHOR,
       overlay,
       state.pixelRatio,
     );
