@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createLoggedOutSession,
   mergePublicCasesIntoStableCases,
-  resolveCaseSearchMatch,
 } from "@/admin/case-editing";
 import type {
   AdminCaseRecord,
@@ -118,6 +117,8 @@ export default function HomePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [focusCaseId, setFocusCaseId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [focusCaseIds, setFocusCaseIds] = useState<string[]>([]);
+  const [focusCaseIdsRequest, setFocusCaseIdsRequest] = useState(0);
   const [focusSearchTarget, setFocusSearchTarget] =
     useState<MapSearchTarget | null>(null);
   const [focusSearchRequest, setFocusSearchRequest] = useState(0);
@@ -281,16 +282,38 @@ export default function HomePage() {
   const focusOnCase = useCallback(
     (query: string) => {
       const searchTarget = resolveMapSearchTarget(searchOptions, query);
-      const stableCase =
-        searchTarget?.kind === "case"
-          ? (stableCasesById.get(searchTarget.id) ?? null)
-          : resolveCaseSearchMatch(stableCases, query);
+
+      if (searchTarget?.kind === "cases") {
+        const matchedCaseIds = searchTarget.ids.filter((idCase) =>
+          stableCasesById.has(idCase),
+        );
+
+        if (matchedCaseIds.length === 0) {
+          setSearchError(
+            "Aucune case ou objet ne correspond a cette recherche.",
+          );
+          return;
+        }
+
+        setCasesVisible(true);
+        setPanelVisible(true);
+        setSearchValue(searchTarget.value);
+        setSearchError(null);
+        setFocusSearchTarget(null);
+        setFocusCaseId(null);
+        setFocusCaseIds(matchedCaseIds);
+        setFocusCaseIdsRequest((value) => value + 1);
+        applySelectionState(matchedCaseIds[0], matchedCaseIds);
+        return;
+      }
 
       if (searchTarget && searchTarget.kind !== "case") {
         setCasesVisible(true);
         setPanelVisible(true);
         setSearchValue(searchTarget.value);
         setSearchError(null);
+        setFocusCaseId(null);
+        setFocusCaseIds([]);
         setFocusSearchTarget(searchTarget);
         setFocusSearchRequest((value) => value + 1);
 
@@ -307,6 +330,11 @@ export default function HomePage() {
         return;
       }
 
+      const stableCase =
+        searchTarget?.kind === "case"
+          ? (stableCasesById.get(searchTarget.id) ?? null)
+          : null;
+
       if (!stableCase) {
         setSearchError("Aucune case ou objet ne correspond a cette recherche.");
         return;
@@ -317,11 +345,12 @@ export default function HomePage() {
       setCasesVisible(true);
       setPanelVisible(true);
       setSearchValue(stableCase.id_case);
+      setFocusCaseIds([]);
       setFocusCaseId(registryId);
       setFocusRequest((value) => value + 1);
       applySelectionState(registryId, [registryId]);
     },
-    [applySelectionState, searchOptions, stableCases, stableCasesById],
+    [applySelectionState, searchOptions, stableCasesById],
   );
 
   const handleLoginSubmit = useCallback(async (payload: LoginPayload) => {
@@ -587,8 +616,8 @@ export default function HomePage() {
         id="carte"
         className={
           panelVisible
-            ? "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 [overflow-anchor:none] xl:grid-cols-[minmax(0,1.65fr)_24rem]"
-            : "grid min-h-[calc(100svh-6rem)] flex-1 gap-6 [overflow-anchor:none]"
+            ? "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
+            : "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0"
         }
         aria-label="Carte publique des cases"
       >
@@ -601,6 +630,8 @@ export default function HomePage() {
           displayMode={mapDisplayMode}
           focusCaseId={focusCaseId}
           focusRequest={focusRequest}
+          focusCaseIds={focusCaseIds}
+          focusCaseIdsRequest={focusCaseIdsRequest}
           focusSearchTarget={focusSearchTarget}
           focusSearchRequest={focusSearchRequest}
           clearHoverRequest={clearMapHoverRequest}
@@ -627,7 +658,6 @@ export default function HomePage() {
             editorHref={editorHref}
             searchValue={searchValue}
             searchError={searchError}
-            searchOptions={searchOptions}
             onSearchValueChange={(value) => {
               setSearchValue(value);
               setSearchError(null);

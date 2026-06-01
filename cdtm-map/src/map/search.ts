@@ -2,14 +2,13 @@ import type {
   EditorMapLandmark,
   EditorMapLocality,
   EditorMapRoute,
-} from "@/editor/types";
+} from "../editor/types";
 import type {
   PublicMapLandmark,
   PublicMapLocality,
   PublicMapRoute,
-} from "@/map/public-objects";
-import { getRegistryCaseId } from "@/map/case-data";
-import type { StableCaseProperties } from "@/map/types";
+} from "./public-objects";
+import type { StableCaseProperties } from "./types";
 
 export type MapSearchTarget =
   | {
@@ -48,7 +47,16 @@ export type MapSearchTarget =
       points: Array<[number, number]>;
     };
 
-function normalizeSearchText(value: string): string {
+export type MapSearchResult =
+  | MapSearchTarget
+  | {
+      kind: "cases";
+      ids: string[];
+      label: string;
+      value: string;
+    };
+
+export function normalizeSearchText(value: string): string {
   return value
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -83,11 +91,29 @@ function uniqueStrings(values: Array<string | null | undefined>): string[] {
   );
 }
 
+function getSearchCaseId(stableCase: StableCaseProperties): string {
+  return stableCase.registry_id_case ?? stableCase.id_case;
+}
+
+function caseAttributeAliases(stableCase: StableCaseProperties): string[] {
+  return [
+    stableCase.cote ? "cote" : null,
+    stableCase.cote ? "cotier" : null,
+    stableCase.lac ? "lac" : null,
+    stableCase.lac ? "lacustre" : null,
+    stableCase.fluvial ? "fluvial" : null,
+    stableCase.fluvial ? "fleuve" : null,
+    stableCase.fluvial ? "cours d eau" : null,
+    stableCase.colline ? "colline" : null,
+    stableCase.colline ? "collines" : null,
+  ].filter((value): value is string => value !== null);
+}
+
 export function buildCaseSearchTargets(
   stableCases: StableCaseProperties[],
 ): MapSearchTarget[] {
   return stableCases.map((stableCase) => {
-    const registryId = getRegistryCaseId(stableCase);
+    const registryId = getSearchCaseId(stableCase);
     const label = stableCase.id_case;
 
     return {
@@ -95,7 +121,20 @@ export function buildCaseSearchTargets(
       id: registryId,
       label,
       value: createValue("case", label, registryId),
-      aliases: uniqueStrings([registryId, stableCase.id_case, label]),
+      aliases: uniqueStrings([
+        registryId,
+        stableCase.id_case,
+        label,
+        stableCase.region,
+        stableCase.sous_region,
+        stableCase.terrain_cat,
+        stableCase.terrain_type,
+        stableCase.peuple,
+        stableCase.faction,
+        stableCase.controleur,
+        stableCase.controle_type,
+        ...caseAttributeAliases(stableCase),
+      ]),
     };
   });
 }
@@ -215,22 +254,23 @@ export function buildEditorObjectSearchTargets({
 export function resolveMapSearchTarget(
   targets: MapSearchTarget[],
   rawQuery: string,
-): MapSearchTarget | null {
+): MapSearchResult | null {
   const query = normalizeSearchText(rawQuery);
+  const labelQuery = rawQuery.trim();
 
   if (!query) {
     return null;
   }
 
-  const exactMatch =
-    targets.find((target) =>
-      [target.value, target.label, ...target.aliases].some(
-        (value) => normalizeSearchText(value) === query,
-      ),
-    ) ?? null;
+  const exactMatches = targets.filter((target) =>
+    [target.value, target.label, ...target.aliases].some(
+      (value) => normalizeSearchText(value) === query,
+    ),
+  );
+  const exactResolution = resolveMatches(exactMatches, labelQuery);
 
-  if (exactMatch) {
-    return exactMatch;
+  if (exactResolution) {
+    return exactResolution;
   }
 
   const prefixMatches = targets.filter((target) =>
@@ -238,9 +278,10 @@ export function resolveMapSearchTarget(
       normalizeSearchText(value).startsWith(query),
     ),
   );
+  const prefixResolution = resolveMatches(prefixMatches, labelQuery);
 
-  if (prefixMatches.length === 1) {
-    return prefixMatches[0];
+  if (prefixResolution) {
+    return prefixResolution;
   }
 
   const includesMatches = targets.filter((target) =>
@@ -249,5 +290,31 @@ export function resolveMapSearchTarget(
     ),
   );
 
-  return includesMatches.length === 1 ? includesMatches[0] : null;
+  return resolveMatches(includesMatches, labelQuery);
+}
+
+function resolveMatches(
+  matches: MapSearchTarget[],
+  labelQuery: string,
+): MapSearchResult | null {
+  const caseMatches = matches.filter(
+    (target): target is Extract<MapSearchTarget, { kind: "case" }> =>
+      target.kind === "case",
+  );
+
+  if (caseMatches.length > 0) {
+    const ids = uniqueStrings(caseMatches.map((target) => target.id));
+
+    return {
+      kind: "cases",
+      ids,
+      label:
+        ids.length === 1
+          ? caseMatches[0].label
+          : `${ids.length} cases : ${labelQuery}`,
+      value: labelQuery,
+    };
+  }
+
+  return matches.length === 1 ? matches[0] : null;
 }

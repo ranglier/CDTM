@@ -294,6 +294,7 @@ export function TechnicalAdminPage() {
           title: "Types de controle",
           groupKey: "controle_type",
           rowCount: nomenclatureGroupCounts.controle_type ?? 0,
+          styleTargetType: "controle_type",
         },
         {
           id: "factions",

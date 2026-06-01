@@ -49,6 +49,7 @@ const MAP_STYLE_TARGET_TYPES: MapStyleTargetType[] = [
   "controleur",
   "terrain_type",
   "case_attribute",
+  "controle_type",
 ];
 
 function assertSafeSqlIdentifier(identifier: string): string {
@@ -231,7 +232,8 @@ function getReferenceStyleTargetType(
 
     if (
       normalizedGroupKey === "terrain_type" ||
-      normalizedGroupKey === "case_attribute"
+      normalizedGroupKey === "case_attribute" ||
+      normalizedGroupKey === "controle_type"
     ) {
       return normalizedGroupKey;
     }

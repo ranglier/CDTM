@@ -20,7 +20,8 @@ export type MapStyleTargetType =
   | "faction"
   | "controleur"
   | "terrain_type"
-  | "case_attribute";
+  | "case_attribute"
+  | "controle_type";
 
 const MAP_PATTERN_TYPES = [
   "diagonal",
@@ -79,6 +80,7 @@ export function createEmptyPublicMapStyles(): PublicMapStyles {
     controleur: {},
     terrain_type: {},
     case_attribute: {},
+    controle_type: {},
   };
 }
 

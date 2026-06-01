@@ -21,6 +21,7 @@ type EditorPointFamily = "locality" | "landmark";
 type EditorPointRecord =
   | { family: "locality"; locality: EditorMapLocality }
   | { family: "landmark"; landmark: EditorMapLandmark };
+type LocalityPointShape = "default" | "fort" | "fortified_city";
 
 type EditorPointsLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
@@ -116,6 +117,7 @@ const archivedUniqueStyle = new Style({
 });
 
 const iconStyleCache = new Map<string, Style[]>();
+const localityShapeStyleCache = new Map<string, Style>();
 const MIN_ICON_SCALE = 0.28;
 const MAX_ICON_SCALE = 1;
 
@@ -135,6 +137,33 @@ function getIconScaleForResolution(resolution: number): number {
 
 function getScaleBucket(scale: number): number {
   return Math.round(scale * 100) / 100;
+}
+
+function normalizeObjectTypeKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getLocalityPointShape(typeKey: string): LocalityPointShape {
+  const normalizedTypeKey = normalizeObjectTypeKey(typeKey);
+
+  if (
+    normalizedTypeKey.includes("cite") &&
+    (normalizedTypeKey.includes("fortifie") ||
+      normalizedTypeKey.includes("fortified") ||
+      normalizedTypeKey.includes("forteresse"))
+  ) {
+    return "fortified_city";
+  }
+
+  if (normalizedTypeKey === "fort") {
+    return "fort";
+  }
+
+  return "default";
 }
 
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
@@ -191,6 +220,12 @@ function getLocalityFallbackStyle(locality: EditorMapLocality | null): Style {
   if (!locality) {
     return publishedLocalityStyle;
   }
+  const pointShape = getLocalityPointShape(locality.type_key);
+
+  if (pointShape !== "default") {
+    return getLocalityShapeStyle(pointShape, locality.status);
+  }
+
   if (locality.status === "draft") {
     return draftLocalityStyle;
   }
@@ -198,6 +233,56 @@ function getLocalityFallbackStyle(locality: EditorMapLocality | null): Style {
     return archivedLocalityStyle;
   }
   return publishedLocalityStyle;
+}
+
+function getLocalityShapeStyle(
+  pointShape: Exclude<LocalityPointShape, "default">,
+  status: EditorMapLocality["status"],
+): Style {
+  const cacheKey = `${pointShape}:${status}`;
+  const cached = localityShapeStyleCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const fillColor =
+    status === "archived"
+      ? "rgba(160, 160, 160, 0.45)"
+      : status === "draft"
+        ? "rgba(245, 221, 150, 0.5)"
+        : "rgba(245, 221, 150, 0.95)";
+  const strokeColor =
+    status === "archived"
+      ? "rgba(35, 35, 35, 0.6)"
+      : status === "draft"
+        ? "rgba(35, 24, 12, 0.8)"
+        : "rgba(35, 24, 12, 0.95)";
+  const strokeWidth = status === "archived" ? 1 : status === "draft" ? 1.5 : 2;
+  const radius = status === "archived" ? 5 : status === "draft" ? 6 : 7;
+
+  const style = new Style({
+    image:
+      pointShape === "fortified_city"
+        ? new RegularShape({
+            points: 8,
+            radius: radius + 2,
+            radius2: Math.max(4, radius * 0.58),
+            angle: Math.PI / 8,
+            fill: new Fill({ color: fillColor }),
+            stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
+          })
+        : new RegularShape({
+            points: 4,
+            radius: radius + 1,
+            angle: 0,
+            fill: new Fill({ color: fillColor }),
+            stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
+          }),
+  });
+
+  localityShapeStyleCache.set(cacheKey, style);
+  return style;
 }
 
 function getLandmarkFallbackStyle(

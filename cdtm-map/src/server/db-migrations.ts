@@ -1447,6 +1447,82 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "011",
+    name: "controle_type_styles",
+    up: async (client) => {
+      await client.query(`
+        INSERT INTO reference_nomenclature_values (
+          id_entry,
+          group_key,
+          entry_key,
+          label
+        )
+        VALUES
+          ('controle_type:aucun', 'controle_type', 'aucun', 'aucun'),
+          ('controle_type:total', 'controle_type', 'total', 'total'),
+          ('controle_type:partiel', 'controle_type', 'partiel', 'partiel'),
+          ('controle_type:conteste', 'controle_type', 'conteste', 'conteste'),
+          ('controle_type:occupe', 'controle_type', 'occupe', 'occupe'),
+          ('controle_type:vassalise', 'controle_type', 'vassalise', 'vassalise'),
+          ('controle_type:inconnu', 'controle_type', 'inconnu', 'inconnu')
+        ON CONFLICT (group_key, entry_key) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          updated_at = NOW()
+      `);
+
+      await client.query(`
+        INSERT INTO reference_styles (
+          id_style,
+          cible_type,
+          cible_id,
+          fill,
+          stroke,
+          pattern_type,
+          pattern_color
+        )
+        VALUES
+          (
+            'controle_type:conteste',
+            'controle_type',
+            'conteste',
+            NULL,
+            NULL,
+            'diagonal_spaced',
+            '#000000'
+          ),
+          (
+            'controle_type:vassalise',
+            'controle_type',
+            'vassalise',
+            NULL,
+            NULL,
+            'diagonal_reverse_spaced',
+            '#000000'
+          ),
+          (
+            'controle_type:occupe',
+            'controle_type',
+            'occupe',
+            NULL,
+            NULL,
+            'vertical_spaced',
+            '#000000'
+          ),
+          (
+            'controle_type:partiel',
+            'controle_type',
+            'partiel',
+            NULL,
+            NULL,
+            'horizontal_spaced',
+            '#000000'
+          )
+        ON CONFLICT (id_style) DO NOTHING
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

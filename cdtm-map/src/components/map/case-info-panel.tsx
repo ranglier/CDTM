@@ -5,7 +5,6 @@ import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { SlotCalculationResult } from "@/map/rules";
-import type { MapSearchTarget } from "@/map/search";
 import type { StableCaseProperties } from "@/map/types";
 
 type CaseInfoPanelProps = {
@@ -22,7 +21,6 @@ type CaseInfoPanelProps = {
   editorHref?: string | null;
   searchValue: string;
   searchError: string | null;
-  searchOptions: MapSearchTarget[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
   onPanelPointerEnter?: () => void;
@@ -224,13 +222,11 @@ function SectionTitle({ title }: { title: string }) {
 function MapSearchBox({
   searchValue,
   searchError,
-  searchOptions,
   onSearchValueChange,
   onSearchSubmit,
 }: {
   searchValue: string;
   searchError: string | null;
-  searchOptions: MapSearchTarget[];
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
 }) {
@@ -247,17 +243,12 @@ function MapSearchBox({
         }}
       >
         <input
-          list="case-id-list"
           className={fieldClassName}
-          placeholder="Rechercher une case ou un objet"
+          placeholder="Case, objet, faction, terrain, region..."
+          autoComplete="off"
           value={searchValue}
           onChange={(event) => onSearchValueChange(event.target.value)}
         />
-        <datalist id="case-id-list">
-          {searchOptions.map((option) => (
-            <option key={`${option.kind}:${option.id}`} value={option.value} />
-          ))}
-        </datalist>
         <Button type="submit" size="sm" variant="outline">
           Rechercher
         </Button>
@@ -284,7 +275,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     editorHref,
     searchValue,
     searchError,
-    searchOptions,
     onSearchValueChange,
     onSearchSubmit,
     onPanelPointerEnter,
@@ -390,12 +380,12 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   ];
   return (
     <aside
-      className="[overflow-anchor:none]"
+      className="h-full min-h-0 [overflow-anchor:none]"
       aria-live="polite"
       onPointerEnter={onPanelPointerEnter}
     >
-      <SectionPanel className="flex h-full flex-col">
-        <div className="flex flex-1 flex-col p-4 sm:p-5">
+      <SectionPanel className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 sm:p-5">
           <header className="space-y-3">
             <h2 className="font-chronicle text-2xl tracking-[0.04em] text-foreground">
               Informations de case
@@ -403,7 +393,6 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
             <MapSearchBox
               searchValue={searchValue}
               searchError={searchError}
-              searchOptions={searchOptions}
               onSearchValueChange={onSearchValueChange}
               onSearchSubmit={onSearchSubmit}
             />

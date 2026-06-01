@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Feature from "ol/Feature";
 import type Geometry from "ol/geom/Geometry";
@@ -10,7 +10,7 @@ import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
-import { buildCaseHoverRows } from "@/map/case-hover";
+import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
   buildPublicLandmarkHoverRows,
@@ -52,7 +52,6 @@ import {
   cdtmProjection,
   createCdtmBackgroundLayer,
   createCdtmMap,
-  createCdtmView,
   fitCdtmCasesExtent,
   preloadCdtmBackgroundImage,
 } from "@/map/openlayers/map-core";
@@ -77,6 +76,8 @@ type CasesMapProps = {
   displayMode: MapDisplayMode;
   focusCaseId: string | null;
   focusRequest: number;
+  focusCaseIds: string[];
+  focusCaseIdsRequest: number;
   focusSearchTarget: MapSearchTarget | null;
   focusSearchRequest: number;
   clearHoverRequest: number;
@@ -95,7 +96,7 @@ type CasesMapProps = {
 type HoverInfo = {
   x: number;
   y: number;
-  title: string;
+  title: string | null;
   rows: Array<{
     label: string;
     value: string;
@@ -137,6 +138,8 @@ export function CasesMap({
   displayMode,
   focusCaseId,
   focusRequest,
+  focusCaseIds,
+  focusCaseIdsRequest,
   focusSearchTarget,
   focusSearchRequest,
   clearHoverRequest,
@@ -190,7 +193,7 @@ export function CasesMap({
   const landmarkCategoryByTypeRef = useRef<
     Record<string, "landmark" | "unique" | null>
   >({});
-  const objectDisplayModeRef = useRef<PublicObjectDisplayMode>("icons");
+  const objectDisplayModeRef = useRef<PublicObjectDisplayMode>("points");
   const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
   const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
@@ -198,10 +201,8 @@ export function CasesMap({
   const [landmarksVisible, setLandmarksVisible] = useState(true);
   const [routesVisible, setRoutesVisible] = useState(true);
   const [objectDisplayMode, setObjectDisplayMode] =
-    useState<PublicObjectDisplayMode>("icons");
+    useState<PublicObjectDisplayMode>("points");
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-
-  const view = useMemo(() => createCdtmView(), []);
 
   function fitCasesExtent(duration = 200) {
     if (!mapRef.current) {
@@ -234,6 +235,46 @@ export function CasesMap({
     map.getView().fit(geometry.getExtent(), {
       duration,
       padding: [60, 60, 60, 60],
+      maxZoom: MAP_MAX_ZOOM,
+    });
+  }, []);
+
+  const focusCasesByIds = useCallback((idCases: string[], duration = 250) => {
+    const source = sourceRef.current;
+    const map = mapRef.current;
+
+    if (!source || !map || idCases.length === 0) {
+      return;
+    }
+
+    let combinedExtent: [number, number, number, number] | null = null;
+
+    for (const idCase of idCases) {
+      const geometry = source.getFeatureById(idCase)?.getGeometry();
+
+      if (!geometry) {
+        continue;
+      }
+
+      const extent = geometry.getExtent();
+
+      combinedExtent = combinedExtent
+        ? [
+            Math.min(combinedExtent[0], extent[0]),
+            Math.min(combinedExtent[1], extent[1]),
+            Math.max(combinedExtent[2], extent[2]),
+            Math.max(combinedExtent[3], extent[3]),
+          ]
+        : [extent[0], extent[1], extent[2], extent[3]];
+    }
+
+    if (!combinedExtent) {
+      return;
+    }
+
+    map.getView().fit(combinedExtent, {
+      duration,
+      padding: [70, 70, 70, 70],
       maxZoom: MAP_MAX_ZOOM,
     });
   }, []);
@@ -430,6 +471,14 @@ export function CasesMap({
   }, [focusCaseById, focusCaseId, focusRequest]);
 
   useEffect(() => {
+    if (focusCaseIds.length === 0 || focusCaseIdsRequest === 0) {
+      return;
+    }
+
+    focusCasesByIds(focusCaseIds);
+  }, [focusCaseIds, focusCaseIdsRequest, focusCasesByIds]);
+
+  useEffect(() => {
     if (!focusSearchTarget) {
       return;
     }
@@ -594,7 +643,6 @@ export function CasesMap({
       routesLayer,
       pointsLayer,
     ]);
-    map.setView(view);
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -654,7 +702,7 @@ export function CasesMap({
       const preferredY = originalEvent.clientY + 18;
 
       const setTooltip = (
-        title: string,
+        title: string | null,
         rows: Array<{ label: string; value: string }>,
       ) => {
         target.style.cursor = "pointer";
@@ -791,7 +839,7 @@ export function CasesMap({
         return;
       }
 
-      setTooltip("Case", rows);
+      setTooltip(getCaseHoverTitle(displayModeRef.current), rows);
     };
 
     let mapInteracting = false;
@@ -874,7 +922,7 @@ export function CasesMap({
       routesLayerRef.current = null;
       mapRef.current = null;
     };
-  }, [view]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1038,7 +1086,7 @@ export function CasesMap({
   }, []);
 
   return (
-    <section className="relative min-h-[calc(100svh-2rem)] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0 xl:h-full">
+    <section className="relative h-full min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 xl:min-h-0">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
         <div className="pointer-events-auto">
           <MapToolbar
@@ -1077,7 +1125,7 @@ export function CasesMap({
       </div>
       <div
         ref={mapElementRef}
-        className="h-[calc(100svh-2rem)] w-full xl:h-full"
+        className="h-full min-h-[72svh] w-full xl:min-h-0"
         aria-label="Carte des cases publiques"
       />
       {hoverInfo &&
@@ -1093,11 +1141,15 @@ export function CasesMap({
             transform: "translate3d(0, 0, 0)",
           }}
         >
-          <p className="text-sm font-semibold text-foreground">
-            {hoverInfo.title}
-          </p>
+          {hoverInfo.title ? (
+            <p className="text-sm font-semibold text-foreground">
+              {hoverInfo.title}
+            </p>
+          ) : null}
           {hoverInfo.rows.length > 0 ? (
-            <div className="mt-2 space-y-1.5">
+            <div
+              className={hoverInfo.title ? "mt-2 space-y-1.5" : "space-y-1.5"}
+            >
               {hoverInfo.rows.map((row) => (
                 <div
                   key={row.label}

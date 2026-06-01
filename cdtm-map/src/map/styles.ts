@@ -36,9 +36,25 @@ const HILL_PATTERN_COLOR = "rgba(40, 30, 14, 0.46)";
 const PATTERN_STEP = 12;
 const SPACED_PATTERN_STEP = 22;
 const PATTERN_LINE_WIDTH = 1.25;
+const MIN_VISIBLE_PATTERN_STEP = 7;
+const MAX_LOW_ZOOM_PATTERN_SCALE = 2.4;
+const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
 
 const styleCache = new Map<string, Style>();
 const patternOverlayCache = new Map<string, Style>();
+const controlSplitOverlayCache = new Map<string, Style>();
+
+type ControlSplitOverlay = {
+  primaryColor: string;
+  secondaryColor: string;
+  secondaryRatio: number;
+  patternType: MapPatternType;
+};
+
+type ControlSplitRule = {
+  secondaryRatio: number;
+  fallbackPatternType: MapPatternType;
+};
 
 function getStyleForTarget(
   styles: PublicMapStyles,
@@ -60,6 +76,127 @@ function getStyleForTarget(
     stroke: normalizeHexColor(style.stroke),
     pattern_type: normalizePatternType(style.pattern_type),
     pattern_color: normalizeHexColor(style.pattern_color),
+  };
+}
+
+function normalizeControlType(value: string | null | undefined): string | null {
+  const normalized = value
+    ?.trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
+function normalizeControlActor(
+  value: string | null | undefined,
+): string | null {
+  const normalized = value?.trim().toLowerCase();
+
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
+function getControlActorStyle(
+  styles: PublicMapStyles,
+  preferredTargetType: "faction" | "controleur",
+  targetId: string | null | undefined,
+): ResolvedStyle | null {
+  if (preferredTargetType === "faction") {
+    return (
+      getStyleForTarget(styles, "faction", targetId) ??
+      getStyleForTarget(styles, "controleur", targetId)
+    );
+  }
+
+  return (
+    getStyleForTarget(styles, "controleur", targetId) ??
+    getStyleForTarget(styles, "faction", targetId)
+  );
+}
+
+function getControlSplitRule(
+  controlType: string | null,
+): ControlSplitRule | null {
+  switch (controlType) {
+    case "conteste":
+      return {
+        secondaryRatio: 0.5,
+        fallbackPatternType: "diagonal_spaced",
+      };
+    case "vassal":
+    case "vassalite":
+    case "vassalise":
+      return {
+        secondaryRatio: 0.3,
+        fallbackPatternType: "diagonal_reverse_spaced",
+      };
+    case "occupe":
+    case "occupation":
+      return {
+        secondaryRatio: 0.9,
+        fallbackPatternType: "vertical_spaced",
+      };
+    case "partiel":
+      return {
+        secondaryRatio: 0.5,
+        fallbackPatternType: "horizontal_spaced",
+      };
+    default:
+      return null;
+  }
+}
+
+function resolveControlSplitOverlay(
+  displayMode: MapDisplayMode,
+  properties: StableCaseProperties | null,
+  styles: PublicMapStyles,
+): ControlSplitOverlay | null {
+  if (
+    !properties ||
+    (displayMode !== "faction" && displayMode !== "influence")
+  ) {
+    return null;
+  }
+
+  const controlType = normalizeControlType(properties.controle_type);
+  const splitRule = getControlSplitRule(controlType);
+
+  if (!controlType || !splitRule) {
+    return null;
+  }
+
+  const faction = normalizeControlActor(properties.faction);
+  const controller = normalizeControlActor(properties.controleur);
+
+  if (!faction || !controller || faction === controller) {
+    return null;
+  }
+
+  const factionStyle = getControlActorStyle(
+    styles,
+    "faction",
+    properties.faction,
+  );
+  const controllerStyle = getControlActorStyle(
+    styles,
+    "controleur",
+    properties.controleur,
+  );
+  const primaryColor = factionStyle?.fill;
+  const secondaryColor = controllerStyle?.fill;
+
+  if (!primaryColor || !secondaryColor || primaryColor === secondaryColor) {
+    return null;
+  }
+
+  const controlStyle = getStyleForTarget(styles, "controle_type", controlType);
+
+  return {
+    primaryColor,
+    secondaryColor,
+    secondaryRatio: splitRule.secondaryRatio,
+    patternType: controlStyle?.pattern_type ?? splitRule.fallbackPatternType,
   };
 }
 
@@ -146,6 +283,17 @@ function getPatternSpec(patternType: MapPatternType): PatternSpec {
     case "grid_spaced":
       return { kind: "grid", step, lineWidth, dotRadius };
   }
+}
+
+function getLowZoomPatternScale(resolution: number): number {
+  if (!Number.isFinite(resolution) || resolution <= 1) {
+    return 1;
+  }
+
+  return Math.min(
+    MAX_LOW_ZOOM_PATTERN_SCALE,
+    Math.max(1, Math.sqrt(resolution)),
+  );
 }
 
 function isCoordinate(value: unknown): value is [number, number] {
@@ -389,12 +537,17 @@ function drawAnchoredPattern(
   patternType: MapPatternType,
   patternColor: string,
   pixelRatio: number,
+  resolution: number,
 ) {
   const spec = getPatternSpec(patternType);
   const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-  const step = spec.step * ratio;
-  const lineWidth = spec.lineWidth * ratio;
-  const dotRadius = spec.dotRadius * ratio;
+  const lowZoomScale = getLowZoomPatternScale(resolution);
+  const step = Math.max(
+    MIN_VISIBLE_PATTERN_STEP * ratio,
+    (spec.step * ratio) / lowZoomScale,
+  );
+  const lineWidth = spec.lineWidth * ratio * Math.min(1.7, lowZoomScale);
+  const dotRadius = spec.dotRadius * ratio * Math.min(1.8, lowZoomScale);
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
@@ -482,6 +635,7 @@ function getPatternOverlayStyle(
       patternType,
       patternColor,
       state.pixelRatio,
+      safeResolution,
     );
     state.context.restore();
   };
@@ -491,6 +645,174 @@ function getPatternOverlayStyle(
     zIndex,
   });
   patternOverlayCache.set(cacheKey, style);
+  return style;
+}
+
+function drawControlSplitBands(
+  context: CanvasRenderingContext2D,
+  extent: PixelExtent,
+  anchor: PixelAnchor,
+  overlay: ControlSplitOverlay,
+  pixelRatio: number,
+) {
+  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  const spec = getPatternSpec(overlay.patternType);
+  const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
+  const secondaryWidth = step * overlay.secondaryRatio;
+  const [minX, minY, maxX, maxY] = extent;
+  const padding = Math.max(maxX - minX, maxY - minY) + step * 2;
+
+  context.fillStyle = overlay.primaryColor;
+  context.fillRect(
+    minX - padding,
+    minY - padding,
+    maxX - minX + padding * 2,
+    maxY - minY + padding * 2,
+  );
+
+  context.fillStyle = overlay.secondaryColor;
+
+  function fillHorizontalBands() {
+    const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
+
+    for (let y = startY; y <= maxY + padding; y += step) {
+      context.fillRect(
+        minX - padding,
+        y,
+        maxX - minX + padding * 2,
+        secondaryWidth,
+      );
+    }
+  }
+
+  function fillVerticalBands() {
+    const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
+
+    for (let x = startX; x <= maxX + padding; x += step) {
+      context.fillRect(
+        x,
+        minY - padding,
+        secondaryWidth,
+        maxY - minY + padding * 2,
+      );
+    }
+  }
+
+  function fillDiagonalBands(reverse = false) {
+    const minConstant = reverse ? minY - maxX - padding : minX + minY - padding;
+    const maxConstant = reverse ? maxY - minX + padding : maxX + maxY + padding;
+    const anchorConstant = reverse ? anchor.y - anchor.x : anchor.x + anchor.y;
+    const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+
+    for (let constant = start; constant <= maxConstant; constant += step) {
+      const nextConstant = constant + secondaryWidth;
+
+      context.beginPath();
+
+      if (reverse) {
+        context.moveTo(minX - padding, minX - padding + constant);
+        context.lineTo(maxX + padding, maxX + padding + constant);
+        context.lineTo(maxX + padding, maxX + padding + nextConstant);
+        context.lineTo(minX - padding, minX - padding + nextConstant);
+      } else {
+        context.moveTo(minX - padding, constant - (minX - padding));
+        context.lineTo(maxX + padding, constant - (maxX + padding));
+        context.lineTo(maxX + padding, nextConstant - (maxX + padding));
+        context.lineTo(minX - padding, nextConstant - (minX - padding));
+      }
+
+      context.closePath();
+      context.fill();
+    }
+  }
+
+  switch (spec.kind) {
+    case "horizontal":
+      fillHorizontalBands();
+      break;
+    case "vertical":
+      fillVerticalBands();
+      break;
+    case "diagonal_reverse":
+      fillDiagonalBands(true);
+      break;
+    case "crosshatch":
+      fillDiagonalBands(false);
+      fillDiagonalBands(true);
+      break;
+    case "grid":
+      fillHorizontalBands();
+      fillVerticalBands();
+      break;
+    case "diagonal":
+    case "dots":
+      fillDiagonalBands(false);
+      break;
+  }
+}
+
+function getControlSplitOverlayStyle(
+  overlay: ControlSplitOverlay,
+  zIndex: number,
+): Style {
+  const cacheKey = [
+    overlay.primaryColor,
+    overlay.secondaryColor,
+    overlay.secondaryRatio,
+    overlay.patternType,
+    zIndex,
+  ].join("|");
+  const cached = controlSplitOverlayCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const renderer: RenderFunction = (coordinates, state) => {
+    const safeResolution =
+      Number.isFinite(state.resolution) && state.resolution > 0
+        ? state.resolution
+        : 1;
+    const renderTransform = state.context.getTransform();
+    const screenCoordinates = transformCoordinates(
+      coordinates,
+      renderTransform,
+    );
+    const screenExtent = getPixelExtent(screenCoordinates);
+
+    if (!screenExtent) {
+      return;
+    }
+
+    const worldCoordinates = state.geometry.getCoordinates();
+    const anchor = getPatternAnchor(
+      coordinates,
+      worldCoordinates,
+      safeResolution,
+    );
+    const screenAnchor = transformAnchor(anchor, renderTransform);
+
+    state.context.save();
+    state.context.setTransform(1, 0, 0, 1, 0, 0);
+    state.context.beginPath();
+    appendGeometryPath(state.context, screenCoordinates);
+    state.context.clip("evenodd");
+    state.context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
+    drawControlSplitBands(
+      state.context,
+      screenExtent,
+      screenAnchor,
+      overlay,
+      state.pixelRatio,
+    );
+    state.context.restore();
+  };
+
+  const style = new Style({
+    renderer,
+    zIndex,
+  });
+  controlSplitOverlayCache.set(cacheKey, style);
   return style;
 }
 
@@ -607,6 +929,17 @@ function getCaseOverlayStyles(
   baseZIndex: number,
 ): Style[] {
   const overlays: Style[] = [];
+  const controlSplitOverlay = resolveControlSplitOverlay(
+    displayMode,
+    properties,
+    styles,
+  );
+
+  if (controlSplitOverlay) {
+    overlays.push(
+      getControlSplitOverlayStyle(controlSplitOverlay, baseZIndex + 0.05),
+    );
+  }
 
   if (resolved?.pattern_type) {
     overlays.push(

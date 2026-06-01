@@ -59,7 +59,7 @@ import {
   getRegistryCaseId,
   mergeStableCases,
 } from "@/map/case-data";
-import { buildCaseHoverRows } from "@/map/case-hover";
+import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
   createCasesVectorLayer,
@@ -127,7 +127,7 @@ import {
 type HoverInfo = {
   x: number;
   y: number;
-  title: string;
+  title: string | null;
   rows: Array<{
     label: string;
     value: string;
@@ -631,7 +631,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const routesVisibleRef = useRef(true);
   const localitiesVisibleRef = useRef(true);
   const landmarksVisibleRef = useRef(true);
-  const localityDisplayModeRef = useRef<LocalityDisplayMode>("icons");
+  const localityDisplayModeRef = useRef<LocalityDisplayMode>("points");
   const mapDisplayModeRef = useRef<MapDisplayMode>("influence");
   const activeCaseIdRef = useRef<string | null>(null);
   const selectedCaseIdsRef = useRef<Set<string>>(new Set());
@@ -692,7 +692,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     useState<EditorReferenceData | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [localityDisplayMode, setLocalityDisplayMode] =
-    useState<LocalityDisplayMode>("icons");
+    useState<LocalityDisplayMode>("points");
   const [mapDisplayMode, setMapDisplayMode] =
     useState<MapDisplayMode>("influence");
   const [searchValue, setSearchValue] = useState("");
@@ -1412,6 +1412,46 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     });
   }, []);
 
+  const focusCasesByIds = useCallback((idCases: string[], duration = 250) => {
+    const source = casesSourceRef.current;
+    const map = mapRef.current;
+
+    if (!source || !map || idCases.length === 0) {
+      return;
+    }
+
+    let combinedExtent: [number, number, number, number] | null = null;
+
+    for (const idCase of idCases) {
+      const geometry = source.getFeatureById(idCase)?.getGeometry();
+
+      if (!geometry) {
+        continue;
+      }
+
+      const extent = geometry.getExtent();
+
+      combinedExtent = combinedExtent
+        ? [
+            Math.min(combinedExtent[0], extent[0]),
+            Math.min(combinedExtent[1], extent[1]),
+            Math.max(combinedExtent[2], extent[2]),
+            Math.max(combinedExtent[3], extent[3]),
+          ]
+        : [extent[0], extent[1], extent[2], extent[3]];
+    }
+
+    if (!combinedExtent) {
+      return;
+    }
+
+    map.getView().fit(combinedExtent, {
+      duration,
+      padding: [70, 70, 70, 70],
+      maxZoom: MAP_MAX_ZOOM,
+    });
+  }, []);
+
   const focusPoint = useCallback((x: number, y: number, duration = 250) => {
     const map = mapRef.current;
 
@@ -1588,6 +1628,41 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       return;
     }
 
+    if (searchTarget.kind === "cases") {
+      const matchedCaseIds = searchTarget.ids.filter((idCase) =>
+        stableCasesById.has(idCase),
+      );
+
+      if (matchedCaseIds.length === 0) {
+        setSearchError("Aucune case ou objet ne correspond a cette recherche.");
+        return;
+      }
+
+      if (
+        !confirmDiscardCaseChanges(
+          "Changer de selection abandonnera le brouillon de case non enregistre. Continuer ?",
+        )
+      ) {
+        return;
+      }
+
+      handleCloseLocalitySelection();
+      handleCloseRouteSelection();
+      setPointDraft(null);
+      setRouteDraft(null);
+      setRouteSaveError(null);
+      if (routePreviewSourceRef.current) {
+        clearEditorRoutePreview(routePreviewSourceRef.current);
+      }
+      setCasesVisible(true);
+      setSearchValue(searchTarget.value);
+      setSearchError(null);
+      applyCaseSelectionState(matchedCaseIds[0], matchedCaseIds);
+      focusCasesByIds(matchedCaseIds);
+      setEditorTool("select");
+      return;
+    }
+
     setSearchValue(searchTarget.value);
     setSearchError(null);
 
@@ -1636,12 +1711,18 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     }
   }, [
     focusCaseById,
+    focusCasesByIds,
     focusPoint,
     focusRoute,
+    applyCaseSelectionState,
+    confirmDiscardCaseChanges,
     handleCaseSelectionChange,
+    handleCloseLocalitySelection,
+    handleCloseRouteSelection,
     landmarks,
     localities,
     routes,
+    stableCasesById,
     searchOptions,
     searchValue,
     selectLandmark,
@@ -2681,7 +2762,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       setHoverInfo({
         x: position.x,
         y: position.y,
-        title: "Case",
+        title: getCaseHoverTitle(mapDisplayModeRef.current),
         rows,
       });
     };
@@ -4021,9 +4102,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   return (
     <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
-        <div className="pointer-events-none absolute right-4 top-4 z-20 w-[min(46rem,calc(100vw-7rem))]">
-          <div className="pointer-events-auto flex flex-wrap items-center justify-start gap-2 rounded-[20px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 sm:left-24">
+          <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/92 px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)] lg:flex-nowrap">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <details className="group relative">
                 <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
                   <span>Cases</span>
@@ -4173,7 +4254,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               ) : null}
             </div>
             {canEditMapObjects ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -4280,23 +4361,15 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           }}
         >
           <input
-            list="editor-map-search-options"
             value={searchValue}
             onChange={(event) => {
               setSearchValue(event.target.value);
               setSearchError(null);
             }}
-            placeholder="Rechercher une case ou un objet"
+            placeholder="Case, objet, faction, terrain, region..."
+            autoComplete="off"
             className="h-10 min-w-0 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
           />
-          <datalist id="editor-map-search-options">
-            {searchOptions.map((option) => (
-              <option
-                key={`${option.kind}:${option.id}`}
-                value={option.value}
-              />
-            ))}
-          </datalist>
           <Button type="submit" size="sm" variant="outline">
             Rechercher
           </Button>
@@ -5705,11 +5778,15 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             transform: "translate3d(0, 0, 0)",
           }}
         >
-          <p className="text-sm font-semibold text-foreground">
-            {hoverInfo.title}
-          </p>
+          {hoverInfo.title ? (
+            <p className="text-sm font-semibold text-foreground">
+              {hoverInfo.title}
+            </p>
+          ) : null}
           {hoverInfo.rows.length > 0 ? (
-            <div className="mt-2 space-y-1.5">
+            <div
+              className={hoverInfo.title ? "mt-2 space-y-1.5" : "space-y-1.5"}
+            >
               {hoverInfo.rows.map((row) => (
                 <div
                   key={row.label}

@@ -22,6 +22,12 @@
       "stroke": {
         "type": ["string", "null"]
       },
+      "pattern_type": {
+        "type": ["string", "null"]
+      },
+      "pattern_color": {
+        "type": ["string", "null"]
+      },
       "opacity": {
         "type": ["number", "null"]
       }
