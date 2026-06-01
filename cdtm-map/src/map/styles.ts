@@ -795,6 +795,24 @@ function drawControlSplitBands(
     }
   }
 
+  function fillDots() {
+    if (bandWidth <= 0) {
+      return;
+    }
+
+    const radius = Math.max(ratio, Math.min(step * 0.35, bandWidth * 0.5));
+    const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
+    const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
+
+    for (let x = startX; x <= maxX + padding; x += step) {
+      for (let y = startY; y <= maxY + padding; y += step) {
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+  }
+
   switch (spec.kind) {
     case "horizontal":
       fillHorizontalBands();
@@ -814,8 +832,10 @@ function drawControlSplitBands(
       fillVerticalBands();
       break;
     case "diagonal":
-    case "dots":
       fillDiagonalBands(false);
+      break;
+    case "dots":
+      fillDots();
       break;
   }
 }

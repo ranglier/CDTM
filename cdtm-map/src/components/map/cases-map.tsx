@@ -10,7 +10,6 @@ import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
-import { getRegistryCaseId } from "@/map/case-data";
 import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
@@ -322,53 +321,6 @@ export function CasesMap({
     [],
   );
 
-  const applyLocalCaseSelectionState = useCallback(
-    (nextActiveCaseId: string | null, nextSelectedCaseIds: string[]) => {
-      const previousActiveCaseId = activeCaseIdRef.current;
-      const previousSelectedIds = selectedCaseIdsRef.current;
-      const nextSelectedIds = new Set(nextSelectedCaseIds);
-
-      if (
-        previousActiveCaseId === nextActiveCaseId &&
-        areStringSetsEqual(previousSelectedIds, nextSelectedIds)
-      ) {
-        return;
-      }
-
-      activeCaseIdRef.current = nextActiveCaseId;
-      selectedCaseIdsRef.current = nextSelectedIds;
-
-      const source = sourceRef.current;
-
-      if (!source) {
-        return;
-      }
-
-      const changedIds = new Set<string>();
-
-      if (previousActiveCaseId) {
-        changedIds.add(previousActiveCaseId);
-      }
-
-      if (nextActiveCaseId) {
-        changedIds.add(nextActiveCaseId);
-      }
-
-      for (const idCase of previousSelectedIds) {
-        changedIds.add(idCase);
-      }
-
-      for (const idCase of nextSelectedIds) {
-        changedIds.add(idCase);
-      }
-
-      for (const idCase of changedIds) {
-        source.getFeatureById(idCase)?.changed();
-      }
-    },
-    [],
-  );
-
   const showSearchTargetTooltip = useCallback((target: MapSearchTarget) => {
     if (target.kind === "case") {
       return;
@@ -446,6 +398,7 @@ export function CasesMap({
 
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
+    layerRef.current?.changed();
   }, [casePropertiesById]);
 
   useEffect(() => {
@@ -732,7 +685,6 @@ export function CasesMap({
 
       if (!feature) {
         if (!isToggleSelection) {
-          applyLocalCaseSelectionState(null, []);
           onCaseSelectionChangeRef.current(null, "replace");
         }
         return;
@@ -742,27 +694,6 @@ export function CasesMap({
         feature as Feature<Geometry>,
         casePropertiesByIdRef.current,
       );
-
-      if (resolvedCase) {
-        const nextCaseId = getRegistryCaseId(resolvedCase);
-
-        if (isToggleSelection) {
-          const currentSelectedCaseIds = Array.from(selectedCaseIdsRef.current);
-          const alreadySelected = currentSelectedCaseIds.includes(nextCaseId);
-          const nextSelectedCaseIds = alreadySelected
-            ? currentSelectedCaseIds.filter((idCase) => idCase !== nextCaseId)
-            : [...currentSelectedCaseIds, nextCaseId];
-          const nextActiveCaseId = alreadySelected
-            ? activeCaseIdRef.current === nextCaseId
-              ? (nextSelectedCaseIds.at(-1) ?? null)
-              : activeCaseIdRef.current
-            : nextCaseId;
-
-          applyLocalCaseSelectionState(nextActiveCaseId, nextSelectedCaseIds);
-        } else {
-          applyLocalCaseSelectionState(nextCaseId, [nextCaseId]);
-        }
-      }
 
       onCaseSelectionChangeRef.current(
         resolvedCase,
@@ -1002,7 +933,7 @@ export function CasesMap({
       routesLayerRef.current = null;
       mapRef.current = null;
     };
-  }, [applyLocalCaseSelectionState]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

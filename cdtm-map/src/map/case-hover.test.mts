@@ -82,6 +82,22 @@ test("le controle conteste conserve un repli historique faction plus controleur"
   );
 });
 
+test("le survol evite les relations explicites reflexives", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("influence", {
+      id_case: "case_vassale_reflexive",
+      controleur: "deorl",
+      controle_type: "vassalise",
+      controle_principal_type: "controleur",
+      controle_principal_id: "deorl",
+    }),
+    [
+      { label: "Controleur", value: "deorl" },
+      { label: "Controle", value: "Vassalite" },
+    ],
+  );
+});
+
 test("le type de controle total est masque au survol", () => {
   const rows = buildCaseHoverRows("faction", {
     id_case: "case_test",

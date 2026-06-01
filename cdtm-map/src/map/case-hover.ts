@@ -97,8 +97,12 @@ function buildControlTypeHoverRow(
     return null;
   }
 
+  const explicitPrimaryActor = getExplicitControlActorLabel(
+    properties,
+    "principal",
+  );
   const primaryActor =
-    getExplicitControlActorLabel(properties, "principal") ??
+    explicitPrimaryActor ??
     getCurrentControlActorLabel(displayMode, properties);
   const explicitSecondaryActor = getExplicitControlActorLabel(
     properties,
@@ -114,7 +118,9 @@ function buildControlTypeHoverRow(
     case "occupe":
     case "occupation": {
       const occupant =
-        explicitSecondaryActor ?? controller ?? fallbackSecondaryActor;
+        explicitSecondaryActor ??
+        fallbackSecondaryActor ??
+        (explicitPrimaryActor ? null : controller);
 
       return {
         label: "Controle",
@@ -125,7 +131,9 @@ function buildControlTypeHoverRow(
     case "vassalite":
     case "vassalise": {
       const suzerain =
-        explicitSecondaryActor ?? controller ?? fallbackSecondaryActor;
+        explicitSecondaryActor ??
+        fallbackSecondaryActor ??
+        (explicitPrimaryActor ? null : controller);
 
       return {
         label: "Controle",

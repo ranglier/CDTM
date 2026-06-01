@@ -1,6 +1,7 @@
 "use client";
 
 import { defaults as defaultControls } from "ol/control/defaults";
+import { defaults as defaultInteractions } from "ol/interaction/defaults";
 import type BaseLayer from "ol/layer/Base";
 import ImageLayer from "ol/layer/Image";
 import Map from "ol/Map";
@@ -92,6 +93,9 @@ export function createCdtmMap(target: HTMLElement, layers: BaseLayer[]) {
     controls: defaultControls({
       attribution: false,
       rotate: false,
+    }),
+    interactions: defaultInteractions({
+      zoomDuration: 0,
     }),
     view: createCdtmView(),
   });

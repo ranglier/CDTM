@@ -172,6 +172,12 @@ function buildBulkFieldState(values: Array<string | null | undefined>) {
   };
 }
 
+function buildBulkStringValue(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function normalizeSlugList(values: string[]): string[] {
   return Array.from(
     new Set(
@@ -399,31 +405,43 @@ export function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
     }
 
     if (draft.control.controle_principal_type.touched) {
-      patch.control.controle_principal_type =
-        draft.control.controle_principal_type.value.trim().length > 0
-          ? draft.control.controle_principal_type.value.trim()
-          : null;
+      patch.control.controle_principal_type = buildBulkStringValue(
+        draft.control.controle_principal_type.value,
+      );
     }
 
     if (draft.control.controle_principal_id.touched) {
-      patch.control.controle_principal_id =
-        draft.control.controle_principal_id.value.trim().length > 0
-          ? draft.control.controle_principal_id.value.trim()
-          : null;
+      patch.control.controle_principal_id = buildBulkStringValue(
+        draft.control.controle_principal_id.value,
+      );
+
+      if (!draft.control.controle_principal_type.touched) {
+        patch.control.controle_principal_type =
+          patch.control.controle_principal_id === null
+            ? null
+            : buildBulkStringValue(draft.control.controle_principal_type.value);
+      }
     }
 
     if (draft.control.controle_secondaire_type.touched) {
-      patch.control.controle_secondaire_type =
-        draft.control.controle_secondaire_type.value.trim().length > 0
-          ? draft.control.controle_secondaire_type.value.trim()
-          : null;
+      patch.control.controle_secondaire_type = buildBulkStringValue(
+        draft.control.controle_secondaire_type.value,
+      );
     }
 
     if (draft.control.controle_secondaire_id.touched) {
-      patch.control.controle_secondaire_id =
-        draft.control.controle_secondaire_id.value.trim().length > 0
-          ? draft.control.controle_secondaire_id.value.trim()
-          : null;
+      patch.control.controle_secondaire_id = buildBulkStringValue(
+        draft.control.controle_secondaire_id.value,
+      );
+
+      if (!draft.control.controle_secondaire_type.touched) {
+        patch.control.controle_secondaire_type =
+          patch.control.controle_secondaire_id === null
+            ? null
+            : buildBulkStringValue(
+                draft.control.controle_secondaire_type.value,
+              );
+      }
     }
   }
 
