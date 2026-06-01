@@ -67,6 +67,7 @@ export type MapStyleRecord = {
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  secondary_ratio: number | null;
 };
 
 export type PublicMapStyles = Record<

@@ -539,6 +539,7 @@ const databaseMigrations: DatabaseMigration[] = [
           stroke TEXT,
           pattern_type TEXT,
           pattern_color TEXT,
+          secondary_ratio NUMERIC,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -551,6 +552,10 @@ const databaseMigrations: DatabaseMigration[] = [
       await client.query(`
         ALTER TABLE reference_styles
         ADD COLUMN IF NOT EXISTS pattern_color TEXT
+      `);
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS secondary_ratio NUMERIC
       `);
       await client.query(`
         ALTER TABLE reference_styles
@@ -1452,6 +1457,11 @@ const databaseMigrations: DatabaseMigration[] = [
     name: "controle_type_styles",
     up: async (client) => {
       await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS secondary_ratio NUMERIC
+      `);
+
+      await client.query(`
         INSERT INTO reference_nomenclature_values (
           id_entry,
           group_key,
@@ -1480,7 +1490,8 @@ const databaseMigrations: DatabaseMigration[] = [
           fill,
           stroke,
           pattern_type,
-          pattern_color
+          pattern_color,
+          secondary_ratio
         )
         VALUES
           (
@@ -1490,7 +1501,8 @@ const databaseMigrations: DatabaseMigration[] = [
             NULL,
             NULL,
             'diagonal_spaced',
-            '#000000'
+            '#000000',
+            0.5
           ),
           (
             'controle_type:vassalise',
@@ -1499,7 +1511,8 @@ const databaseMigrations: DatabaseMigration[] = [
             NULL,
             NULL,
             'diagonal_reverse_spaced',
-            '#000000'
+            '#000000',
+            0.3
           ),
           (
             'controle_type:occupe',
@@ -1508,7 +1521,8 @@ const databaseMigrations: DatabaseMigration[] = [
             NULL,
             NULL,
             'vertical_spaced',
-            '#000000'
+            '#000000',
+            0.9
           ),
           (
             'controle_type:partiel',
@@ -1517,9 +1531,36 @@ const databaseMigrations: DatabaseMigration[] = [
             NULL,
             NULL,
             'horizontal_spaced',
-            '#000000'
+            '#000000',
+            0.5
           )
         ON CONFLICT (id_style) DO NOTHING
+      `);
+    },
+  },
+  {
+    version: "012",
+    name: "controle_type_style_ratios",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS secondary_ratio NUMERIC
+      `);
+
+      await client.query(`
+        UPDATE reference_styles
+        SET
+          secondary_ratio = CASE cible_id
+            WHEN 'conteste' THEN 0.5
+            WHEN 'vassalise' THEN 0.3
+            WHEN 'occupe' THEN 0.9
+            WHEN 'partiel' THEN 0.5
+            ELSE secondary_ratio
+          END,
+          updated_at = NOW()
+        WHERE cible_type = 'controle_type'
+          AND secondary_ratio IS NULL
+          AND cible_id IN ('conteste', 'vassalise', 'occupe', 'partiel')
       `);
     },
   },

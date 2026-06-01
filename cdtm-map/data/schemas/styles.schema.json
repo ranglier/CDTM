@@ -28,6 +28,9 @@
       "pattern_color": {
         "type": ["string", "null"]
       },
+      "secondary_ratio": {
+        "type": ["number", "null"]
+      },
       "opacity": {
         "type": ["number", "null"]
       }

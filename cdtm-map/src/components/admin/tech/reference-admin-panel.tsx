@@ -11,6 +11,7 @@ import {
   getReferenceRowSummary,
   isHexColorInputValid,
   isPatternTypeInputValid,
+  isSecondaryRatioInputValid,
   LOCKED_REFERENCE_FIELDS,
   PATTERN_TYPE_OPTIONS,
   REFERENCE_TECHNICAL_FIELDS,
@@ -119,6 +120,8 @@ export function ReferenceAdminPanel({
                   const showStyles = Boolean(
                     activeReferenceView?.styleTargetType,
                   );
+                  const showControlRatio =
+                    activeReferenceView?.styleTargetType === "controle_type";
                   const hasImageFields =
                     activeReference.definition.fields.some(
                       (field) => field.name === "image_path",
@@ -460,6 +463,36 @@ export function ReferenceAdminPanel({
                                 />
                               </div>
                             </div>
+
+                            {showControlRatio ? (
+                              <div>
+                                <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                  Proportion controleur (%)
+                                </p>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="1"
+                                  className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                    isSecondaryRatioInputValid(
+                                      row.values.secondary_ratio ?? "",
+                                    )
+                                      ? "border-border/70"
+                                      : "border-destructive/70"
+                                  }`}
+                                  value={row.values.secondary_ratio ?? ""}
+                                  disabled={row.saving}
+                                  onChange={(event) =>
+                                    onReferenceRowValueChange(
+                                      row.localId,
+                                      "secondary_ratio",
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                            ) : null}
                           </>
                         ) : null}
                       </div>

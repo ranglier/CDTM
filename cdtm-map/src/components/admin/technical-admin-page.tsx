@@ -42,6 +42,7 @@ import {
   getStyleTargetIdForRow,
   isHexColorInputValid,
   isPatternTypeInputValid,
+  isSecondaryRatioInputValid,
   rowValueToInputValue,
   SIDEBAR_SECTION_STORAGE_KEY,
   toEditableRow,
@@ -1102,6 +1103,7 @@ export function TechnicalAdminPage() {
                 stroke: DEFAULT_STYLE_STROKE,
                 pattern_type: "none",
                 pattern_color: "",
+                secondary_ratio: "",
               }
             : {}),
         },
@@ -1166,6 +1168,20 @@ export function TechnicalAdminPage() {
         return;
       }
 
+      if (
+        activeReferenceView?.styleTargetType === "controle_type" &&
+        !isSecondaryRatioInputValid(row.values.secondary_ratio ?? "")
+      ) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Proportion secondaire invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
       setReferenceRows((current) =>
         current.map((item) =>
           item.localId === row.localId
@@ -1193,6 +1209,7 @@ export function TechnicalAdminPage() {
             stroke: row.values.stroke ?? "",
             pattern_type: row.values.pattern_type ?? "none",
             pattern_color: row.values.pattern_color ?? "",
+            secondary_ratio: row.values.secondary_ratio ?? "",
           },
         };
         const styleTargetId = getStyleTargetIdForRow(
@@ -1215,6 +1232,7 @@ export function TechnicalAdminPage() {
                 stroke: null,
                 pattern_type: null,
                 pattern_color: null,
+                secondary_ratio: null,
               },
             ),
           });
@@ -1292,6 +1310,7 @@ export function TechnicalAdminPage() {
               stroke: null,
               pattern_type: null,
               pattern_color: null,
+              secondary_ratio: null,
             }),
           });
         }

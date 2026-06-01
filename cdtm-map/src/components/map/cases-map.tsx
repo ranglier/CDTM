@@ -183,6 +183,8 @@ export function CasesMap({
     normalizeMapDisplayMode(displayMode),
   );
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
+  const onFeaturesLoadRef = useRef(onFeaturesLoad);
+  const focusCaseIdRef = useRef(focusCaseId);
   const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
   const localityDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>(
     {},
@@ -385,6 +387,14 @@ export function CasesMap({
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
   }, [onCaseSelectionChange]);
+
+  useEffect(() => {
+    onFeaturesLoadRef.current = onFeaturesLoad;
+  }, [onFeaturesLoad]);
+
+  useEffect(() => {
+    focusCaseIdRef.current = focusCaseId;
+  }, [focusCaseId]);
 
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
@@ -950,18 +960,18 @@ export function CasesMap({
 
         sourceRef.current.clear(true);
         sourceRef.current.addFeatures(features);
-        onFeaturesLoad?.(features.length);
+        onFeaturesLoadRef.current?.(features.length);
         fitCasesExtent(0);
 
-        if (focusCaseId) {
-          focusCaseById(focusCaseId, 0);
+        if (focusCaseIdRef.current) {
+          focusCaseById(focusCaseIdRef.current, 0);
         }
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        onFeaturesLoad?.(0);
+        onFeaturesLoadRef.current?.(0);
         onCaseSelectionChangeRef.current(null, "replace");
         console.error("Impossible de charger la couche publique.", error);
       }
@@ -972,7 +982,7 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, [dataUrl, focusCaseById, focusCaseId, onFeaturesLoad]);
+  }, [dataUrl, focusCaseById]);
 
   useEffect(() => {
     let cancelled = false;

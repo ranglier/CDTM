@@ -24,6 +24,7 @@ export const STYLE_FIELDS = [
   "stroke",
   "pattern_type",
   "pattern_color",
+  "secondary_ratio",
 ] as const;
 export type StyleFieldName = (typeof STYLE_FIELDS)[number];
 
@@ -254,6 +255,7 @@ export function buildStylePayload(
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  secondary_ratio: number | null;
 } | null {
   const targetType = view?.styleTargetType ?? null;
   const targetId = getStyleTargetIdForRow(view, values);
@@ -273,13 +275,19 @@ export function buildStylePayload(
     normalizedPatternType.length > 0 && normalizedPatternType !== "none"
       ? normalizePatternType(normalizedPatternType)
       : null;
+  const normalizedSecondaryRatio = values.secondary_ratio?.trim() || "";
+  const parsedSecondaryRatio =
+    normalizedSecondaryRatio.length > 0
+      ? Number(normalizedSecondaryRatio) / 100
+      : null;
 
   if (
     normalizedFill.length === 0 &&
     (normalizedStroke.length === 0 ||
       normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
     (normalizedPatternType.length === 0 || normalizedPatternType === "none") &&
-    normalizedPatternColor.length === 0
+    normalizedPatternColor.length === 0 &&
+    parsedSecondaryRatio === null
   ) {
     return null;
   }
@@ -291,6 +299,8 @@ export function buildStylePayload(
     stroke: normalizedStroke || null,
     pattern_type: parsedPatternType,
     pattern_color: normalizedPatternColor || null,
+    secondary_ratio:
+      targetType === "controle_type" ? parsedSecondaryRatio : null,
   };
 }
 
@@ -385,6 +395,20 @@ export function isPatternTypeInputValid(value: string): boolean {
   );
 }
 
+export function isSecondaryRatioInputValid(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return true;
+  }
+
+  const numericValue = Number(trimmed);
+
+  return (
+    Number.isFinite(numericValue) && numericValue >= 0 && numericValue <= 100
+  );
+}
+
 export function isPreviewImageUrl(value: string): boolean {
   const trimmed = value.trim();
   return trimmed.startsWith("/uploads/map-icons/");
@@ -456,6 +480,10 @@ export function withStyleValues(
       stroke: style?.stroke ?? DEFAULT_STYLE_STROKE,
       pattern_type: style?.pattern_type ?? "none",
       pattern_color: style?.pattern_color ?? "",
+      secondary_ratio:
+        style?.secondary_ratio !== null && style?.secondary_ratio !== undefined
+          ? String(Math.round(style.secondary_ratio * 100))
+          : "",
     },
   };
 }

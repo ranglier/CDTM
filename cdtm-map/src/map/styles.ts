@@ -25,6 +25,7 @@ type ResolvedStyle = {
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  secondary_ratio: number | null;
 };
 
 const DEFAULT_FILL = "rgba(0, 0, 0, 0)";
@@ -37,8 +38,8 @@ const PATTERN_STEP = 12;
 const SPACED_PATTERN_STEP = 22;
 const PATTERN_LINE_WIDTH = 1.25;
 const MIN_VISIBLE_PATTERN_STEP = 7;
-const MAX_LOW_ZOOM_PATTERN_SCALE = 2.4;
 const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
+const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
 
 const styleCache = new Map<string, Style>();
 const patternOverlayCache = new Map<string, Style>();
@@ -55,6 +56,21 @@ type ControlSplitRule = {
   secondaryRatio: number;
   fallbackPatternType: MapPatternType;
 };
+
+function normalizeSecondaryRatio(value: unknown): number | null {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.min(1, Math.max(0, numericValue));
+}
 
 function getStyleForTarget(
   styles: PublicMapStyles,
@@ -76,6 +92,7 @@ function getStyleForTarget(
     stroke: normalizeHexColor(style.stroke),
     pattern_type: normalizePatternType(style.pattern_type),
     pattern_color: normalizeHexColor(style.pattern_color),
+    secondary_ratio: normalizeSecondaryRatio(style.secondary_ratio),
   };
 }
 
@@ -169,7 +186,7 @@ function resolveControlSplitOverlay(
   const faction = normalizeControlActor(properties.faction);
   const controller = normalizeControlActor(properties.controleur);
 
-  if (!faction || !controller || faction === controller) {
+  if (!controller || faction === controller) {
     return null;
   }
 
@@ -183,10 +200,10 @@ function resolveControlSplitOverlay(
     "controleur",
     properties.controleur,
   );
-  const primaryColor = factionStyle?.fill;
+  const primaryColor = factionStyle?.fill ?? TRANSPARENT_CONTROL_COLOR;
   const secondaryColor = controllerStyle?.fill;
 
-  if (!primaryColor || !secondaryColor || primaryColor === secondaryColor) {
+  if (!secondaryColor || primaryColor === secondaryColor) {
     return null;
   }
 
@@ -195,7 +212,7 @@ function resolveControlSplitOverlay(
   return {
     primaryColor,
     secondaryColor,
-    secondaryRatio: splitRule.secondaryRatio,
+    secondaryRatio: controlStyle?.secondary_ratio ?? splitRule.secondaryRatio,
     patternType: controlStyle?.pattern_type ?? splitRule.fallbackPatternType,
   };
 }
@@ -285,17 +302,6 @@ function getPatternSpec(patternType: MapPatternType): PatternSpec {
   }
 }
 
-function getLowZoomPatternScale(resolution: number): number {
-  if (!Number.isFinite(resolution) || resolution <= 1) {
-    return 1;
-  }
-
-  return Math.min(
-    MAX_LOW_ZOOM_PATTERN_SCALE,
-    Math.max(1, Math.sqrt(resolution)),
-  );
-}
-
 function isCoordinate(value: unknown): value is [number, number] {
   return (
     Array.isArray(value) &&
@@ -340,39 +346,6 @@ function getPixelExtent(coordinates: unknown): PixelExtent | null {
   }
 
   return [minX, minY, maxX, maxY];
-}
-
-function transformCoordinate(
-  coordinate: [number, number],
-  transform: DOMMatrixReadOnly,
-): [number, number] {
-  return [
-    coordinate[0] * transform.a + coordinate[1] * transform.c + transform.e,
-    coordinate[0] * transform.b + coordinate[1] * transform.d + transform.f,
-  ];
-}
-
-function transformCoordinates(
-  coordinates: unknown,
-  transform: DOMMatrixReadOnly,
-): unknown {
-  if (isCoordinate(coordinates)) {
-    return transformCoordinate(coordinates, transform);
-  }
-
-  if (!Array.isArray(coordinates)) {
-    return coordinates;
-  }
-
-  return coordinates.map((item) => transformCoordinates(item, transform));
-}
-
-function transformAnchor(
-  anchor: PixelAnchor,
-  transform: DOMMatrixReadOnly,
-): PixelAnchor {
-  const [x, y] = transformCoordinate([anchor.x, anchor.y], transform);
-  return { x, y };
 }
 
 function appendRingPath(
@@ -537,17 +510,12 @@ function drawAnchoredPattern(
   patternType: MapPatternType,
   patternColor: string,
   pixelRatio: number,
-  resolution: number,
 ) {
   const spec = getPatternSpec(patternType);
   const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-  const lowZoomScale = getLowZoomPatternScale(resolution);
-  const step = Math.max(
-    MIN_VISIBLE_PATTERN_STEP * ratio,
-    (spec.step * ratio) / lowZoomScale,
-  );
-  const lineWidth = spec.lineWidth * ratio * Math.min(1.7, lowZoomScale);
-  const dotRadius = spec.dotRadius * ratio * Math.min(1.8, lowZoomScale);
+  const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
+  const lineWidth = spec.lineWidth * ratio;
+  const dotRadius = spec.dotRadius * ratio;
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
@@ -604,11 +572,7 @@ function getPatternOverlayStyle(
       Number.isFinite(state.resolution) && state.resolution > 0
         ? state.resolution
         : 1;
-    const renderTransform = state.context.getTransform();
-    const screenCoordinates = transformCoordinates(
-      coordinates,
-      renderTransform,
-    );
+    const screenCoordinates = coordinates;
     const screenExtent = getPixelExtent(screenCoordinates);
 
     if (!screenExtent) {
@@ -617,11 +581,10 @@ function getPatternOverlayStyle(
 
     const worldCoordinates = state.geometry.getCoordinates();
     const anchor = getPatternAnchor(
-      coordinates,
+      screenCoordinates,
       worldCoordinates,
       safeResolution,
     );
-    const screenAnchor = transformAnchor(anchor, renderTransform);
 
     state.context.save();
     state.context.setTransform(1, 0, 0, 1, 0, 0);
@@ -631,11 +594,10 @@ function getPatternOverlayStyle(
     drawAnchoredPattern(
       state.context,
       screenExtent,
-      screenAnchor,
+      anchor,
       patternType,
       patternColor,
       state.pixelRatio,
-      safeResolution,
     );
     state.context.restore();
   };
@@ -773,11 +735,7 @@ function getControlSplitOverlayStyle(
       Number.isFinite(state.resolution) && state.resolution > 0
         ? state.resolution
         : 1;
-    const renderTransform = state.context.getTransform();
-    const screenCoordinates = transformCoordinates(
-      coordinates,
-      renderTransform,
-    );
+    const screenCoordinates = coordinates;
     const screenExtent = getPixelExtent(screenCoordinates);
 
     if (!screenExtent) {
@@ -786,11 +744,10 @@ function getControlSplitOverlayStyle(
 
     const worldCoordinates = state.geometry.getCoordinates();
     const anchor = getPatternAnchor(
-      coordinates,
+      screenCoordinates,
       worldCoordinates,
       safeResolution,
     );
-    const screenAnchor = transformAnchor(anchor, renderTransform);
 
     state.context.save();
     state.context.setTransform(1, 0, 0, 1, 0, 0);
@@ -801,7 +758,7 @@ function getControlSplitOverlayStyle(
     drawControlSplitBands(
       state.context,
       screenExtent,
-      screenAnchor,
+      anchor,
       overlay,
       state.pixelRatio,
     );
@@ -820,6 +777,7 @@ function buildCacheKey(
   displayMode: MapDisplayMode,
   selectionState: SelectionState,
   style: ResolvedStyle | null,
+  hasControlSplitOverlay: boolean,
   strokeColor: string,
   strokeWidth: number,
   zIndex: number,
@@ -831,6 +789,7 @@ function buildCacheKey(
     style?.stroke ?? DEFAULT_STROKE,
     style?.pattern_type ?? "none",
     style?.pattern_color ?? "none",
+    hasControlSplitOverlay ? "control-split" : "normal",
     strokeColor,
     strokeWidth,
     zIndex,
@@ -844,6 +803,11 @@ export function getCaseStyle({
   styles,
 }: CaseStyleOptions): Style | Style[] {
   const resolved = resolveBaseStyle(displayMode, properties, styles);
+  const controlSplitOverlay = resolveControlSplitOverlay(
+    displayMode,
+    properties,
+    styles,
+  );
   const isUnstyled = resolved === null;
   const baseStrokeColor = resolved?.stroke ?? DEFAULT_STROKE;
 
@@ -870,11 +834,13 @@ export function getCaseStyle({
         : DEFAULT_STROKE_WIDTH;
 
   const fillColorWithSelection: string =
-    selectionState === "active" && isUnstyled
+    selectionState === "active" && isUnstyled && !controlSplitOverlay
       ? "rgba(220, 193, 130, 0.24)"
-      : selectionState === "selected" && isUnstyled
+      : selectionState === "selected" && isUnstyled && !controlSplitOverlay
         ? "rgba(220, 193, 130, 0.16)"
-        : buildBaseFill(displayMode, resolved);
+        : controlSplitOverlay
+          ? DEFAULT_FILL
+          : buildBaseFill(displayMode, resolved);
 
   const zIndex =
     selectionState === "active" ? 10 : selectionState === "selected" ? 8 : 1;
@@ -882,6 +848,7 @@ export function getCaseStyle({
     displayMode,
     selectionState,
     resolved,
+    controlSplitOverlay !== null,
     strokeColor,
     strokeWidth,
     zIndex,
@@ -895,6 +862,7 @@ export function getCaseStyle({
       styles,
       displayMode,
       zIndex,
+      controlSplitOverlay,
     );
     return overlayStyles.length > 0 ? [cached, ...overlayStyles] : cached;
   }
@@ -917,6 +885,7 @@ export function getCaseStyle({
     styles,
     displayMode,
     zIndex,
+    controlSplitOverlay,
   );
   return overlayStyles.length > 0 ? [style, ...overlayStyles] : style;
 }
@@ -927,13 +896,9 @@ function getCaseOverlayStyles(
   styles: PublicMapStyles,
   displayMode: MapDisplayMode,
   baseZIndex: number,
+  controlSplitOverlay: ControlSplitOverlay | null,
 ): Style[] {
   const overlays: Style[] = [];
-  const controlSplitOverlay = resolveControlSplitOverlay(
-    displayMode,
-    properties,
-    styles,
-  );
 
   if (controlSplitOverlay) {
     overlays.push(

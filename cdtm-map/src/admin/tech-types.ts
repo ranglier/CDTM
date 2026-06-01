@@ -75,13 +75,16 @@ export type ReferenceTableRowsResponse = {
   style_target_type?: MapStyleTargetType | null;
   styles?: Record<
     string,
-    Pick<MapStyleRecord, "fill" | "stroke" | "pattern_type" | "pattern_color">
+    Pick<
+      MapStyleRecord,
+      "fill" | "stroke" | "pattern_type" | "pattern_color" | "secondary_ratio"
+    >
   >;
 };
 
 export type ReferenceStyleValue = Pick<
   MapStyleRecord,
-  "fill" | "stroke" | "pattern_type" | "pattern_color"
+  "fill" | "stroke" | "pattern_type" | "pattern_color" | "secondary_ratio"
 >;
 
 export type MapIconUploadMetadata = {
@@ -98,6 +101,7 @@ export type AdminStyleUpsertInput = {
   stroke?: string | null;
   pattern_type?: MapPatternType | "none" | null;
   pattern_color?: string | null;
+  secondary_ratio?: number | string | null;
 };
 
 export type DynamicCaseTableFieldType =
@@ -359,6 +363,12 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         name: "pattern_color",
         label: "pattern_color",
         type: "text",
+        searchable: true,
+      },
+      {
+        name: "secondary_ratio",
+        label: "secondary_ratio",
+        type: "number",
         searchable: true,
       },
       {

@@ -108,6 +108,7 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
   stroke: string | null;
   patternType: MapPatternType | null;
   patternColor: string | null;
+  secondaryRatio: number | null;
 } {
   const targetType = normalizeMapStyleTargetType(input.target_type);
   const targetId = normalizeMapStyleTargetId(input.target_id);
@@ -115,6 +116,10 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
   const strokeRaw = normalizeNullableText(input.stroke);
   const patternTypeRaw = normalizeNullableText(input.pattern_type);
   const patternColorRaw = normalizeNullableText(input.pattern_color);
+  const secondaryRatioRaw =
+    input.secondary_ratio === undefined || input.secondary_ratio === null
+      ? null
+      : input.secondary_ratio;
 
   if (
     input.fill !== undefined &&
@@ -159,6 +164,30 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     throw new Error("Couleur du motif invalide.");
   }
 
+  let secondaryRatio: number | null = null;
+
+  if (targetType === "controle_type" && secondaryRatioRaw !== null) {
+    const normalizedValue =
+      typeof secondaryRatioRaw === "number"
+        ? secondaryRatioRaw
+        : normalizeNullableText(secondaryRatioRaw);
+
+    if (normalizedValue === null) {
+      secondaryRatio = null;
+    } else {
+      const parsedValue =
+        typeof normalizedValue === "number"
+          ? normalizedValue
+          : Number(normalizedValue);
+
+      if (!Number.isFinite(parsedValue) || parsedValue < 0 || parsedValue > 1) {
+        throw new Error("Proportion secondaire invalide.");
+      }
+
+      secondaryRatio = parsedValue;
+    }
+  }
+
   return {
     targetType,
     targetId,
@@ -166,6 +195,7 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     stroke,
     patternType,
     patternColor,
+    secondaryRatio,
   };
 }
 
@@ -176,6 +206,7 @@ function sanitizeMapStyleRow(row: {
   stroke: string | null;
   pattern_type: string | null;
   pattern_color: string | null;
+  secondary_ratio: string | number | null;
 }): MapStyleRecord | null {
   if (
     !row.cible_type ||
@@ -193,8 +224,24 @@ function sanitizeMapStyleRow(row: {
   const patternColor = row.pattern_color
     ? normalizeHexColor(row.pattern_color)
     : null;
+  const secondaryRatio =
+    typeof row.secondary_ratio === "number"
+      ? row.secondary_ratio
+      : row.secondary_ratio !== null
+        ? Number(row.secondary_ratio)
+        : null;
+  const normalizedSecondaryRatio =
+    secondaryRatio !== null && Number.isFinite(secondaryRatio)
+      ? Math.min(1, Math.max(0, secondaryRatio))
+      : null;
 
-  if (!fill && !stroke && !patternType && !patternColor) {
+  if (
+    !fill &&
+    !stroke &&
+    !patternType &&
+    !patternColor &&
+    normalizedSecondaryRatio === null
+  ) {
     return null;
   }
 
@@ -205,6 +252,7 @@ function sanitizeMapStyleRow(row: {
     stroke,
     pattern_type: patternType,
     pattern_color: patternColor,
+    secondary_ratio: normalizedSecondaryRatio,
   };
 }
 
@@ -262,6 +310,7 @@ async function listStylesForTargets(
     stroke: string | null;
     pattern_type: string | null;
     pattern_color: string | null;
+    secondary_ratio: string | number | null;
   }>(
     `
       SELECT DISTINCT ON (cible_type, cible_id)
@@ -270,7 +319,8 @@ async function listStylesForTargets(
         fill,
         stroke,
         pattern_type,
-        pattern_color
+        pattern_color,
+        secondary_ratio
       FROM reference_styles
       WHERE cible_type = $1
         AND cible_id = ANY($2::text[])
@@ -290,6 +340,7 @@ async function listStylesForTargets(
           stroke: row.stroke,
           pattern_type: row.pattern_type,
           pattern_color: row.pattern_color,
+          secondary_ratio: row.secondary_ratio,
         },
       ]),
   );
@@ -1240,7 +1291,8 @@ export async function saveMapStyle(
       !normalized.fill &&
       !normalized.stroke &&
       !normalized.patternType &&
-      !normalized.patternColor
+      !normalized.patternColor &&
+      normalized.secondaryRatio === null
     ) {
       await client.query(
         `
@@ -1276,6 +1328,7 @@ export async function saveMapStyle(
       stroke: string | null;
       pattern_type: string | null;
       pattern_color: string | null;
+      secondary_ratio: string | number | null;
     }>(
       `
         INSERT INTO reference_styles (
@@ -1286,9 +1339,10 @@ export async function saveMapStyle(
           stroke,
           pattern_type,
           pattern_color,
+          secondary_ratio,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id_style) DO UPDATE
         SET
           cible_type = EXCLUDED.cible_type,
@@ -1297,9 +1351,10 @@ export async function saveMapStyle(
           stroke = EXCLUDED.stroke,
           pattern_type = EXCLUDED.pattern_type,
           pattern_color = EXCLUDED.pattern_color,
+          secondary_ratio = EXCLUDED.secondary_ratio,
           updated_by_user_id = EXCLUDED.updated_by_user_id,
           updated_at = NOW()
-        RETURNING cible_type, cible_id, fill, stroke, pattern_type, pattern_color
+        RETURNING cible_type, cible_id, fill, stroke, pattern_type, pattern_color, secondary_ratio
       `,
       [
         stableStyleId,
@@ -1309,6 +1364,7 @@ export async function saveMapStyle(
         normalized.stroke,
         normalized.patternType,
         normalized.patternColor,
+        normalized.secondaryRatio,
         userId,
       ],
     );
@@ -1333,6 +1389,7 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
     stroke: string | null;
     pattern_type: string | null;
     pattern_color: string | null;
+    secondary_ratio: string | number | null;
   }>(
     `
       SELECT DISTINCT ON (cible_type, cible_id)
@@ -1341,7 +1398,8 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
         fill,
         stroke,
         pattern_type,
-        pattern_color
+        pattern_color,
+        secondary_ratio
       FROM reference_styles
       WHERE cible_type = ANY($1::text[])
       ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC

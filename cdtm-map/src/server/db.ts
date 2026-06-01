@@ -230,7 +230,8 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
         fill,
         stroke,
         pattern_type,
-        pattern_color
+        pattern_color,
+        secondary_ratio
       )
       VALUES
         (
@@ -240,7 +241,8 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
           NULL,
           NULL,
           'diagonal_spaced',
-          '#000000'
+          '#000000',
+          0.5
         ),
         (
           'controle_type:vassalise',
@@ -249,7 +251,8 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
           NULL,
           NULL,
           'diagonal_reverse_spaced',
-          '#000000'
+          '#000000',
+          0.3
         ),
         (
           'controle_type:occupe',
@@ -258,7 +261,8 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
           NULL,
           NULL,
           'vertical_spaced',
-          '#000000'
+          '#000000',
+          0.9
         ),
         (
           'controle_type:partiel',
@@ -267,9 +271,13 @@ async function seedNomenclatures(client: PoolClient): Promise<void> {
           NULL,
           NULL,
           'horizontal_spaced',
-          '#000000'
+          '#000000',
+          0.5
         )
-      ON CONFLICT (id_style) DO NOTHING
+      ON CONFLICT (id_style) DO UPDATE
+      SET
+        secondary_ratio = COALESCE(reference_styles.secondary_ratio, EXCLUDED.secondary_ratio),
+        updated_at = NOW()
     `,
   );
 
