@@ -1,6 +1,6 @@
 import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
-import Style, { type RenderFunction } from "ol/style/Style";
+import Style from "ol/style/Style";
 
 import {
   normalizeHexColor,
@@ -47,8 +47,6 @@ const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
 const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
 
 const styleCache = new Map<string, Style>();
-const patternOverlayCache = new Map<string, Style>();
-const controlSplitOverlayCache = new Map<string, Style>();
 const patternTileCache = new Map<string, CanvasImageSource>();
 const canvasPatternCache = new WeakMap<
   CanvasRenderingContext2D,
@@ -68,6 +66,17 @@ type ControlSplitOverlay = {
   secondaryRatio: number;
   patternType: MapPatternType;
 };
+
+export type CasePatternOverlay =
+  | {
+      type: "control-split";
+      overlay: ControlSplitOverlay;
+    }
+  | {
+      type: "pattern";
+      patternType: MapPatternType;
+      patternColor: string;
+    };
 
 type ControlSplitRule = {
   secondaryRatio: number;
@@ -796,51 +805,6 @@ function fillClippedWithPattern(
   context.restore();
 }
 
-function getPatternOverlayStyle(
-  patternType: MapPatternType,
-  patternColor: string,
-  zIndex: number,
-): Style {
-  const cacheKey = `${patternType}|${patternColor}|${zIndex}`;
-  const cached = patternOverlayCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const renderer: RenderFunction = (coordinates, state) => {
-    const tile = getPatternTile(patternType, patternColor, state.pixelRatio);
-
-    if (!tile) {
-      return;
-    }
-
-    const pattern = getContextPattern(
-      state.context,
-      [
-        "pattern",
-        patternType,
-        patternColor,
-        Math.round(normalizeCanvasPixelRatio(state.pixelRatio) * 100),
-      ].join("|"),
-      tile,
-    );
-
-    if (!pattern) {
-      return;
-    }
-
-    fillClippedWithPattern(state.context, coordinates, pattern);
-  };
-
-  const style = new Style({
-    renderer,
-    zIndex,
-  });
-  patternOverlayCache.set(cacheKey, style);
-  return style;
-}
-
 function drawControlSplitBands(
   context: CanvasRenderingContext2D,
   extent: PixelExtent,
@@ -1011,61 +975,6 @@ function getControlSplitTile(
   return canvas;
 }
 
-function getControlSplitOverlayStyle(
-  overlay: ControlSplitOverlay,
-  zIndex: number,
-): Style {
-  const cacheKey = [
-    overlay.primaryColor,
-    overlay.secondaryColor,
-    overlay.secondaryRatio,
-    overlay.patternType,
-    zIndex,
-  ].join("|");
-  const cached = controlSplitOverlayCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const renderer: RenderFunction = (coordinates, state) => {
-    const tile = getControlSplitTile(overlay, state.pixelRatio);
-
-    if (!tile) {
-      return;
-    }
-
-    const pattern = getContextPattern(
-      state.context,
-      [
-        "control",
-        overlay.primaryColor,
-        overlay.secondaryColor,
-        overlay.secondaryRatio,
-        overlay.patternType,
-        Math.round(normalizeCanvasPixelRatio(state.pixelRatio) * 100),
-      ].join("|"),
-      tile,
-    );
-
-    if (!pattern) {
-      return;
-    }
-
-    state.context.save();
-    state.context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
-    fillClippedWithPattern(state.context, coordinates, pattern);
-    state.context.restore();
-  };
-
-  const style = new Style({
-    renderer,
-    zIndex,
-  });
-  controlSplitOverlayCache.set(cacheKey, style);
-  return style;
-}
-
 function buildCacheKey(
   displayMode: MapDisplayMode,
   selectionState: SelectionState,
@@ -1149,15 +1058,7 @@ export function getCaseStyle({
   const cached = styleCache.get(cacheKey);
 
   if (cached) {
-    const overlayStyles = getCaseOverlayStyles(
-      resolved,
-      properties,
-      styles,
-      displayMode,
-      zIndex,
-      controlSplitOverlay,
-    );
-    return overlayStyles.length > 0 ? [cached, ...overlayStyles] : cached;
+    return cached;
   }
 
   const style = new Style({
@@ -1172,53 +1073,114 @@ export function getCaseStyle({
   });
 
   styleCache.set(cacheKey, style);
-  const overlayStyles = getCaseOverlayStyles(
-    resolved,
-    properties,
-    styles,
-    displayMode,
-    zIndex,
-    controlSplitOverlay,
-  );
-  return overlayStyles.length > 0 ? [style, ...overlayStyles] : style;
+  return style;
 }
 
-function getCaseOverlayStyles(
-  resolved: ResolvedStyle | null,
-  properties: StableCaseProperties | null,
-  styles: PublicMapStyles,
-  displayMode: MapDisplayMode,
-  baseZIndex: number,
-  controlSplitOverlay: ControlSplitOverlay | null,
-): Style[] {
-  const overlays: Style[] = [];
+export function getCasePatternOverlays({
+  displayMode,
+  properties,
+  styles,
+}: {
+  displayMode: MapDisplayMode;
+  properties: StableCaseProperties | null;
+  styles: PublicMapStyles;
+}): CasePatternOverlay[] {
+  const resolved = resolveBaseStyle(displayMode, properties, styles);
+  const controlSplitOverlay = resolveControlSplitOverlay(
+    displayMode,
+    properties,
+    styles,
+  );
+  const overlays: CasePatternOverlay[] = [];
 
   if (controlSplitOverlay) {
-    overlays.push(
-      getControlSplitOverlayStyle(controlSplitOverlay, baseZIndex + 0.05),
-    );
+    overlays.push({
+      type: "control-split",
+      overlay: controlSplitOverlay,
+    });
   }
 
   if (resolved?.pattern_type) {
-    overlays.push(
-      getPatternOverlayStyle(
-        resolved.pattern_type,
-        resolved.pattern_color ?? DEFAULT_PATTERN_COLOR,
-        baseZIndex + 0.1,
-      ),
-    );
+    overlays.push({
+      type: "pattern",
+      patternType: resolved.pattern_type,
+      patternColor: resolved.pattern_color ?? DEFAULT_PATTERN_COLOR,
+    });
   }
 
   if (displayMode === "topographic" && properties?.colline === true) {
     const hillStyle = getStyleForTarget(styles, "case_attribute", "colline");
-    overlays.push(
-      getPatternOverlayStyle(
-        hillStyle?.pattern_type ?? HILL_PATTERN_TYPE,
-        hillStyle?.pattern_color ?? HILL_PATTERN_COLOR,
-        baseZIndex + 0.2,
-      ),
-    );
+    overlays.push({
+      type: "pattern",
+      patternType: hillStyle?.pattern_type ?? HILL_PATTERN_TYPE,
+      patternColor: hillStyle?.pattern_color ?? HILL_PATTERN_COLOR,
+    });
   }
 
   return overlays;
+}
+
+export function paintCasePatternOverlay(
+  context: CanvasRenderingContext2D,
+  coordinates: unknown,
+  overlay: CasePatternOverlay,
+  pixelRatio: number,
+): void {
+  if (overlay.type === "control-split") {
+    const tile = getControlSplitTile(overlay.overlay, pixelRatio);
+
+    if (!tile) {
+      return;
+    }
+
+    const pattern = getContextPattern(
+      context,
+      [
+        "control",
+        overlay.overlay.primaryColor,
+        overlay.overlay.secondaryColor,
+        overlay.overlay.secondaryRatio,
+        overlay.overlay.patternType,
+        Math.round(normalizeCanvasPixelRatio(pixelRatio) * 100),
+      ].join("|"),
+      tile,
+    );
+
+    if (!pattern) {
+      return;
+    }
+
+    context.save();
+    context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
+    fillClippedWithPattern(context, coordinates, pattern);
+    context.restore();
+    return;
+  }
+
+  const tile = getPatternTile(
+    overlay.patternType,
+    overlay.patternColor,
+    pixelRatio,
+  );
+
+  if (!tile) {
+    return;
+  }
+
+  const pattern = getContextPattern(
+    context,
+    [
+      "pattern",
+      overlay.patternType,
+      overlay.patternColor,
+      Math.round(normalizeCanvasPixelRatio(pixelRatio) * 100),
+    ].join("|"),
+    tile,
+  );
+
+  if (!pattern) {
+    return;
+  }
+
+  fillClippedWithPattern(context, coordinates, pattern);
 }

@@ -18,6 +18,10 @@ import {
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
+  createCasePatternsLayer,
+  syncCasePatternsLayerVisibility,
+} from "@/map/openlayers/case-patterns-layer";
+import {
   createEditorPointsVectorLayer,
   createEditorPointsVectorSource,
   syncEditorPointsLayerVisibility,
@@ -57,6 +61,7 @@ type StandardLayers = {
   backgroundLayer: ReturnType<typeof createCdtmBackgroundLayer>;
   casesSource: ReturnType<typeof createCasesVectorSource>;
   casesLayer: ReturnType<typeof createCasesVectorLayer>;
+  casePatternsLayer: ReturnType<typeof createCasePatternsLayer>;
   routesSource: ReturnType<typeof createEditorRoutesVectorSource>;
   routesLayer: ReturnType<typeof createEditorRoutesVectorLayer>;
   pointsSource: ReturnType<typeof createEditorPointsVectorSource>;
@@ -102,7 +107,8 @@ function clearMapCursor(map: Map | null) {
 
 export function isToggleSelectionEvent(event: unknown): boolean {
   return (
-    event instanceof MouseEvent && (event.shiftKey || event.ctrlKey || event.metaKey)
+    event instanceof MouseEvent &&
+    (event.shiftKey || event.ctrlKey || event.metaKey)
   );
 }
 
@@ -221,6 +227,9 @@ export function useCdtmMapRuntime({
   const casesLayerRef = useRef<ReturnType<
     typeof createCasesVectorLayer
   > | null>(null);
+  const casePatternsLayerRef = useRef<ReturnType<
+    typeof createCasePatternsLayer
+  > | null>(null);
   const pointsSourceRef = useRef<ReturnType<
     typeof createEditorPointsVectorSource
   > | null>(null);
@@ -308,7 +317,8 @@ export function useCdtmMapRuntime({
       const pixel = map.getPixelFromCoordinate(coordinate);
       const mapRect = map.getTargetElement().getBoundingClientRect();
       const tooltipWidth = 260;
-      const tooltipHeight = rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
+      const tooltipHeight =
+        rows.length === 0 ? 72 : rows.length > 2 ? 180 : 140;
       const preferredX = mapRect.left + pixel[0] + 18;
       const preferredY = mapRect.top + pixel[1] + 18;
 
@@ -344,6 +354,17 @@ export function useCdtmMapRuntime({
         visible: casesVisibleRef.current,
       },
     );
+    const casePatternsLayer = createCasePatternsLayer(
+      casesSource,
+      {
+        getDisplayMode: () => displayModeRef.current,
+        getCasePropertiesById: () => casePropertiesByIdRef.current,
+        getPublicMapStyles: () => publicMapStylesRef.current,
+      },
+      {
+        visible: casesVisibleRef.current,
+      },
+    );
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
     });
@@ -370,6 +391,7 @@ export function useCdtmMapRuntime({
       backgroundLayer,
       casesSource,
       casesLayer,
+      casePatternsLayer,
       routesSource,
       routesLayer,
       pointsSource,
@@ -389,6 +411,7 @@ export function useCdtmMapRuntime({
     mapRef.current = handles.map;
     casesSourceRef.current = handles.casesSource;
     casesLayerRef.current = handles.casesLayer;
+    casePatternsLayerRef.current = handles.casePatternsLayer;
     routesSourceRef.current = handles.routesSource;
     routesLayerRef.current = handles.routesLayer;
     pointsSourceRef.current = handles.pointsSource;
@@ -399,6 +422,7 @@ export function useCdtmMapRuntime({
     mapRef.current = null;
     casesSourceRef.current = null;
     casesLayerRef.current = null;
+    casePatternsLayerRef.current = null;
     routesSourceRef.current = null;
     routesLayerRef.current = null;
     pointsSourceRef.current = null;
@@ -497,14 +521,16 @@ export function useCdtmMapRuntime({
       const xs = points.map(([x]) => x);
       const ys = points.map(([, y]) => y);
 
-      map.getView().fit(
-        [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
-        {
-          duration,
-          padding: [80, 80, 80, 80],
-          maxZoom: MAP_MAX_ZOOM,
-        },
-      );
+      map
+        .getView()
+        .fit(
+          [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+          {
+            duration,
+            padding: [80, 80, 80, 80],
+            maxZoom: MAP_MAX_ZOOM,
+          },
+        );
     },
     [],
   );
@@ -512,16 +538,19 @@ export function useCdtmMapRuntime({
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
     casesLayerRef.current?.changed();
+    casePatternsLayerRef.current?.changed();
   }, [casePropertiesById]);
 
   useEffect(() => {
     publicMapStylesRef.current = publicMapStyles;
     casesLayerRef.current?.changed();
+    casePatternsLayerRef.current?.changed();
   }, [publicMapStyles]);
 
   useEffect(() => {
     displayModeRef.current = normalizeMapDisplayMode(displayMode);
     casesLayerRef.current?.changed();
+    casePatternsLayerRef.current?.changed();
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
@@ -583,6 +612,7 @@ export function useCdtmMapRuntime({
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
+    syncCasePatternsLayerVisibility(casePatternsLayerRef.current, casesVisible);
 
     if (!casesVisible) {
       const frame = requestAnimationFrame(() => {
@@ -636,6 +666,7 @@ export function useCdtmMapRuntime({
     mapRef,
     casesSourceRef,
     casesLayerRef,
+    casePatternsLayerRef,
     pointsSourceRef,
     pointsLayerRef,
     routesSourceRef,

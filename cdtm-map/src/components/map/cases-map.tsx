@@ -175,56 +175,59 @@ export function CasesMap({
     focusRoute,
   } = runtime;
 
-  const showSearchTargetTooltip = useCallback((target: MapSearchTarget) => {
-    if (target.kind === "case") {
-      return;
-    }
-
-    const map = mapRef.current;
-
-    if (!map) {
-      return;
-    }
-
-    let coordinate: [number, number] | null = null;
-    let title = target.label;
-    let rows: Array<{ label: string; value: string }> = [];
-
-    if (target.kind === "locality") {
-      const publicLocality = publicLocalitiesByIdRef.current[target.id];
-      coordinate = [target.x, target.y];
-      title = publicLocality?.name ?? target.label;
-      rows = publicLocality
-        ? buildPublicLocalityHoverRows(publicLocality)
-        : [{ label: "Type", value: "Localite" }];
-    } else if (target.kind === "landmark") {
-      const publicLandmark = publicLandmarksByIdRef.current[target.id];
-      coordinate = [target.x, target.y];
-      title = publicLandmark?.name ?? target.label;
-      rows = buildPublicLandmarkHoverRows();
-    } else {
-      const publicRoute = publicRoutesByIdRef.current[target.id];
-      const xs = target.points.map(([x]) => x);
-      const ys = target.points.map(([, y]) => y);
-
-      if (xs.length > 0 && ys.length > 0) {
-        coordinate = [
-          (Math.min(...xs) + Math.max(...xs)) / 2,
-          (Math.min(...ys) + Math.max(...ys)) / 2,
-        ];
+  const showSearchTargetTooltip = useCallback(
+    (target: MapSearchTarget) => {
+      if (target.kind === "case") {
+        return;
       }
-      title = publicRoute?.name ?? target.label;
-      rows = publicRoute
-        ? buildPublicRouteHoverRows(publicRoute)
-        : [{ label: "Type", value: "Route" }];
-    }
 
-    if (!coordinate) {
-      return;
-    }
+      const map = mapRef.current;
 
-    showTooltipAtCoordinate(coordinate, title, rows);
-  }, [mapRef, showTooltipAtCoordinate]);
+      if (!map) {
+        return;
+      }
+
+      let coordinate: [number, number] | null = null;
+      let title = target.label;
+      let rows: Array<{ label: string; value: string }> = [];
+
+      if (target.kind === "locality") {
+        const publicLocality = publicLocalitiesByIdRef.current[target.id];
+        coordinate = [target.x, target.y];
+        title = publicLocality?.name ?? target.label;
+        rows = publicLocality
+          ? buildPublicLocalityHoverRows(publicLocality)
+          : [{ label: "Type", value: "Localite" }];
+      } else if (target.kind === "landmark") {
+        const publicLandmark = publicLandmarksByIdRef.current[target.id];
+        coordinate = [target.x, target.y];
+        title = publicLandmark?.name ?? target.label;
+        rows = buildPublicLandmarkHoverRows();
+      } else {
+        const publicRoute = publicRoutesByIdRef.current[target.id];
+        const xs = target.points.map(([x]) => x);
+        const ys = target.points.map(([, y]) => y);
+
+        if (xs.length > 0 && ys.length > 0) {
+          coordinate = [
+            (Math.min(...xs) + Math.max(...xs)) / 2,
+            (Math.min(...ys) + Math.max(...ys)) / 2,
+          ];
+        }
+        title = publicRoute?.name ?? target.label;
+        rows = publicRoute
+          ? buildPublicRouteHoverRows(publicRoute)
+          : [{ label: "Type", value: "Route" }];
+      }
+
+      if (!coordinate) {
+        return;
+      }
+
+      showTooltipAtCoordinate(coordinate, title, rows);
+    },
+    [mapRef, showTooltipAtCoordinate],
+  );
 
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
@@ -328,6 +331,7 @@ export function CasesMap({
     const map = createMap(mapElementRef.current, [
       standardLayers.backgroundLayer,
       standardLayers.casesLayer,
+      standardLayers.casePatternsLayer,
       standardLayers.routesLayer,
       standardLayers.pointsLayer,
     ]);
@@ -340,11 +344,7 @@ export function CasesMap({
       }
 
       const isToggleSelection = isToggleSelectionEvent(event.originalEvent);
-      const feature = getFeatureAtPixel(
-        map,
-        event,
-        standardLayers.casesLayer,
-      );
+      const feature = getFeatureAtPixel(map, event, standardLayers.casesLayer);
 
       if (!feature) {
         if (!isToggleSelection) {
@@ -489,6 +489,7 @@ export function CasesMap({
       map,
       casesSource: standardLayers.casesSource,
       casesLayer: standardLayers.casesLayer,
+      casePatternsLayer: standardLayers.casePatternsLayer,
       routesSource: standardLayers.routesSource,
       routesLayer: standardLayers.routesLayer,
       pointsSource: standardLayers.pointsSource,

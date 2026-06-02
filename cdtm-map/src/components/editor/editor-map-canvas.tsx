@@ -1960,6 +1960,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     const map = createMap(mapElementRef.current, [
       standardLayers.backgroundLayer,
       standardLayers.casesLayer,
+      standardLayers.casePatternsLayer,
       standardLayers.routesLayer,
       routePreviewLayer,
       standardLayers.pointsLayer,
@@ -1984,6 +1985,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       map,
       casesSource: standardLayers.casesSource,
       casesLayer: standardLayers.casesLayer,
+      casePatternsLayer: standardLayers.casePatternsLayer,
       routesSource: standardLayers.routesSource,
       routesLayer: standardLayers.routesLayer,
       pointsSource: standardLayers.pointsSource,
