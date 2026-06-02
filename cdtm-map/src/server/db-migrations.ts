@@ -517,6 +517,7 @@ const databaseMigrations: DatabaseMigration[] = [
         CREATE TABLE IF NOT EXISTS reference_factions (
           id_faction TEXT PRIMARY KEY,
           nom TEXT,
+          peuple_key TEXT,
           description_courte TEXT,
           statut TEXT,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
@@ -528,6 +529,7 @@ const databaseMigrations: DatabaseMigration[] = [
         CREATE TABLE IF NOT EXISTS reference_controleurs (
           id_controleur TEXT PRIMARY KEY,
           nom TEXT,
+          peuple_key TEXT,
           pnj BOOLEAN,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -888,6 +890,9 @@ const databaseMigrations: DatabaseMigration[] = [
           name TEXT NOT NULL,
           type_key TEXT NOT NULL REFERENCES reference_locality_types(type_key) ON DELETE RESTRICT,
           icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
+          marker_shape TEXT,
+          marker_fill_color TEXT,
+          marker_stroke_color TEXT,
           x DOUBLE PRECISION NOT NULL,
           y DOUBLE PRECISION NOT NULL,
           id_case_detected TEXT REFERENCES case_registry(id_case) ON DELETE SET NULL,
@@ -907,6 +912,9 @@ const databaseMigrations: DatabaseMigration[] = [
           name TEXT NOT NULL,
           type_key TEXT NOT NULL REFERENCES reference_landmark_types(type_key) ON DELETE RESTRICT,
           icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
+          marker_shape TEXT,
+          marker_fill_color TEXT,
+          marker_stroke_color TEXT,
           x DOUBLE PRECISION NOT NULL,
           y DOUBLE PRECISION NOT NULL,
           id_case_detected TEXT REFERENCES case_registry(id_case) ON DELETE SET NULL,
@@ -925,6 +933,9 @@ const databaseMigrations: DatabaseMigration[] = [
           name TEXT NOT NULL,
           type_key TEXT NOT NULL REFERENCES reference_force_types(type_key) ON DELETE RESTRICT,
           icon_key TEXT REFERENCES reference_map_icons(icon_key) ON DELETE SET NULL,
+          marker_shape TEXT,
+          marker_fill_color TEXT,
+          marker_stroke_color TEXT,
           x DOUBLE PRECISION NOT NULL,
           y DOUBLE PRECISION NOT NULL,
           id_case_detected TEXT REFERENCES case_registry(id_case) ON DELETE SET NULL,
@@ -1590,6 +1601,151 @@ const databaseMigrations: DatabaseMigration[] = [
       await client.query(`
         ALTER TABLE case_control_current
         ADD COLUMN IF NOT EXISTS controle_secondaire_id TEXT
+      `);
+    },
+  },
+  {
+    version: "014",
+    name: "map_object_marker_appearance",
+    up: async (client) => {
+      for (const tableName of [
+        "map_localities",
+        "map_landmarks",
+        "map_forces",
+      ]) {
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS marker_shape TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS marker_fill_color TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS marker_stroke_color TEXT
+        `);
+      }
+    },
+  },
+  {
+    version: "015",
+    name: "reference_actor_peuples",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE reference_factions
+        ADD COLUMN IF NOT EXISTS peuple_key TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE reference_controleurs
+        ADD COLUMN IF NOT EXISTS peuple_key TEXT
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS reference_factions_peuple_idx
+        ON reference_factions(peuple_key)
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS reference_controleurs_peuple_idx
+        ON reference_controleurs(peuple_key)
+      `);
+
+      await client.query(`
+        UPDATE reference_factions AS faction
+        SET peuple_key = NULL
+        WHERE faction.peuple_key IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM reference_peuples AS peuple
+            WHERE peuple.peuple_key = faction.peuple_key
+          )
+      `);
+
+      await client.query(`
+        UPDATE reference_controleurs AS controleur
+        SET peuple_key = NULL
+        WHERE controleur.peuple_key IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM reference_peuples AS peuple
+            WHERE peuple.peuple_key = controleur.peuple_key
+          )
+      `);
+
+      await client.query(`
+        DO $$
+        BEGIN
+          ALTER TABLE reference_factions
+          ADD CONSTRAINT reference_factions_peuple_key_fkey
+          FOREIGN KEY (peuple_key) REFERENCES reference_peuples(peuple_key)
+          ON DELETE SET NULL;
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+
+      await client.query(`
+        DO $$
+        BEGIN
+          ALTER TABLE reference_controleurs
+          ADD CONSTRAINT reference_controleurs_peuple_key_fkey
+          FOREIGN KEY (peuple_key) REFERENCES reference_peuples(peuple_key)
+          ON DELETE SET NULL;
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END $$;
+      `);
+
+      await client.query(`
+        UPDATE case_control_current
+        SET
+          controle_principal_type = CASE
+            WHEN controleur IS NOT NULL THEN 'controleur'
+            WHEN faction IS NOT NULL THEN 'faction'
+            ELSE NULL
+          END,
+          controle_principal_id = CASE
+            WHEN controleur IS NOT NULL THEN controleur
+            WHEN faction IS NOT NULL THEN faction
+            ELSE NULL
+          END,
+          updated_at = NOW()
+        WHERE controle_principal_type IS DISTINCT FROM CASE
+            WHEN controleur IS NOT NULL THEN 'controleur'
+            WHEN faction IS NOT NULL THEN 'faction'
+            ELSE NULL
+          END
+          OR controle_principal_id IS DISTINCT FROM CASE
+            WHEN controleur IS NOT NULL THEN controleur
+            WHEN faction IS NOT NULL THEN faction
+            ELSE NULL
+          END
+      `);
+
+      await client.query(`
+        WITH actor_peuples AS (
+          SELECT
+            control_current.id_case,
+            COALESCE(controleur.peuple_key, faction.peuple_key) AS peuple_key
+          FROM case_control_current AS control_current
+          LEFT JOIN reference_controleurs AS controleur
+            ON controleur.id_controleur = control_current.controleur
+          LEFT JOIN reference_factions AS faction
+            ON control_current.controleur IS NULL
+            AND faction.id_faction = control_current.faction
+          WHERE control_current.peuple IS NULL
+        )
+        UPDATE case_control_current AS control_current
+        SET
+          peuple = actor_peuples.peuple_key,
+          updated_at = NOW()
+        FROM actor_peuples
+        WHERE control_current.id_case = actor_peuples.id_case
+          AND actor_peuples.peuple_key IS NOT NULL
       `);
     },
   },

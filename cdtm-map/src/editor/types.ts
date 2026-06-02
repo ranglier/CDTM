@@ -1,3 +1,5 @@
+import type { MapObjectPointShape } from "@/map/point-shapes";
+
 export const MAP_OBJECT_STATUSES = ["draft", "published", "archived"] as const;
 export type MapObjectStatus = (typeof MAP_OBJECT_STATUSES)[number];
 export const MAP_ROUTE_GEOMETRY_MODES = ["straight", "curved"] as const;
@@ -27,6 +29,9 @@ export type EditorMapLocality = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -48,6 +53,9 @@ export type EditorMapLandmark = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -64,6 +72,9 @@ export type EditorMapForce = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -99,6 +110,9 @@ export type EditorMapLocalityInput = {
   name: string;
   type_key: string;
   icon_key?: string | null;
+  marker_shape?: MapObjectPointShape | null;
+  marker_fill_color?: string | null;
+  marker_stroke_color?: string | null;
   x: number;
   y: number;
   id_case_detected?: string | null;
@@ -119,6 +133,9 @@ export type EditorMapLandmarkInput = {
   name: string;
   type_key: string;
   icon_key?: string | null;
+  marker_shape?: MapObjectPointShape | null;
+  marker_fill_color?: string | null;
+  marker_stroke_color?: string | null;
   x: number;
   y: number;
   id_case_detected?: string | null;
@@ -135,6 +152,9 @@ export type EditorMapForceInput = {
   name: string;
   type_key: string;
   icon_key?: string | null;
+  marker_shape?: MapObjectPointShape | null;
+  marker_fill_color?: string | null;
+  marker_stroke_color?: string | null;
   x: number;
   y: number;
   id_case_detected?: string | null;

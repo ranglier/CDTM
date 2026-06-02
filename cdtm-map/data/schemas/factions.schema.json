@@ -13,6 +13,9 @@
       "nom": {
         "type": ["string", "null"]
       },
+      "peuple_key": {
+        "type": ["string", "null"]
+      },
       "description_courte": {
         "type": ["string", "null"]
       },

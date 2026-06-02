@@ -409,14 +409,17 @@ async function seedControleurs(client: PoolClient): Promise<void> {
   >) {
     await client.query(
       `
-        INSERT INTO reference_controleurs (id_controleur, nom, pnj)
-        VALUES ($1, $2, $3)
+        INSERT INTO reference_controleurs (id_controleur, nom, peuple_key, pnj)
+        VALUES ($1, $2, $3, $4)
       `,
       [
         typeof controleur.id_controleur === "string"
           ? controleur.id_controleur
           : "",
         typeof controleur.nom === "string" ? controleur.nom : null,
+        typeof controleur.peuple_key === "string"
+          ? controleur.peuple_key
+          : null,
         typeof controleur.pnj === "boolean" ? controleur.pnj : null,
       ],
     );

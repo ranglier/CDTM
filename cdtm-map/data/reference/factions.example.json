@@ -2,6 +2,7 @@
   {
     "id_faction": "faction_exemple",
     "nom": "Faction exemple",
+    "peuple_key": null,
     "description_courte": "Entree fictive de demonstration.",
     "statut": "provisoire"
   }

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 
 import type {
   AdminBlockMeta,
@@ -169,6 +170,35 @@ function SectionTitle({ title, meta }: { title: string; meta?: string }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  meta,
+  children,
+  defaultOpen = false,
+  variant = "default",
+}: {
+  title: string;
+  meta?: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  variant?: "default" | "primary";
+}) {
+  const className =
+    variant === "primary"
+      ? "rounded-[24px] border border-primary/25 bg-primary/8 p-4"
+      : "rounded-[24px] border border-border/70 bg-background/40 p-4";
+
+  return (
+    <details className={`${className} group`} open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+        <SectionTitle title={title} meta={meta} />
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+      </summary>
+      {children}
+    </details>
   );
 }
 
@@ -476,17 +506,9 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
     activeAdminRecord?.reference_data.control_type_options.map(
       (option) => option.value,
     ) ?? [];
-  const selectedPrincipalActorType = isMultiSelection
-    ? bulkDraft.control.controle_principal_type.value
-    : singleDraft.control.controle_principal_type;
   const selectedSecondaryActorType = isMultiSelection
     ? bulkDraft.control.controle_secondaire_type.value
     : singleDraft.control.controle_secondaire_type;
-  const principalActorOptions = getControlActorIdOptions(
-    selectedPrincipalActorType,
-    factionOptions,
-    controllerOptions,
-  );
   const secondaryActorOptions = getControlActorIdOptions(
     selectedSecondaryActorType,
     factionOptions,
@@ -504,16 +526,68 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
   const dynamicSections = !isMultiSelection
     ? (activeAdminRecord?.dynamic_sections ?? [])
     : [];
+  const selectionKey = `${activeCase?.id_case ?? "none"}:${selectedCaseIds.join(",")}`;
+  const slotSummary =
+    !isMultiSelection && activeAdminRecord
+      ? activeAdminRecord.emplacements.available
+        ? `${activeAdminRecord.emplacements.emplacements_restants}/${activeAdminRecord.emplacements.emplacements_max} restants`
+        : activeAdminRecord.emplacements.reason
+      : "Non renseigne";
   const terrainSecondaireOptions = Object.values(
     activeAdminRecord?.reference_data.terrain_types_by_category ?? {},
   )
     .flat()
     .map((option) => option.value);
 
+  function resolvePeupleForControlSelection(
+    faction: string,
+    controleur: string,
+  ): string {
+    if (controleur) {
+      return (
+        activeAdminRecord?.reference_data.controller_options.find(
+          (option) => option.value === controleur,
+        )?.peuple_key ?? ""
+      );
+    }
+
+    if (faction) {
+      return (
+        activeAdminRecord?.reference_data.faction_options.find(
+          (option) => option.value === faction,
+        )?.peuple_key ?? ""
+      );
+    }
+
+    return "";
+  }
+
+  function handleSingleControlFieldChange(field: string, value: string) {
+    onSingleFieldChange("control", field, value);
+
+    if (field !== "faction" && field !== "controleur") {
+      return;
+    }
+
+    const nextFaction =
+      field === "faction" ? value : singleDraft.control.faction;
+    const nextControleur =
+      field === "controleur" ? value : singleDraft.control.controleur;
+    onSingleFieldChange(
+      "control",
+      "peuple",
+      resolvePeupleForControlSelection(nextFaction, nextControleur),
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-[24px] border border-primary/25 bg-primary/8 p-4">
-        <SectionTitle title="Modification de case" />
+      <CollapsibleSection
+        key={`summary:${selectionKey}`}
+        title="Modification de case"
+        defaultOpen
+        variant="primary"
+      >
         <div className="mt-4">
           <CompactInfoRow
             label="Cases selectionnees"
@@ -523,30 +597,20 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
             label="Case active"
             value={activeCase?.id_case ?? "Aucune"}
           />
-          <CompactInfoRow
-            label="Mode"
-            value={isMultiSelection ? "Masse" : "Simple"}
-          />
-          <CompactInfoRow
-            label="Etat"
-            value={
-              adminSaving
-                ? "Enregistrement..."
-                : adminDirty
-                  ? "Brouillon modifie"
-                  : "Pret a enregistrer"
-            }
-          />
+          <CompactInfoRow label="Emplacements" value={slotSummary} />
         </div>
         {adminLoading ? (
           <p className="mt-3 text-sm text-muted-foreground">
             Chargement des donnees admin...
           </p>
         ) : null}
-      </section>
+      </CollapsibleSection>
 
-      <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-        <SectionTitle title="Case" meta={publicMeta} />
+      <CollapsibleSection
+        key={`public:${selectionKey}`}
+        title="Case"
+        meta={publicMeta}
+      >
         <div className="mt-4">
           {!isMultiSelection ? (
             <FormRow label="id_case">
@@ -645,10 +709,13 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
             </FormRow>
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-        <SectionTitle title="Terrain" meta={terrainMeta} />
+      <CollapsibleSection
+        key={`terrain:${selectionKey}`}
+        title="Terrain"
+        meta={terrainMeta}
+      >
         <div className="mt-4">
           <FormRow
             label="Categorie"
@@ -765,10 +832,13 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
             />
           </FormRow>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-        <SectionTitle title="Controle" meta={controlMeta} />
+      <CollapsibleSection
+        key={`control:${selectionKey}`}
+        title="Controle"
+        meta={controlMeta}
+      >
         <div className="mt-4">
           <FormRow
             label="Peuple"
@@ -813,7 +883,7 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
               onChange={(value) =>
                 isMultiSelection
                   ? onBulkFieldChange("control", "faction", value)
-                  : onSingleFieldChange("control", "faction", value)
+                  : handleSingleControlFieldChange("faction", value)
               }
               disabled={adminLoading || adminSaving}
             />
@@ -839,7 +909,7 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
               onChange={(value) =>
                 isMultiSelection
                   ? onBulkFieldChange("control", "controleur", value)
-                  : onSingleFieldChange("control", "controleur", value)
+                  : handleSingleControlFieldChange("controleur", value)
               }
               disabled={adminLoading || adminSaving}
             />
@@ -868,74 +938,6 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
                   : onSingleFieldChange("control", "controle_type", value)
               }
               disabled={adminLoading || adminSaving}
-            />
-          </FormRow>
-          <FormRow
-            label="Acteur principal"
-            mixed={
-              isMultiSelection
-                ? bulkDraft.control.controle_principal_type.mixed
-                : false
-            }
-            helper={
-              isMultiSelection
-                ? renderBulkHelper(bulkDraft.control.controle_principal_type)
-                : undefined
-            }
-          >
-            <SelectField
-              value={selectedPrincipalActorType}
-              options={controlActorTypeOptions}
-              onChange={(value) =>
-                isMultiSelection
-                  ? onBulkFieldChange(
-                      "control",
-                      "controle_principal_type",
-                      value,
-                    )
-                  : onSingleFieldChange(
-                      "control",
-                      "controle_principal_type",
-                      value,
-                    )
-              }
-              disabled={adminLoading || adminSaving}
-            />
-          </FormRow>
-          <FormRow
-            label="Reference principale"
-            mixed={
-              isMultiSelection
-                ? bulkDraft.control.controle_principal_id.mixed
-                : false
-            }
-            helper={
-              isMultiSelection
-                ? renderBulkHelper(bulkDraft.control.controle_principal_id)
-                : undefined
-            }
-          >
-            <SelectField
-              value={
-                isMultiSelection
-                  ? bulkDraft.control.controle_principal_id.value
-                  : singleDraft.control.controle_principal_id
-              }
-              options={principalActorOptions}
-              onChange={(value) =>
-                isMultiSelection
-                  ? onBulkFieldChange("control", "controle_principal_id", value)
-                  : onSingleFieldChange(
-                      "control",
-                      "controle_principal_id",
-                      value,
-                    )
-              }
-              disabled={
-                adminLoading ||
-                adminSaving ||
-                selectedPrincipalActorType.length === 0
-              }
             />
           </FormRow>
           <FormRow
@@ -1011,10 +1013,12 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
             />
           </FormRow>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="rounded-[24px] border border-border/70 bg-background/40 p-4">
-        <SectionTitle title="Bonus contextuels" />
+      <CollapsibleSection
+        key={`bonus:${selectionKey}`}
+        title="Bonus contextuels"
+      >
         <div className="mt-4">
           <FormRow
             label="Bonus"
@@ -1037,14 +1041,14 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
             />
           </FormRow>
         </div>
-      </section>
+      </CollapsibleSection>
 
       {dynamicSections.map((section) => (
-        <section
-          key={section.table_key}
-          className="rounded-[24px] border border-border/70 bg-background/40 p-4"
+        <CollapsibleSection
+          key={`${selectionKey}:${section.table_key}`}
+          title={section.title}
+          meta={formatMeta(section.meta)}
         >
-          <SectionTitle title={section.title} meta={formatMeta(section.meta)} />
           <div className="mt-4">
             {section.fields.map((field) => (
               <FormRow
@@ -1061,7 +1065,7 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
               </FormRow>
             ))}
           </div>
-        </section>
+        </CollapsibleSection>
       ))}
 
       {adminError ? (

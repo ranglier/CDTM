@@ -37,6 +37,10 @@ import {
   validateLocalityUpgradeLink,
   validateSlotConsumption,
 } from "@/map/rules";
+import {
+  normalizeMapObjectPointShape,
+  type MapObjectPointShape,
+} from "@/map/point-shapes";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import {
   EditorConflictError,
@@ -49,6 +53,9 @@ type EditorLocalityRow = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -66,6 +73,9 @@ type EditorLandmarkRow = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -82,6 +92,9 @@ type EditorForceRow = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -127,6 +140,9 @@ type NormalizedEditorObjectInput = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -319,6 +335,39 @@ function normalizeRouteStrokeColor(value: unknown): string | null {
   return normalized;
 }
 
+function normalizeMarkerColor(
+  value: unknown,
+  fieldName: string,
+): string | null {
+  const normalized = normalizeNullableText(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized)) {
+    throw new EditorValidationError(`Le champ ${fieldName} est invalide.`);
+  }
+
+  return normalized;
+}
+
+function normalizeMarkerShape(value: unknown): MapObjectPointShape | null {
+  const normalized = normalizeNullableText(value);
+
+  if (!normalized || normalized === "auto") {
+    return null;
+  }
+
+  const shape = normalizeMapObjectPointShape(normalized);
+
+  if (!shape) {
+    throw new EditorValidationError("La forme de point est invalide.");
+  }
+
+  return shape;
+}
+
 function normalizeRoutePoint(
   value: unknown,
   index: number,
@@ -372,6 +421,9 @@ function mapLocalityRow(row: EditorLocalityRow): EditorMapLocality {
     name: row.name,
     type_key: row.type_key,
     icon_key: row.icon_key,
+    marker_shape: row.marker_shape,
+    marker_fill_color: row.marker_fill_color,
+    marker_stroke_color: row.marker_stroke_color,
     x: row.x,
     y: row.y,
     id_case_detected: row.id_case_detected,
@@ -391,6 +443,9 @@ function mapLandmarkRow(row: EditorLandmarkRow): EditorMapLandmark {
     name: row.name,
     type_key: row.type_key,
     icon_key: row.icon_key,
+    marker_shape: row.marker_shape,
+    marker_fill_color: row.marker_fill_color,
+    marker_stroke_color: row.marker_stroke_color,
     x: row.x,
     y: row.y,
     id_case_detected: row.id_case_detected,
@@ -409,6 +464,9 @@ function mapForceRow(row: EditorForceRow): EditorMapForce {
     name: row.name,
     type_key: row.type_key,
     icon_key: row.icon_key,
+    marker_shape: row.marker_shape,
+    marker_fill_color: row.marker_fill_color,
+    marker_stroke_color: row.marker_stroke_color,
     x: row.x,
     y: row.y,
     id_case_detected: row.id_case_detected,
@@ -1056,6 +1114,9 @@ function getAllowedPatchFields(config: EditorEntityConfig): Set<string> {
     "name",
     "type_key",
     "icon_key",
+    "marker_shape",
+    "marker_fill_color",
+    "marker_stroke_color",
     "x",
     "y",
     "id_case_detected",
@@ -1115,6 +1176,15 @@ function normalizeEditorObjectInput(
     name,
     type_key: typeKey,
     icon_key: normalizeNullableText(input.icon_key),
+    marker_shape: normalizeMarkerShape(input.marker_shape),
+    marker_fill_color: normalizeMarkerColor(
+      input.marker_fill_color,
+      "marker_fill_color",
+    ),
+    marker_stroke_color: normalizeMarkerColor(
+      input.marker_stroke_color,
+      "marker_stroke_color",
+    ),
     x: normalizeFiniteNumber(input.x, "x"),
     y: normalizeFiniteNumber(input.y, "y"),
     id_case_detected: normalizeNullableText(input.id_case_detected),
@@ -1156,6 +1226,21 @@ function normalizeEditorObjectPatch(
         break;
       case "icon_key":
         patch.icon_key = normalizeNullableText(value);
+        break;
+      case "marker_shape":
+        patch.marker_shape = normalizeMarkerShape(value);
+        break;
+      case "marker_fill_color":
+        patch.marker_fill_color = normalizeMarkerColor(
+          value,
+          "marker_fill_color",
+        );
+        break;
+      case "marker_stroke_color":
+        patch.marker_stroke_color = normalizeMarkerColor(
+          value,
+          "marker_stroke_color",
+        );
         break;
       case "x":
         patch.x = normalizeFiniteNumber(value, "x");
@@ -1219,6 +1304,15 @@ function mapRowToNormalizedInput(
     name: row.name,
     type_key: row.type_key,
     icon_key: row.icon_key,
+    marker_shape: normalizeMarkerShape(row.marker_shape),
+    marker_fill_color: normalizeMarkerColor(
+      row.marker_fill_color,
+      "marker_fill_color",
+    ),
+    marker_stroke_color: normalizeMarkerColor(
+      row.marker_stroke_color,
+      "marker_stroke_color",
+    ),
     x: row.x,
     y: row.y,
     id_case_detected: row.id_case_detected,
@@ -1515,6 +1609,9 @@ async function createEditorEntity<
     "name",
     "type_key",
     "icon_key",
+    "marker_shape",
+    "marker_fill_color",
+    "marker_stroke_color",
     "x",
     "y",
     "id_case_detected",
@@ -1531,6 +1628,9 @@ async function createEditorEntity<
     normalized.name,
     normalized.type_key,
     normalized.icon_key,
+    normalized.marker_shape,
+    normalized.marker_fill_color,
+    normalized.marker_stroke_color,
     normalized.x,
     normalized.y,
     normalized.id_case_detected,

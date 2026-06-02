@@ -150,8 +150,6 @@ export function hasBulkDraftChanges(draft: AdminBulkEditDraft): boolean {
       draft.control.faction,
       draft.control.controleur,
       draft.control.controle_type,
-      draft.control.controle_principal_type,
-      draft.control.controle_principal_id,
       draft.control.controle_secondaire_type,
       draft.control.controle_secondaire_id,
     ].some((fieldState) => fieldState.touched) ||
@@ -369,8 +367,6 @@ export function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
     draft.control.faction.touched ||
     draft.control.controleur.touched ||
     draft.control.controle_type.touched ||
-    draft.control.controle_principal_type.touched ||
-    draft.control.controle_principal_id.touched ||
     draft.control.controle_secondaire_type.touched ||
     draft.control.controle_secondaire_id.touched
   ) {
@@ -402,25 +398,6 @@ export function buildBulkPatch(draft: AdminBulkEditDraft): AdminBulkPatch {
         draft.control.controle_type.value.trim().length > 0
           ? draft.control.controle_type.value.trim()
           : null;
-    }
-
-    if (draft.control.controle_principal_type.touched) {
-      patch.control.controle_principal_type = buildBulkStringValue(
-        draft.control.controle_principal_type.value,
-      );
-    }
-
-    if (draft.control.controle_principal_id.touched) {
-      patch.control.controle_principal_id = buildBulkStringValue(
-        draft.control.controle_principal_id.value,
-      );
-
-      if (!draft.control.controle_principal_type.touched) {
-        patch.control.controle_principal_type =
-          patch.control.controle_principal_id === null
-            ? null
-            : buildBulkStringValue(draft.control.controle_principal_type.value);
-      }
     }
 
     if (draft.control.controle_secondaire_type.touched) {
@@ -490,13 +467,6 @@ export function updateSingleAdminDraftField(
     nextDraft.terrain = {
       ...nextDraft.terrain,
       terrain_type: "",
-    };
-  }
-
-  if (section === "control" && field === "controle_principal_type") {
-    nextDraft.control = {
-      ...nextDraft.control,
-      controle_principal_id: "",
     };
   }
 
@@ -578,15 +548,6 @@ export function updateBulkAdminDraftField(
   ) {
     nextDraft.terrain.terrain_cat = {
       ...nextDraft.terrain.terrain_cat,
-      touched: true,
-      mixed: false,
-    };
-  }
-
-  if (section === "control" && field === "controle_principal_type") {
-    nextDraft.control.controle_principal_id = {
-      ...nextDraft.control.controle_principal_id,
-      value: "",
       touched: true,
       mixed: false,
     };

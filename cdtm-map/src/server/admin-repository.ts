@@ -57,6 +57,14 @@ type CaseLookupRow = {
 
 type EditableSectionPatch = Record<string, string | boolean | null | undefined>;
 
+type ControlActorType = "faction" | "controleur";
+
+type CaseControlValues = {
+  peuple: string | null;
+  faction: string | null;
+  controleur: string | null;
+};
+
 export class AdminCaseNotFoundError extends Error {
   constructor(idCase: string) {
     super(`La case ${idCase} est introuvable.`);
@@ -104,6 +112,140 @@ function normalizePublicId(value: string, registryId: string): string | null {
   }
 
   return normalized;
+}
+
+function derivePrimaryControlActor(
+  faction: string | null,
+  controleur: string | null,
+): { type: ControlActorType | null; id: string | null } {
+  if (controleur) {
+    return { type: "controleur", id: controleur };
+  }
+
+  if (faction) {
+    return { type: "faction", id: faction };
+  }
+
+  return { type: null, id: null };
+}
+
+async function getControlActorPeupleKey(
+  client: PoolClient,
+  actor: { type: ControlActorType | null; id: string | null },
+): Promise<string | null> {
+  if (!actor.type || !actor.id) {
+    return null;
+  }
+
+  const result =
+    actor.type === "controleur"
+      ? await client.query<{ peuple_key: string | null }>(
+          `
+            SELECT peuple_key
+            FROM reference_controleurs
+            WHERE id_controleur = $1
+          `,
+          [actor.id],
+        )
+      : await client.query<{ peuple_key: string | null }>(
+          `
+            SELECT peuple_key
+            FROM reference_factions
+            WHERE id_faction = $1
+          `,
+          [actor.id],
+        );
+
+  return result.rows[0]?.peuple_key ?? null;
+}
+
+async function getCaseControlValues(
+  client: PoolClient,
+  idCase: string,
+): Promise<CaseControlValues> {
+  const result = await client.query<CaseControlValues>(
+    `
+      SELECT peuple, faction, controleur
+      FROM case_control_current
+      WHERE id_case = $1
+    `,
+    [idCase],
+  );
+
+  return (
+    result.rows[0] ?? {
+      peuple: null,
+      faction: null,
+      controleur: null,
+    }
+  );
+}
+
+async function buildControlSectionPatch(
+  client: PoolClient,
+  fields: {
+    peuple?: string | null;
+    faction: string | null;
+    controleur: string | null;
+    controle_type?: string | null;
+    controle_secondaire_type?: string | null;
+    controle_secondaire_id?: string | null;
+  },
+): Promise<EditableSectionPatch> {
+  const primaryActor = derivePrimaryControlActor(
+    fields.faction,
+    fields.controleur,
+  );
+  const peuple =
+    fields.peuple !== undefined
+      ? fields.peuple
+      : await getControlActorPeupleKey(client, primaryActor);
+
+  return {
+    faction: fields.faction,
+    controleur: fields.controleur,
+    controle_type: fields.controle_type,
+    controle_principal_type: primaryActor.type,
+    controle_principal_id: primaryActor.id,
+    controle_secondaire_type: fields.controle_secondaire_type,
+    controle_secondaire_id: fields.controle_secondaire_id,
+    peuple,
+  };
+}
+
+async function buildBulkControlSectionPatch(
+  client: PoolClient,
+  idCase: string,
+  patch: NonNullable<AdminBulkPatch["control"]>,
+): Promise<EditableSectionPatch> {
+  const existing = await getCaseControlValues(client, idCase);
+  const nextFaction =
+    patch.faction !== undefined ? patch.faction : existing.faction;
+  const nextControleur =
+    patch.controleur !== undefined ? patch.controleur : existing.controleur;
+  const previousPrimaryActor = derivePrimaryControlActor(
+    existing.faction,
+    existing.controleur,
+  );
+  const nextPrimaryActor = derivePrimaryControlActor(
+    nextFaction,
+    nextControleur,
+  );
+  const primaryActorChanged =
+    previousPrimaryActor.type !== nextPrimaryActor.type ||
+    previousPrimaryActor.id !== nextPrimaryActor.id;
+  const shouldDerivePeuple = patch.peuple === undefined && primaryActorChanged;
+
+  return {
+    ...patch,
+    controle_principal_type: nextPrimaryActor.type,
+    controle_principal_id: nextPrimaryActor.id,
+    ...(shouldDerivePeuple
+      ? {
+          peuple: await getControlActorPeupleKey(client, nextPrimaryActor),
+        }
+      : {}),
+  };
 }
 
 function getPresentEntries<T extends EditableSectionPatch>(
@@ -743,28 +885,24 @@ export async function saveAdminCaseRecord(
       userId,
     );
 
+    const controlPatch = await buildControlSectionPatch(client, {
+      faction: normalizeNullableField(draft.control.faction),
+      controleur: normalizeNullableField(draft.control.controleur),
+      controle_type: normalizeNullableField(draft.control.controle_type),
+      controle_secondaire_type: normalizeNullableField(
+        draft.control.controle_secondaire_type,
+      ),
+      controle_secondaire_id: normalizeNullableField(
+        draft.control.controle_secondaire_id,
+      ),
+      peuple: normalizeNullableField(draft.control.peuple) ?? undefined,
+    });
+
     await applyCurrentSectionPatch(
       client,
       "case_control_current",
       idCase,
-      {
-        faction: normalizeNullableField(draft.control.faction),
-        controleur: normalizeNullableField(draft.control.controleur),
-        controle_type: normalizeNullableField(draft.control.controle_type),
-        controle_principal_type: normalizeNullableField(
-          draft.control.controle_principal_type,
-        ),
-        controle_principal_id: normalizeNullableField(
-          draft.control.controle_principal_id,
-        ),
-        controle_secondaire_type: normalizeNullableField(
-          draft.control.controle_secondaire_type,
-        ),
-        controle_secondaire_id: normalizeNullableField(
-          draft.control.controle_secondaire_id,
-        ),
-        peuple: normalizeNullableField(draft.control.peuple),
-      },
+      controlPatch,
       userId,
     );
 
@@ -848,11 +986,16 @@ export async function saveAdminCaseBulkPatch(
       }
 
       if (patch.control) {
+        const controlPatch = await buildBulkControlSectionPatch(
+          client,
+          idCase,
+          patch.control,
+        );
         await applyCurrentSectionPatch(
           client,
           "case_control_current",
           idCase,
-          patch.control,
+          controlPatch,
           userId,
         );
       }

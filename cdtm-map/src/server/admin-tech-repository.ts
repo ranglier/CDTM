@@ -918,9 +918,10 @@ async function listReferenceOptionsInternal(
       const result = await client.query<{
         id_faction: string;
         nom: string | null;
+        peuple_key: string | null;
       }>(
         `
-          SELECT id_faction, nom
+          SELECT id_faction, nom, peuple_key
           FROM reference_factions
           ORDER BY LOWER(COALESCE(nom, id_faction)) ASC, id_faction ASC
         `,
@@ -929,15 +930,17 @@ async function listReferenceOptionsInternal(
       return result.rows.map((row) => ({
         value: row.id_faction,
         label: row.nom?.trim().length ? row.nom : row.id_faction,
+        peuple_key: row.peuple_key,
       }));
     }
     case "controleurs": {
       const result = await client.query<{
         id_controleur: string;
         nom: string | null;
+        peuple_key: string | null;
       }>(
         `
-          SELECT id_controleur, nom
+          SELECT id_controleur, nom, peuple_key
           FROM reference_controleurs
           ORDER BY LOWER(COALESCE(nom, id_controleur)) ASC, id_controleur ASC
         `,
@@ -946,6 +949,7 @@ async function listReferenceOptionsInternal(
       return result.rows.map((row) => ({
         value: row.id_controleur,
         label: row.nom?.trim().length ? row.nom : row.id_controleur,
+        peuple_key: row.peuple_key,
       }));
     }
     case "styles": {
@@ -2176,12 +2180,6 @@ export async function validateStaticAdminDraftSelections(
   const faction = normalizeNullableText(draft.control.faction);
   const controleur = normalizeNullableText(draft.control.controleur);
   const controlType = normalizeNullableText(draft.control.controle_type);
-  const principalType = normalizeNullableText(
-    draft.control.controle_principal_type,
-  );
-  const principalId = normalizeNullableText(
-    draft.control.controle_principal_id,
-  );
   const secondaryType = normalizeNullableText(
     draft.control.controle_secondaire_type,
   );
@@ -2233,12 +2231,6 @@ export async function validateStaticAdminDraftSelections(
     throw new Error("La valeur du champ controle_type est invalide.");
   }
 
-  assertControlActorSelection(
-    referenceData,
-    principalType,
-    principalId,
-    "acteur principal",
-  );
   assertControlActorSelection(
     referenceData,
     secondaryType,
@@ -2353,18 +2345,6 @@ export async function validateStaticBulkPatchSelections(
     ) {
       throw new Error("La valeur du champ controle_type est invalide.");
     }
-  }
-
-  if (
-    patch.control?.controle_principal_type !== undefined ||
-    patch.control?.controle_principal_id !== undefined
-  ) {
-    assertControlActorSelection(
-      referenceData,
-      patch.control.controle_principal_type ?? null,
-      patch.control.controle_principal_id ?? null,
-      "acteur principal",
-    );
   }
 
   if (

@@ -13,6 +13,9 @@
       "nom": {
         "type": ["string", "null"]
       },
+      "peuple_key": {
+        "type": ["string", "null"]
+      },
       "pnj": {
         "type": ["boolean", "null"]
       }

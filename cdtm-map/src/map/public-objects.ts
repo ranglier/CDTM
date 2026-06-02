@@ -5,6 +5,7 @@ import type {
   MapRouteGeometryMode,
   MapRouteStrokeStyle,
 } from "@/editor/types";
+import type { MapObjectPointShape } from "@/map/point-shapes";
 
 export type PublicMapReferenceIcon = {
   value: string;
@@ -43,6 +44,9 @@ export type PublicMapLocality = {
   type_key: string;
   type_label?: string | null;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -56,6 +60,9 @@ export type PublicMapLandmark = {
   type_label?: string | null;
   category: "landmark" | "unique" | null;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -125,6 +132,9 @@ export function toRenderablePublicLocalities(
     name: locality.name,
     type_key: locality.type_key,
     icon_key: locality.icon_key,
+    marker_shape: locality.marker_shape,
+    marker_fill_color: locality.marker_fill_color,
+    marker_stroke_color: locality.marker_stroke_color,
     x: locality.x,
     y: locality.y,
     id_case_detected: locality.id_case_detected,
@@ -146,6 +156,9 @@ export function toRenderablePublicLandmarks(
     name: landmark.name,
     type_key: landmark.type_key,
     icon_key: landmark.icon_key,
+    marker_shape: landmark.marker_shape,
+    marker_fill_color: landmark.marker_fill_color,
+    marker_stroke_color: landmark.marker_stroke_color,
     x: landmark.x,
     y: landmark.y,
     id_case_detected: landmark.id_case_detected,

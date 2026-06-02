@@ -11,6 +11,7 @@ import type {
   PublicMapReferenceLocalityType,
   PublicMapRoute,
 } from "@/map/public-objects";
+import type { MapObjectPointShape } from "@/map/point-shapes";
 import { listPublicMapStyles } from "@/server/admin-tech-repository";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 import { loadStableCaseIndex } from "@/server/stable-case-source";
@@ -43,6 +44,9 @@ type PublicMapLocalityRow = {
   type_key: string;
   type_label: string | null;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -56,6 +60,9 @@ type PublicMapLandmarkRow = {
   type_label: string | null;
   category: "landmark" | "unique" | null;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   x: number;
   y: number;
   id_case_detected: string | null;
@@ -269,6 +276,9 @@ async function listPublicLocalities(): Promise<PublicMapLocality[]> {
         locality.type_key,
         COALESCE(type_ref.label, type_ref.type_key) AS type_label,
         locality.icon_key,
+        locality.marker_shape,
+        locality.marker_fill_color,
+        locality.marker_stroke_color,
         locality.x,
         locality.y,
         locality.id_case_detected,
@@ -299,6 +309,9 @@ async function listPublicLandmarks(): Promise<PublicMapLandmark[]> {
         COALESCE(type_ref.label, type_ref.type_key) AS type_label,
         type_ref.category,
         landmark.icon_key,
+        landmark.marker_shape,
+        landmark.marker_fill_color,
+        landmark.marker_stroke_color,
         landmark.x,
         landmark.y,
         landmark.id_case_detected,

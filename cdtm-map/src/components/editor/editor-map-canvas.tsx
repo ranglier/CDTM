@@ -100,6 +100,11 @@ import {
   type StableCaseFeatureCollection,
   type StableCaseProperties,
 } from "@/map/types";
+import {
+  MAP_OBJECT_POINT_SHAPE_LABELS,
+  MAP_OBJECT_POINT_SHAPES,
+  type MapObjectPointShape,
+} from "@/map/point-shapes";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
   attachCdtmPointerMoveLifecycle,
@@ -127,6 +132,9 @@ type MapObjectCreateDraft = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   description: string;
   depends_on_locality_id: string | null;
   force_slot_override: boolean;
@@ -138,6 +146,9 @@ type LocalityEditDraft = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   status: "draft" | "published" | "archived";
   depends_on_locality_id: string | null;
   force_slot_override: boolean;
@@ -150,6 +161,9 @@ type LandmarkEditDraft = {
   name: string;
   type_key: string;
   icon_key: string | null;
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
   status: "draft" | "published" | "archived";
   force_slot_override: boolean;
   slot_override_reason: string;
@@ -272,6 +286,9 @@ function createLocalityEditDraft(
     name: locality.name,
     type_key: locality.type_key,
     icon_key: locality.icon_key,
+    marker_shape: locality.marker_shape,
+    marker_fill_color: locality.marker_fill_color,
+    marker_stroke_color: locality.marker_stroke_color,
     status: locality.status,
     depends_on_locality_id: locality.depends_on_locality_id,
     force_slot_override: false,
@@ -288,6 +305,9 @@ function createLandmarkEditDraft(
     name: landmark.name,
     type_key: landmark.type_key,
     icon_key: landmark.icon_key,
+    marker_shape: landmark.marker_shape,
+    marker_fill_color: landmark.marker_fill_color,
+    marker_stroke_color: landmark.marker_stroke_color,
     status: landmark.status,
     force_slot_override: false,
     slot_override_reason: "",
@@ -408,6 +428,9 @@ function createPointDraft(
       name: "",
       type_key: "lieu_unique",
       icon_key: referenceData?.map_icons[0]?.value ?? null,
+      marker_shape: null,
+      marker_fill_color: null,
+      marker_stroke_color: null,
       depends_on_locality_id: null,
       force_slot_override: false,
       slot_override_reason: "",
@@ -423,6 +446,9 @@ function createPointDraft(
     name: "",
     type_key: family === "locality" ? localityTypeKey : landmarkTypeKey,
     icon_key: null,
+    marker_shape: null,
+    marker_fill_color: null,
+    marker_stroke_color: null,
     depends_on_locality_id: null,
     force_slot_override: false,
     slot_override_reason: "",
@@ -448,6 +474,9 @@ function changePointDraftFamily(
   return {
     ...nextDraft,
     name: draft.name,
+    marker_shape: draft.marker_shape,
+    marker_fill_color: draft.marker_fill_color,
+    marker_stroke_color: draft.marker_stroke_color,
     force_slot_override: draft.force_slot_override,
     slot_override_reason: draft.slot_override_reason,
     description: draft.description,
@@ -513,6 +542,112 @@ function normalizeColorInput(value: string): string {
   }
 
   return "#ffffff";
+}
+
+function normalizeMarkerColorInput(value: string | null): string {
+  return normalizeColorInput(value ?? "");
+}
+
+type MarkerAppearanceFieldsProps = {
+  markerShape: MapObjectPointShape | null;
+  markerFillColor: string | null;
+  markerStrokeColor: string | null;
+  onShapeChange: (shape: MapObjectPointShape | null) => void;
+  onFillColorChange: (color: string | null) => void;
+  onStrokeColorChange: (color: string | null) => void;
+};
+
+function MarkerAppearanceFields({
+  markerShape,
+  markerFillColor,
+  markerStrokeColor,
+  onShapeChange,
+  onFillColorChange,
+  onStrokeColorChange,
+}: MarkerAppearanceFieldsProps) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/70 bg-background/45 px-3 py-3">
+      <label className="block text-xs text-muted-foreground">
+        <span className="mb-1 block">Forme du point</span>
+        <select
+          value={markerShape ?? ""}
+          onChange={(event) =>
+            onShapeChange(
+              event.target.value
+                ? (event.target.value as MapObjectPointShape)
+                : null,
+            )
+          }
+          className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+        >
+          <option value="">Automatique</option>
+          {MAP_OBJECT_POINT_SHAPES.map((shape) => (
+            <option key={shape} value={shape}>
+              {MAP_OBJECT_POINT_SHAPE_LABELS[shape]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs text-muted-foreground">
+          <span className="mb-1 block">Fond</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={normalizeMarkerColorInput(markerFillColor)}
+              onChange={(event) => onFillColorChange(event.target.value)}
+              className="h-10 w-12 rounded-xl border border-border/80 bg-background/70 px-1"
+            />
+            <input
+              value={markerFillColor ?? ""}
+              placeholder="Auto"
+              onChange={(event) =>
+                onFillColorChange(event.target.value.trim() || null)
+              }
+              className="h-10 min-w-0 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-1 px-0"
+            onClick={() => onFillColorChange(null)}
+          >
+            Fond automatique
+          </Button>
+        </label>
+        <label className="block text-xs text-muted-foreground">
+          <span className="mb-1 block">Contour</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={normalizeMarkerColorInput(markerStrokeColor)}
+              onChange={(event) => onStrokeColorChange(event.target.value)}
+              className="h-10 w-12 rounded-xl border border-border/80 bg-background/70 px-1"
+            />
+            <input
+              value={markerStrokeColor ?? ""}
+              placeholder="Auto"
+              onChange={(event) =>
+                onStrokeColorChange(event.target.value.trim() || null)
+              }
+              className="h-10 min-w-0 flex-1 rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-1 px-0"
+            onClick={() => onStrokeColorChange(null)}
+          >
+            Contour automatique
+          </Button>
+        </label>
+      </div>
+    </div>
+  );
 }
 
 function getRouteEditSnapshot(draft: RouteEditDraft): string {
@@ -669,6 +804,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     null,
   );
   const [routeEditSaving, setRouteEditSaving] = useState(false);
+  const [routeDeleteSaving, setRouteDeleteSaving] = useState(false);
   const [routeEditError, setRouteEditError] = useState<string | null>(null);
   const [routeGeometryDraft, setRouteGeometryDraft] =
     useState<RouteGeometryEditDraft | null>(null);
@@ -2211,11 +2347,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         return;
       }
 
-      const feature = getFeatureAtPixel(
-        map,
-        event,
-        standardLayers.casesLayer,
-      );
+      const feature = getFeatureAtPixel(map, event, standardLayers.casesLayer);
 
       if (!feature) {
         handleCloseLocalitySelection();
@@ -2398,11 +2530,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         return;
       }
 
-      const feature = getFeatureAtPixel(
-        map,
-        event,
-        standardLayers.casesLayer,
-      );
+      const feature = getFeatureAtPixel(map, event, standardLayers.casesLayer);
 
       if (!feature) {
         target.style.cursor = "";
@@ -3064,6 +3192,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           name: trimmedName,
           type_key: pointDraft.type_key,
           icon_key: pointDraft.icon_key,
+          marker_shape: pointDraft.marker_shape,
+          marker_fill_color: pointDraft.marker_fill_color,
+          marker_stroke_color: pointDraft.marker_stroke_color,
           x: pointDraft.x,
           y: pointDraft.y,
           id_case_detected: pointDraft.id_case_detected,
@@ -3101,7 +3232,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             pointDraft.family === "unique"
               ? "lieu_unique"
               : pointDraft.type_key,
-          icon_key: pointDraft.family === "unique" ? pointDraft.icon_key : null,
+          icon_key: pointDraft.icon_key,
+          marker_shape: pointDraft.marker_shape,
+          marker_fill_color: pointDraft.marker_fill_color,
+          marker_stroke_color: pointDraft.marker_stroke_color,
           x: pointDraft.x,
           y: pointDraft.y,
           id_case_detected: pointDraft.id_case_detected,
@@ -3167,6 +3301,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         name,
         type_key: typeKey,
         icon_key: localityEditDraft.icon_key,
+        marker_shape: localityEditDraft.marker_shape,
+        marker_fill_color: localityEditDraft.marker_fill_color,
+        marker_stroke_color: localityEditDraft.marker_stroke_color,
         status: localityEditDraft.status,
         depends_on_locality_id: localityEditDraft.depends_on_locality_id,
         force_slot_override: localityEditDraft.force_slot_override,
@@ -3246,7 +3383,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       const patch: EditorMapLandmarkPatch = {
         name,
         type_key: typeKey,
-        icon_key: typeCategory === "unique" ? landmarkEditDraft.icon_key : null,
+        icon_key: landmarkEditDraft.icon_key,
+        marker_shape: landmarkEditDraft.marker_shape,
+        marker_fill_color: landmarkEditDraft.marker_fill_color,
+        marker_stroke_color: landmarkEditDraft.marker_stroke_color,
         status: landmarkEditDraft.status,
         force_slot_override: landmarkEditDraft.force_slot_override,
         slot_override_reason:
@@ -3567,6 +3707,68 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     }
   }
 
+  async function handleDeleteRoute() {
+    if (!selectedRoute || routeDeleteSaving) {
+      return;
+    }
+
+    const dirtyWarning =
+      routeEditDirty || routeGeometryDirty
+        ? "\nLes modifications non enregistrees seront perdues."
+        : "";
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        `Supprimer la route "${selectedRoute.name}" ?${dirtyWarning}`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRouteDeleteSaving(true);
+    setRouteEditError(null);
+    setRouteGeometryError(null);
+
+    try {
+      const id = selectedRoute.id_route;
+
+      await fetchJson<{ deleted: boolean; id: string }>(
+        `/api/admin/editor/routes/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      const feature = routesSourceRef.current?.getFeatureById(`route:${id}`);
+      if (feature) {
+        routesSourceRef.current?.removeFeature(feature);
+      }
+
+      if (routePreviewSourceRef.current) {
+        clearEditorRoutePreview(routePreviewSourceRef.current);
+      }
+      if (routeVerticesSourceRef.current) {
+        clearEditorRouteVertexFeatures(routeVerticesSourceRef.current);
+      }
+
+      setRoutesCount((count) =>
+        count === null ? null : Math.max(count - 1, 0),
+      );
+      setRoutes((items) => items.filter((item) => item.id_route !== id));
+      setHoverInfo(null);
+      handleCloseRouteSelection();
+    } catch (error) {
+      setRouteEditError(
+        error instanceof Error
+          ? error.message
+          : "Suppression de route impossible.",
+      );
+    } finally {
+      setRouteDeleteSaving(false);
+    }
+  }
+
   function handleDeleteSelectedRouteVertex() {
     if (
       !routeGeometryDraft ||
@@ -3718,7 +3920,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       ? "Nouveau point"
       : selectedRoute
         ? "Route selectionnee"
-      : selectedLocality
+        : selectedLocality
           ? "Localite selectionnee"
           : selectedLandmark
             ? "Landmark selectionne"
@@ -3793,7 +3995,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                         setHoverInfo(null);
                       }}
                     >
-                      {publishedObjectsLocked ? "Lock publies" : "Publies libres"}
+                      {publishedObjectsLocked
+                        ? "Lock publies"
+                        : "Publies libres"}
                     </Button>
                     <Button
                       type="button"
@@ -3815,7 +4019,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                         setRouteDraft(null);
                         setRouteSaveError(null);
                         if (routePreviewSourceRef.current) {
-                          clearEditorRoutePreview(routePreviewSourceRef.current);
+                          clearEditorRoutePreview(
+                            routePreviewSourceRef.current,
+                          );
                         }
                         setEditorTool((tool) =>
                           tool === "create-point" ? "select" : "create-point",
@@ -4212,6 +4418,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 disabled={
                   routeGeometrySaving ||
                   routeSaving ||
+                  routeDeleteSaving ||
                   (!routeGeometryDraft && selectedRoutePublishedLocked)
                 }
                 onClick={() => {
@@ -4242,7 +4449,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     }
                     size="sm"
                     disabled={
-                      routeGeometrySaving || selectedRoutePublishedLocked
+                      routeGeometrySaving ||
+                      routeDeleteSaving ||
+                      selectedRoutePublishedLocked
                     }
                     onClick={() => {
                       setRouteGeometryTool("prepend-vertex");
@@ -4260,7 +4469,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     }
                     size="sm"
                     disabled={
-                      routeGeometrySaving || selectedRoutePublishedLocked
+                      routeGeometrySaving ||
+                      routeDeleteSaving ||
+                      selectedRoutePublishedLocked
                     }
                     onClick={() => {
                       setRouteGeometryTool("append-vertex");
@@ -4279,6 +4490,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      routeDeleteSaving ||
                       selectedRoutePublishedLocked ||
                       selectedRouteVertexIndex === null
                     }
@@ -4299,6 +4511,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      routeDeleteSaving ||
                       selectedRoutePublishedLocked ||
                       selectedRouteVertexIndex === null
                     }
@@ -4315,6 +4528,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      routeDeleteSaving ||
                       selectedRoutePublishedLocked ||
                       selectedRouteVertexIndex === null ||
                       routeGeometryDraft.points.length <= 2
@@ -4350,6 +4564,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     size="sm"
                     disabled={
                       routeGeometrySaving ||
+                      routeDeleteSaving ||
                       selectedRoutePublishedLocked ||
                       routeGeometryDraft.points.length < 2 ||
                       !routeGeometryDirty
@@ -4366,7 +4581,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={routeGeometrySaving || !routeGeometryDirty}
+                    disabled={
+                      routeGeometrySaving ||
+                      routeDeleteSaving ||
+                      !routeGeometryDirty
+                    }
                     onClick={handleCancelRouteGeometryEdit}
                   >
                     Annuler les modifications geometriques
@@ -4559,6 +4778,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   size="sm"
                   disabled={
                     routeEditSaving ||
+                    routeDeleteSaving ||
                     routeGeometryDirty ||
                     routeGeometrySaving ||
                     routeEditDraft.name.trim().length === 0 ||
@@ -4575,7 +4795,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={routeEditSaving || !routeEditDirty}
+                  disabled={
+                    routeEditSaving || routeDeleteSaving || !routeEditDirty
+                  }
                   onClick={handleCancelRouteEdit}
                 >
                   Annuler
@@ -4584,10 +4806,24 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={routeEditSaving}
+                  disabled={routeEditSaving || routeDeleteSaving}
                   onClick={handleCloseRouteSelection}
                 >
                   Fermer
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={
+                    routeEditSaving || routeGeometrySaving || routeDeleteSaving
+                  }
+                  onClick={() => {
+                    void handleDeleteRoute();
+                  }}
+                >
+                  {routeDeleteSaving ? "Suppression..." : "Supprimer"}
                 </Button>
               </div>
             </div>
@@ -4713,7 +4949,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 </select>
               </label>
             ) : null}
-            {pointDraft.family === "unique" ? (
+            {pointDraft.family !== "locality" ? (
               <label className="block text-xs text-muted-foreground">
                 <span className="mb-1 block">Icone</span>
                 <select
@@ -4733,7 +4969,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                   }
                   className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
                 >
-                  <option value="">Aucune icone</option>
+                  <option value="">
+                    {pointDraft.family === "unique"
+                      ? "Aucune icone"
+                      : "Icone du type"}
+                  </option>
                   {(referenceData?.map_icons ?? []).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -4771,6 +5011,30 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 </select>
               </label>
             ) : null}
+            <MarkerAppearanceFields
+              markerShape={pointDraft.marker_shape}
+              markerFillColor={pointDraft.marker_fill_color}
+              markerStrokeColor={pointDraft.marker_stroke_color}
+              onShapeChange={(markerShape) =>
+                setPointDraft((draft) =>
+                  draft ? { ...draft, marker_shape: markerShape } : draft,
+                )
+              }
+              onFillColorChange={(markerFillColor) =>
+                setPointDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_fill_color: markerFillColor }
+                    : draft,
+                )
+              }
+              onStrokeColorChange={(markerStrokeColor) =>
+                setPointDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_stroke_color: markerStrokeColor }
+                    : draft,
+                )
+              }
+            />
             <label className="block text-xs text-muted-foreground">
               <span className="mb-1 block">Description</span>
               <textarea
@@ -4967,6 +5231,30 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 ))}
               </select>
             </label>
+            <MarkerAppearanceFields
+              markerShape={localityEditDraft.marker_shape}
+              markerFillColor={localityEditDraft.marker_fill_color}
+              markerStrokeColor={localityEditDraft.marker_stroke_color}
+              onShapeChange={(markerShape) =>
+                setLocalityEditDraft((draft) =>
+                  draft ? { ...draft, marker_shape: markerShape } : draft,
+                )
+              }
+              onFillColorChange={(markerFillColor) =>
+                setLocalityEditDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_fill_color: markerFillColor }
+                    : draft,
+                )
+              }
+              onStrokeColorChange={(markerStrokeColor) =>
+                setLocalityEditDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_stroke_color: markerStrokeColor }
+                    : draft,
+                )
+              }
+            />
             <label className="block text-xs text-muted-foreground">
               <span className="mb-1 block">Statut</span>
               <select
@@ -5123,12 +5411,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                       ? {
                           ...draft,
                           type_key: event.target.value,
-                          icon_key:
-                            referenceData?.landmark_types.find(
-                              (option) => option.value === event.target.value,
-                            )?.category === "unique"
-                              ? draft.icon_key
-                              : null,
                         }
                       : draft,
                   )
@@ -5147,35 +5429,61 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 {landmarkEditSlotRequirement}
               </p>
             ) : null}
-            {selectedLandmarkCategory === "unique" ? (
-              <label className="block text-xs text-muted-foreground">
-                <span className="mb-1 block">Icone</span>
-                <select
-                  value={landmarkEditDraft.icon_key ?? ""}
-                  onChange={(event) =>
-                    setLandmarkEditDraft((draft) =>
-                      draft
-                        ? {
-                            ...draft,
-                            icon_key:
-                              event.target.value.trim().length > 0
-                                ? event.target.value
-                                : null,
-                          }
-                        : draft,
-                    )
-                  }
-                  className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="">Aucune icone</option>
-                  {(referenceData?.map_icons ?? []).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <label className="block text-xs text-muted-foreground">
+              <span className="mb-1 block">Icone</span>
+              <select
+                value={landmarkEditDraft.icon_key ?? ""}
+                onChange={(event) =>
+                  setLandmarkEditDraft((draft) =>
+                    draft
+                      ? {
+                          ...draft,
+                          icon_key:
+                            event.target.value.trim().length > 0
+                              ? event.target.value
+                              : null,
+                        }
+                      : draft,
+                  )
+                }
+                className="h-10 w-full rounded-xl border border-border/80 bg-background/70 px-3 text-sm text-foreground outline-none"
+              >
+                <option value="">
+                  {selectedLandmarkCategory === "unique"
+                    ? "Aucune icone"
+                    : "Icone du type"}
+                </option>
+                {(referenceData?.map_icons ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <MarkerAppearanceFields
+              markerShape={landmarkEditDraft.marker_shape}
+              markerFillColor={landmarkEditDraft.marker_fill_color}
+              markerStrokeColor={landmarkEditDraft.marker_stroke_color}
+              onShapeChange={(markerShape) =>
+                setLandmarkEditDraft((draft) =>
+                  draft ? { ...draft, marker_shape: markerShape } : draft,
+                )
+              }
+              onFillColorChange={(markerFillColor) =>
+                setLandmarkEditDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_fill_color: markerFillColor }
+                    : draft,
+                )
+              }
+              onStrokeColorChange={(markerStrokeColor) =>
+                setLandmarkEditDraft((draft) =>
+                  draft
+                    ? { ...draft, marker_stroke_color: markerStrokeColor }
+                    : draft,
+                )
+              }
+            />
             <label className="block text-xs text-muted-foreground">
               <span className="mb-1 block">Statut</span>
               <select

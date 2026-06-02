@@ -16,12 +16,17 @@ import {
   MAP_VECTOR_UPDATE_WHILE_ANIMATING,
   MAP_VECTOR_UPDATE_WHILE_INTERACTING,
 } from "@/map/config";
+import {
+  resolveLocalityPointShape,
+  resolveDefaultLocalityRenderShape,
+  type LocalityPointShape,
+  type MapObjectPointShape,
+} from "@/map/point-shapes";
 
 type EditorPointFamily = "locality" | "landmark";
 type EditorPointRecord =
   | { family: "locality"; locality: EditorMapLocality }
   | { family: "landmark"; landmark: EditorMapLandmark };
-type LocalityPointShape = "default" | "fort" | "fortified_city";
 
 type EditorPointsLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
@@ -60,7 +65,7 @@ const publishedLandmarkStyle = new Style({
   image: new RegularShape({
     points: 4,
     radius: 7,
-    angle: Math.PI / 4,
+    angle: 0,
     fill: new Fill({ color: "rgba(238, 196, 104, 0.95)" }),
     stroke: new Stroke({ color: "rgba(42, 30, 12, 0.95)", width: 2 }),
   }),
@@ -70,7 +75,7 @@ const draftLandmarkStyle = new Style({
   image: new RegularShape({
     points: 4,
     radius: 6,
-    angle: Math.PI / 4,
+    angle: 0,
     fill: new Fill({ color: "rgba(238, 196, 104, 0.5)" }),
     stroke: new Stroke({ color: "rgba(42, 30, 12, 0.8)", width: 1.5 }),
   }),
@@ -80,7 +85,7 @@ const archivedLandmarkStyle = new Style({
   image: new RegularShape({
     points: 4,
     radius: 5,
-    angle: Math.PI / 4,
+    angle: 0,
     fill: new Fill({ color: "rgba(160, 160, 160, 0.42)" }),
     stroke: new Stroke({ color: "rgba(35, 35, 35, 0.6)", width: 1 }),
   }),
@@ -118,8 +123,16 @@ const archivedUniqueStyle = new Style({
 
 const iconStyleCache = new Map<string, Style[]>();
 const localityShapeStyleCache = new Map<string, Style>();
+const customPointShapeStyleCache = new Map<string, Style>();
 const MIN_ICON_SCALE = 0.28;
 const MAX_ICON_SCALE = 1;
+
+type MarkerPalette = {
+  fillColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+  radius: number;
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -137,33 +150,6 @@ function getIconScaleForResolution(resolution: number): number {
 
 function getScaleBucket(scale: number): number {
   return Math.round(scale * 100) / 100;
-}
-
-function normalizeObjectTypeKey(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function getLocalityPointShape(typeKey: string): LocalityPointShape {
-  const normalizedTypeKey = normalizeObjectTypeKey(typeKey);
-
-  if (
-    normalizedTypeKey.includes("cite") &&
-    (normalizedTypeKey.includes("fortifie") ||
-      normalizedTypeKey.includes("fortified") ||
-      normalizedTypeKey.includes("forteresse"))
-  ) {
-    return "fortified_city";
-  }
-
-  if (normalizedTypeKey === "fort") {
-    return "fort";
-  }
-
-  return "default";
 }
 
 function isEditorMapLocality(value: unknown): value is EditorMapLocality {
@@ -216,13 +202,151 @@ function createPointFeature(point: EditorPointRecord): Feature<Point> {
   return feature;
 }
 
+function getColorOverride(value: string | null, fallback: string): string {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function getLocalityPalette(
+  status: EditorMapLocality["status"],
+): MarkerPalette {
+  return {
+    fillColor:
+      status === "archived"
+        ? "rgba(160, 160, 160, 0.45)"
+        : status === "draft"
+          ? "rgba(245, 221, 150, 0.5)"
+          : "rgba(245, 221, 150, 0.95)",
+    strokeColor:
+      status === "archived"
+        ? "rgba(35, 35, 35, 0.6)"
+        : status === "draft"
+          ? "rgba(35, 24, 12, 0.8)"
+          : "rgba(35, 24, 12, 0.95)",
+    strokeWidth: status === "archived" ? 1 : status === "draft" ? 1.5 : 2,
+    radius: status === "archived" ? 5 : status === "draft" ? 6 : 7,
+  };
+}
+
+function getLandmarkPalette(
+  status: EditorMapLandmark["status"],
+  category: "landmark" | "unique" | null,
+): MarkerPalette {
+  const isUnique = category === "unique";
+  return {
+    fillColor:
+      status === "archived"
+        ? "rgba(160, 160, 160, 0.42)"
+        : status === "draft"
+          ? isUnique
+            ? "rgba(170, 214, 255, 0.5)"
+            : "rgba(238, 196, 104, 0.5)"
+          : isUnique
+            ? "rgba(170, 214, 255, 0.95)"
+            : "rgba(238, 196, 104, 0.95)",
+    strokeColor:
+      status === "archived"
+        ? "rgba(35, 35, 35, 0.6)"
+        : status === "draft"
+          ? isUnique
+            ? "rgba(16, 42, 74, 0.8)"
+            : "rgba(42, 30, 12, 0.8)"
+          : isUnique
+            ? "rgba(16, 42, 74, 0.95)"
+            : "rgba(42, 30, 12, 0.95)",
+    strokeWidth: status === "archived" ? 1 : status === "draft" ? 1.5 : 2,
+    radius: status === "archived" ? 5 : status === "draft" ? 6 : 7,
+  };
+}
+
+function getCustomPointShapeStyle(
+  shape: MapObjectPointShape,
+  palette: MarkerPalette,
+  fillColorOverride: string | null,
+  strokeColorOverride: string | null,
+): Style {
+  const fillColor = getColorOverride(fillColorOverride, palette.fillColor);
+  const strokeColor = getColorOverride(
+    strokeColorOverride,
+    palette.strokeColor,
+  );
+  const cacheKey = [
+    shape,
+    fillColor,
+    strokeColor,
+    palette.strokeWidth,
+    palette.radius,
+  ].join(":");
+  const cached = customPointShapeStyleCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const fill = new Fill({ color: fillColor });
+  const stroke = new Stroke({
+    color: strokeColor,
+    width: palette.strokeWidth,
+  });
+  const image =
+    shape === "circle"
+      ? new CircleStyle({
+          radius: Math.max(4, palette.radius - 1),
+          fill,
+          stroke,
+        })
+      : shape === "star"
+        ? new RegularShape({
+            points: 8,
+            radius: palette.radius + 2,
+            radius2: Math.max(4, palette.radius * 0.58),
+            angle: Math.PI / 8,
+            fill,
+            stroke,
+          })
+        : new RegularShape({
+            points: 4,
+            radius: palette.radius + 1,
+            angle: shape === "square" ? Math.PI / 4 : 0,
+            fill,
+            stroke,
+          });
+
+  const style = new Style({ image });
+  customPointShapeStyleCache.set(cacheKey, style);
+  return style;
+}
+
+function hasMarkerAppearanceOverride(
+  value: Pick<
+    EditorMapLocality | EditorMapLandmark,
+    "marker_shape" | "marker_fill_color" | "marker_stroke_color"
+  > | null,
+): boolean {
+  return Boolean(
+    value?.marker_shape ||
+    value?.marker_fill_color ||
+    value?.marker_stroke_color,
+  );
+}
+
 function getLocalityFallbackStyle(locality: EditorMapLocality | null): Style {
   if (!locality) {
     return publishedLocalityStyle;
   }
-  const pointShape = getLocalityPointShape(locality.type_key);
+  if (hasMarkerAppearanceOverride(locality)) {
+    return getCustomPointShapeStyle(
+      locality.marker_shape ??
+        resolveDefaultLocalityRenderShape(locality.type_key),
+      getLocalityPalette(locality.status),
+      locality.marker_fill_color,
+      locality.marker_stroke_color,
+    );
+  }
 
-  if (pointShape !== "default") {
+  const pointShape = resolveLocalityPointShape(locality.type_key);
+
+  if (pointShape !== "locality") {
     return getLocalityShapeStyle(pointShape, locality.status);
   }
 
@@ -236,7 +360,7 @@ function getLocalityFallbackStyle(locality: EditorMapLocality | null): Style {
 }
 
 function getLocalityShapeStyle(
-  pointShape: Exclude<LocalityPointShape, "default">,
+  pointShape: Exclude<LocalityPointShape, "locality">,
   status: EditorMapLocality["status"],
 ): Style {
   const cacheKey = `${pointShape}:${status}`;
@@ -275,7 +399,7 @@ function getLocalityShapeStyle(
         : new RegularShape({
             points: 4,
             radius: radius + 1,
-            angle: 0,
+            angle: Math.PI / 4,
             fill: new Fill({ color: fillColor }),
             stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
           }),
@@ -290,6 +414,15 @@ function getLandmarkFallbackStyle(
   category: "landmark" | "unique" | null,
 ): Style {
   const effectiveCategory = category ?? "landmark";
+  if (hasMarkerAppearanceOverride(landmark)) {
+    return getCustomPointShapeStyle(
+      landmark?.marker_shape ?? "diamond",
+      getLandmarkPalette(landmark?.status ?? "published", effectiveCategory),
+      landmark?.marker_fill_color ?? null,
+      landmark?.marker_stroke_color ?? null,
+    );
+  }
+
   if (effectiveCategory === "unique") {
     if (landmark?.status === "draft") return draftUniqueStyle;
     if (landmark?.status === "archived") return archivedUniqueStyle;

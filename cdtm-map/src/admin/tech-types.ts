@@ -28,6 +28,7 @@ export type TechFieldDefinition = {
 export type ReferenceOption = {
   value: string;
   label: string;
+  peuple_key?: string | null;
 };
 
 export type ReferenceTableKey =
@@ -267,6 +268,13 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       },
       { name: "nom", label: "nom", type: "text", searchable: true },
       {
+        name: "peuple_key",
+        label: "peuple_key",
+        type: "reference",
+        searchable: true,
+        reference_table_key: "peuples",
+      },
+      {
         name: "description_courte",
         label: "description_courte",
         type: "textarea",
@@ -308,6 +316,13 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         searchable: true,
       },
       { name: "nom", label: "nom", type: "text", searchable: true },
+      {
+        name: "peuple_key",
+        label: "peuple_key",
+        type: "reference",
+        searchable: true,
+        reference_table_key: "peuples",
+      },
       { name: "pnj", label: "pnj", type: "boolean" },
       {
         name: "updated_by_user_id",
