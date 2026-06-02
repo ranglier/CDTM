@@ -35,13 +35,13 @@ const DEFAULT_STROKE_WIDTH = 1.2;
 const HILL_PATTERN_TYPE: MapPatternType = "dots_spaced";
 const HILL_PATTERN_COLOR = "rgba(40, 30, 14, 0.46)";
 const PATTERN_STEP = 12;
-const SPACED_PATTERN_STEP = 22;
+const SPACED_PATTERN_STEP = 18;
 const PATTERN_LINE_WIDTH = 1.25;
 const MIN_VISIBLE_PATTERN_STEP = 7;
 const MIN_VISIBLE_PATTERN_LINE_WIDTH = 1.45;
 const MIN_VISIBLE_PATTERN_DOT_RADIUS = 1.45;
-const CONTROL_SPLIT_MIN_VISIBLE_STEP = 18;
-const CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH = 5;
+const CONTROL_SPLIT_MIN_VISIBLE_STEP = 12;
+const CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH = 3;
 const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
 const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
 const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
@@ -491,6 +491,39 @@ function getPixelExtent(coordinates: unknown): PixelExtent | null {
   return [minX, minY, maxX, maxY];
 }
 
+function normalizeCanvasPixelRatio(pixelRatio: number): number {
+  return Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+}
+
+function toCssPixelCoordinates(value: unknown, pixelRatio: number): unknown {
+  if (isCoordinate(value)) {
+    return [value[0] / pixelRatio, value[1] / pixelRatio];
+  }
+
+  if (!Array.isArray(value)) {
+    return value;
+  }
+
+  return value.map((item) => toCssPixelCoordinates(item, pixelRatio));
+}
+
+function prepareCssPixelRenderer(
+  context: CanvasRenderingContext2D,
+  coordinates: unknown,
+  pixelRatio: number,
+): { coordinates: unknown; extent: PixelExtent } | null {
+  const ratio = normalizeCanvasPixelRatio(pixelRatio);
+  const cssCoordinates = toCssPixelCoordinates(coordinates, ratio);
+  const cssExtent = getPixelExtent(cssCoordinates);
+
+  if (!cssExtent) {
+    return null;
+  }
+
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return { coordinates: cssCoordinates, extent: cssExtent };
+}
+
 function appendRingPath(
   context: CanvasRenderingContext2D,
   ring: Array<[number, number]>,
@@ -629,18 +662,16 @@ function drawAnchoredPattern(
   anchor: PixelAnchor,
   patternType: MapPatternType,
   patternColor: string,
-  pixelRatio: number,
 ) {
   const spec = getPatternSpec(patternType);
-  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-  const step = Math.max(MIN_VISIBLE_PATTERN_STEP * ratio, spec.step * ratio);
+  const step = Math.max(MIN_VISIBLE_PATTERN_STEP, spec.step);
   const lineWidth = Math.max(
-    MIN_VISIBLE_PATTERN_LINE_WIDTH * ratio,
-    spec.lineWidth * ratio,
+    MIN_VISIBLE_PATTERN_LINE_WIDTH,
+    spec.lineWidth,
   );
   const dotRadius = Math.max(
-    MIN_VISIBLE_PATTERN_DOT_RADIUS * ratio,
-    spec.dotRadius * ratio,
+    MIN_VISIBLE_PATTERN_DOT_RADIUS,
+    spec.dotRadius,
   );
 
   context.strokeStyle = patternColor;
@@ -694,25 +725,27 @@ function getPatternOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    const screenCoordinates = coordinates;
-    const screenExtent = getPixelExtent(screenCoordinates);
+    state.context.save();
+    const prepared = prepareCssPixelRenderer(
+      state.context,
+      coordinates,
+      state.pixelRatio,
+    );
 
-    if (!screenExtent) {
+    if (!prepared) {
+      state.context.restore();
       return;
     }
 
-    state.context.save();
-    state.context.setTransform(1, 0, 0, 1, 0, 0);
     state.context.beginPath();
-    appendGeometryPath(state.context, screenCoordinates);
+    appendGeometryPath(state.context, prepared.coordinates);
     state.context.clip("evenodd");
     drawAnchoredPattern(
       state.context,
-      screenExtent,
+      prepared.extent,
       SCREEN_PATTERN_ANCHOR,
       patternType,
       patternColor,
-      state.pixelRatio,
     );
     state.context.restore();
   };
@@ -730,14 +763,9 @@ function drawControlSplitBands(
   extent: PixelExtent,
   anchor: PixelAnchor,
   overlay: ControlSplitOverlay,
-  pixelRatio: number,
 ) {
-  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
   const spec = getPatternSpec(overlay.patternType);
-  const step = Math.max(
-    CONTROL_SPLIT_MIN_VISIBLE_STEP * ratio,
-    spec.step * ratio,
-  );
+  const step = Math.max(CONTROL_SPLIT_MIN_VISIBLE_STEP, spec.step);
   const hasEmptySecondaryBands =
     overlay.secondaryColor === TRANSPARENT_CONTROL_COLOR;
   const rawBandWidth = hasEmptySecondaryBands
@@ -748,7 +776,7 @@ function drawControlSplitBands(
       ? 0
       : Math.min(
           step,
-          Math.max(CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH * ratio, rawBandWidth),
+          Math.max(CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH, rawBandWidth),
         );
   const [minX, minY, maxX, maxY] = extent;
   const padding = Math.max(maxX - minX, maxY - minY) + step * 2;
@@ -820,7 +848,7 @@ function drawControlSplitBands(
       return;
     }
 
-    const radius = Math.max(ratio, Math.min(step * 0.35, bandWidth * 0.5));
+    const radius = Math.max(1, Math.min(step * 0.35, bandWidth * 0.5));
     const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
     const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
 
@@ -878,25 +906,27 @@ function getControlSplitOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    const screenCoordinates = coordinates;
-    const screenExtent = getPixelExtent(screenCoordinates);
+    state.context.save();
+    const prepared = prepareCssPixelRenderer(
+      state.context,
+      coordinates,
+      state.pixelRatio,
+    );
 
-    if (!screenExtent) {
+    if (!prepared) {
+      state.context.restore();
       return;
     }
 
-    state.context.save();
-    state.context.setTransform(1, 0, 0, 1, 0, 0);
     state.context.beginPath();
-    appendGeometryPath(state.context, screenCoordinates);
+    appendGeometryPath(state.context, prepared.coordinates);
     state.context.clip("evenodd");
     state.context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
     drawControlSplitBands(
       state.context,
-      screenExtent,
+      prepared.extent,
       SCREEN_PATTERN_ANCHOR,
       overlay,
-      state.pixelRatio,
     );
     state.context.restore();
   };
