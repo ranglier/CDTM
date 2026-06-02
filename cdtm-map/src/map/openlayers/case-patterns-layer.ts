@@ -1,9 +1,9 @@
 import Feature from "ol/Feature";
-import type { FrameState } from "ol/Map";
 import type Geometry from "ol/geom/Geometry";
-import Layer from "ol/layer/Layer";
+import type Map from "ol/Map";
+import { unByKey } from "ol/Observable";
+import type { EventsKey } from "ol/events";
 import type VectorSource from "ol/source/Vector";
-import { apply as applyTransform } from "ol/transform";
 
 import { resolveCaseFeatureProperties } from "@/map/openlayers/cases-layer";
 import { getCasePatternOverlays, paintCasePatternOverlay } from "@/map/styles";
@@ -14,14 +14,23 @@ import {
   type StableCaseProperties,
 } from "@/map/types";
 
-type CasePatternLayerContext = {
+type CasePatternOverlayContext = {
   getDisplayMode: () => MapDisplayMode;
   getCasePropertiesById: () => Record<string, StableCaseProperties>;
   getPublicMapStyles: () => PublicMapStyles;
 };
 
-type CreateCasePatternsLayerOptions = {
+type AttachCasePatternsOverlayOptions = {
+  map: Map;
+  source: VectorSource;
+  context: CasePatternOverlayContext;
   visible?: boolean;
+};
+
+export type CasePatternsOverlayHandle = {
+  render: () => void;
+  setVisible: (visible: boolean) => void;
+  dispose: () => void;
 };
 
 type ScreenCoordinate = [number, number];
@@ -34,16 +43,23 @@ function isCoordinate(value: unknown): value is [number, number] {
   );
 }
 
+function getDevicePixelRatio(): number {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  const ratio = window.devicePixelRatio;
+
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
 function transformCoordinatesToDevicePixels(
   coordinates: unknown,
-  frameState: FrameState,
+  map: Map,
   pixelRatio: number,
 ): unknown {
   if (isCoordinate(coordinates)) {
-    const pixel = applyTransform(frameState.coordinateToPixelTransform, [
-      coordinates[0],
-      coordinates[1],
-    ]) as ScreenCoordinate;
+    const pixel = map.getPixelFromCoordinate(coordinates) as ScreenCoordinate;
 
     return [pixel[0] * pixelRatio, pixel[1] * pixelRatio];
   }
@@ -53,7 +69,7 @@ function transformCoordinatesToDevicePixels(
   }
 
   return coordinates.map((item) =>
-    transformCoordinatesToDevicePixels(item, frameState, pixelRatio),
+    transformCoordinatesToDevicePixels(item, map, pixelRatio),
   );
 }
 
@@ -67,13 +83,39 @@ function getGeometryCoordinates(geometry: Geometry): unknown {
   return candidate.getCoordinates();
 }
 
-function resizeCanvasForFrame(
+function createOverlayCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.className = "cdtm-case-patterns-overlay";
+  canvas.setAttribute("aria-hidden", "true");
+  canvas.style.position = "absolute";
+  canvas.style.inset = "0";
+  canvas.style.pointerEvents = "none";
+  canvas.style.zIndex = "1";
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  return canvas;
+}
+
+function getMapCssSize(map: Map): [number, number] {
+  const size = map.getSize();
+
+  if (size) {
+    return [Math.max(1, size[0]), Math.max(1, size[1])];
+  }
+
+  const rect = map.getViewport().getBoundingClientRect();
+
+  return [Math.max(1, rect.width), Math.max(1, rect.height)];
+}
+
+function resizeCanvasForMap(
   canvas: HTMLCanvasElement,
-  frameState: FrameState,
+  map: Map,
+  pixelRatio: number,
 ): CanvasRenderingContext2D | null {
-  const pixelRatio = frameState.pixelRatio;
-  const width = Math.max(1, Math.round(frameState.size[0] * pixelRatio));
-  const height = Math.max(1, Math.round(frameState.size[1] * pixelRatio));
+  const [cssWidth, cssHeight] = getMapCssSize(map);
+  const width = Math.max(1, Math.round(cssWidth * pixelRatio));
+  const height = Math.max(1, Math.round(cssHeight * pixelRatio));
 
   if (canvas.width !== width) {
     canvas.width = width;
@@ -81,17 +123,6 @@ function resizeCanvasForFrame(
 
   if (canvas.height !== height) {
     canvas.height = height;
-  }
-
-  const cssWidth = `${frameState.size[0]}px`;
-  const cssHeight = `${frameState.size[1]}px`;
-
-  if (canvas.style.width !== cssWidth) {
-    canvas.style.width = cssWidth;
-  }
-
-  if (canvas.style.height !== cssHeight) {
-    canvas.style.height = cssHeight;
   }
 
   const context = canvas.getContext("2d");
@@ -105,99 +136,153 @@ function resizeCanvasForFrame(
   return context;
 }
 
-export function createCasePatternsLayer(
-  source: VectorSource,
-  context: CasePatternLayerContext,
-  options: CreateCasePatternsLayerOptions = {},
-): Layer {
-  let canvas: HTMLCanvasElement | null = null;
+function clearCanvas(canvas: HTMLCanvasElement): void {
+  const context = canvas.getContext("2d");
 
-  return new Layer({
-    visible: options.visible ?? true,
-    render: (frameState) => {
-      if (!canvas) {
-        canvas = document.createElement("canvas");
-        canvas.className = "cdtm-case-patterns-layer";
-        canvas.style.position = "absolute";
-        canvas.style.left = "0";
-        canvas.style.top = "0";
-        canvas.style.pointerEvents = "none";
-      }
-
-      const drawContext = resizeCanvasForFrame(canvas, frameState);
-
-      if (!drawContext) {
-        return canvas;
-      }
-
-      const features = frameState.extent
-        ? source.getFeaturesInExtent(frameState.extent)
-        : source.getFeatures();
-      const casePropertiesById = context.getCasePropertiesById();
-      const styles =
-        context.getPublicMapStyles() ?? createEmptyPublicMapStyles();
-      const displayMode = context.getDisplayMode();
-
-      for (const candidateFeature of features) {
-        if (!(candidateFeature instanceof Feature)) {
-          continue;
-        }
-
-        const properties = resolveCaseFeatureProperties(
-          candidateFeature as Feature<Geometry>,
-          casePropertiesById,
-        );
-        const overlays = getCasePatternOverlays({
-          displayMode,
-          properties,
-          styles,
-        });
-
-        if (overlays.length === 0) {
-          continue;
-        }
-
-        const geometry = (candidateFeature as Feature<Geometry>).getGeometry();
-
-        if (!geometry) {
-          continue;
-        }
-
-        const coordinates = getGeometryCoordinates(geometry);
-
-        if (!coordinates) {
-          continue;
-        }
-
-        const screenCoordinates = transformCoordinatesToDevicePixels(
-          coordinates,
-          frameState,
-          frameState.pixelRatio,
-        );
-
-        for (const overlay of overlays) {
-          paintCasePatternOverlay(
-            drawContext,
-            screenCoordinates,
-            overlay,
-            frameState.pixelRatio,
-          );
-        }
-      }
-
-      return canvas;
-    },
-  });
-}
-
-export function syncCasePatternsLayerVisibility(
-  layer: Layer | null,
-  visible: boolean,
-): void {
-  if (!layer) {
+  if (!context) {
     return;
   }
 
-  layer.setVisible(visible);
-  layer.changed();
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+export function attachCasePatternsOverlay({
+  map,
+  source,
+  context,
+  visible = true,
+}: AttachCasePatternsOverlayOptions): CasePatternsOverlayHandle {
+  const canvas = createOverlayCanvas();
+  const viewport = map.getViewport();
+  let disposed = false;
+  let currentVisible = visible;
+  let mapMoving = false;
+  let animationFrame: number | null = null;
+
+  viewport.appendChild(canvas);
+
+  const cancelScheduledRender = () => {
+    if (animationFrame !== null) {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+    }
+  };
+
+  const draw = () => {
+    animationFrame = null;
+
+    if (disposed) {
+      return;
+    }
+
+    const pixelRatio = getDevicePixelRatio();
+    const drawContext = resizeCanvasForMap(canvas, map, pixelRatio);
+
+    if (!drawContext || !currentVisible || mapMoving) {
+      return;
+    }
+
+    const extent = map.getView().calculateExtent(map.getSize());
+    const features = source.getFeaturesInExtent(extent);
+    const casePropertiesById = context.getCasePropertiesById();
+    const styles = context.getPublicMapStyles() ?? createEmptyPublicMapStyles();
+    const displayMode = context.getDisplayMode();
+
+    for (const candidateFeature of features) {
+      if (!(candidateFeature instanceof Feature)) {
+        continue;
+      }
+
+      const properties = resolveCaseFeatureProperties(
+        candidateFeature as Feature<Geometry>,
+        casePropertiesById,
+      );
+      const overlays = getCasePatternOverlays({
+        displayMode,
+        properties,
+        styles,
+      });
+
+      if (overlays.length === 0) {
+        continue;
+      }
+
+      const geometry = (candidateFeature as Feature<Geometry>).getGeometry();
+
+      if (!geometry) {
+        continue;
+      }
+
+      const coordinates = getGeometryCoordinates(geometry);
+
+      if (!coordinates) {
+        continue;
+      }
+
+      const screenCoordinates = transformCoordinatesToDevicePixels(
+        coordinates,
+        map,
+        pixelRatio,
+      );
+
+      for (const overlay of overlays) {
+        paintCasePatternOverlay(
+          drawContext,
+          screenCoordinates,
+          overlay,
+          pixelRatio,
+        );
+      }
+    }
+  };
+
+  const scheduleRender = () => {
+    if (disposed || animationFrame !== null) {
+      return;
+    }
+
+    animationFrame = window.requestAnimationFrame(draw);
+  };
+
+  const clearAndCancel = () => {
+    cancelScheduledRender();
+    clearCanvas(canvas);
+  };
+
+  const eventKeys: EventsKey[] = [
+    map.on("movestart", () => {
+      mapMoving = true;
+      clearAndCancel();
+    }),
+    map.on("moveend", () => {
+      mapMoving = false;
+      scheduleRender();
+    }),
+    source.on("change", scheduleRender),
+  ];
+
+  scheduleRender();
+
+  return {
+    render: scheduleRender,
+    setVisible: (nextVisible) => {
+      currentVisible = nextVisible;
+
+      if (!nextVisible) {
+        clearAndCancel();
+        return;
+      }
+
+      scheduleRender();
+    },
+    dispose: () => {
+      disposed = true;
+      cancelScheduledRender();
+      for (const key of eventKeys) {
+        unByKey(key);
+      }
+      canvas.remove();
+    },
+  };
 }

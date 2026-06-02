@@ -331,7 +331,6 @@ export function CasesMap({
     const map = createMap(mapElementRef.current, [
       standardLayers.backgroundLayer,
       standardLayers.casesLayer,
-      standardLayers.casePatternsLayer,
       standardLayers.routesLayer,
       standardLayers.pointsLayer,
     ]);
@@ -489,7 +488,6 @@ export function CasesMap({
       map,
       casesSource: standardLayers.casesSource,
       casesLayer: standardLayers.casesLayer,
-      casePatternsLayer: standardLayers.casePatternsLayer,
       routesSource: standardLayers.routesSource,
       routesLayer: standardLayers.routesLayer,
       pointsSource: standardLayers.pointsSource,
