@@ -78,14 +78,28 @@ export type ReferenceTableRowsResponse = {
     string,
     Pick<
       MapStyleRecord,
-      "fill" | "stroke" | "pattern_type" | "pattern_color" | "secondary_ratio"
+      | "fill"
+      | "stroke"
+      | "pattern_type"
+      | "pattern_color"
+      | "pattern_spacing"
+      | "pattern_line_width"
+      | "pattern_dot_radius"
+      | "secondary_ratio"
     >
   >;
 };
 
 export type ReferenceStyleValue = Pick<
   MapStyleRecord,
-  "fill" | "stroke" | "pattern_type" | "pattern_color" | "secondary_ratio"
+  | "fill"
+  | "stroke"
+  | "pattern_type"
+  | "pattern_color"
+  | "pattern_spacing"
+  | "pattern_line_width"
+  | "pattern_dot_radius"
+  | "secondary_ratio"
 >;
 
 export type MapIconUploadMetadata = {
@@ -102,6 +116,9 @@ export type AdminStyleUpsertInput = {
   stroke?: string | null;
   pattern_type?: MapPatternType | "none" | null;
   pattern_color?: string | null;
+  pattern_spacing?: number | string | null;
+  pattern_line_width?: number | string | null;
+  pattern_dot_radius?: number | string | null;
   secondary_ratio?: number | string | null;
 };
 
@@ -378,6 +395,24 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         name: "pattern_color",
         label: "pattern_color",
         type: "text",
+        searchable: true,
+      },
+      {
+        name: "pattern_spacing",
+        label: "pattern_spacing",
+        type: "number",
+        searchable: true,
+      },
+      {
+        name: "pattern_line_width",
+        label: "pattern_line_width",
+        type: "number",
+        searchable: true,
+      },
+      {
+        name: "pattern_dot_radius",
+        label: "pattern_dot_radius",
+        type: "number",
         searchable: true,
       },
       {

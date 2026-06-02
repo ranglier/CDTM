@@ -1,5 +1,12 @@
 import {
+  MAP_PATTERN_DOT_RADIUS_MAX,
+  MAP_PATTERN_DOT_RADIUS_MIN,
+  MAP_PATTERN_LINE_WIDTH_MAX,
+  MAP_PATTERN_LINE_WIDTH_MIN,
+  MAP_PATTERN_SPACING_MAX,
+  MAP_PATTERN_SPACING_MIN,
   normalizeHexColor,
+  normalizeMapStyleNumber,
   normalizePatternType,
   type MapDisplayMode,
   type MapPatternType,
@@ -12,6 +19,9 @@ export type ResolvedCaseStyle = {
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  pattern_spacing: number | null;
+  pattern_line_width: number | null;
+  pattern_dot_radius: number | null;
   secondary_ratio: number | null;
 };
 
@@ -27,6 +37,9 @@ export type ControlSplitOverlay = {
   secondaryColor: string;
   secondaryRatio: number;
   patternType: MapPatternType;
+  patternSpacing: number | null;
+  patternLineWidth: number | null;
+  patternDotRadius: number | null;
 };
 
 export type CasePatternOverlay =
@@ -38,6 +51,9 @@ export type CasePatternOverlay =
       type: "pattern";
       patternType: MapPatternType;
       patternColor: string;
+      patternSpacing: number | null;
+      patternLineWidth: number | null;
+      patternDotRadius: number | null;
     };
 
 type ControlSplitRule = {
@@ -59,6 +75,12 @@ export type PatternSpec = {
   step: number;
   lineWidth: number;
   dotRadius: number;
+};
+
+export type PatternSpecOverrides = {
+  patternSpacing?: number | null;
+  patternLineWidth?: number | null;
+  patternDotRadius?: number | null;
 };
 
 export type MapPoint = [number, number];
@@ -110,6 +132,35 @@ function normalizeSecondaryRatio(value: unknown): number | null {
   return Math.min(1, Math.max(0, numericValue));
 }
 
+function normalizePatternSpecOverrides(
+  value: {
+    pattern_spacing?: unknown;
+    pattern_line_width?: unknown;
+    pattern_dot_radius?: unknown;
+  },
+): Pick<
+  ResolvedCaseStyle,
+  "pattern_spacing" | "pattern_line_width" | "pattern_dot_radius"
+> {
+  return {
+    pattern_spacing: normalizeMapStyleNumber(
+      value.pattern_spacing,
+      MAP_PATTERN_SPACING_MIN,
+      MAP_PATTERN_SPACING_MAX,
+    ),
+    pattern_line_width: normalizeMapStyleNumber(
+      value.pattern_line_width,
+      MAP_PATTERN_LINE_WIDTH_MIN,
+      MAP_PATTERN_LINE_WIDTH_MAX,
+    ),
+    pattern_dot_radius: normalizeMapStyleNumber(
+      value.pattern_dot_radius,
+      MAP_PATTERN_DOT_RADIUS_MIN,
+      MAP_PATTERN_DOT_RADIUS_MAX,
+    ),
+  };
+}
+
 function getStyleForTarget(
   styles: PublicMapStyles,
   targetType: keyof PublicMapStyles,
@@ -126,6 +177,7 @@ function getStyleForTarget(
   }
 
   return {
+    ...normalizePatternSpecOverrides(style),
     fill: normalizeHexColor(style.fill),
     stroke: normalizeHexColor(style.stroke),
     pattern_type: normalizePatternType(style.pattern_type),
@@ -383,6 +435,9 @@ export function resolveCaseControlSplitOverlay(
     secondaryColor,
     secondaryRatio: controlStyle?.secondary_ratio ?? splitRule.secondaryRatio,
     patternType: controlStyle?.pattern_type ?? splitRule.fallbackPatternType,
+    patternSpacing: controlStyle?.pattern_spacing ?? null,
+    patternLineWidth: controlStyle?.pattern_line_width ?? null,
+    patternDotRadius: controlStyle?.pattern_dot_radius ?? null,
   };
 }
 
@@ -439,6 +494,9 @@ export function getCasePatternOverlays({
       type: "pattern",
       patternType: resolved.pattern_type,
       patternColor: resolved.pattern_color ?? DEFAULT_PATTERN_COLOR,
+      patternSpacing: resolved.pattern_spacing,
+      patternLineWidth: resolved.pattern_line_width,
+      patternDotRadius: resolved.pattern_dot_radius,
     });
   }
 
@@ -448,17 +506,38 @@ export function getCasePatternOverlays({
       type: "pattern",
       patternType: hillStyle?.pattern_type ?? HILL_PATTERN_TYPE,
       patternColor: hillStyle?.pattern_color ?? HILL_PATTERN_COLOR,
+      patternSpacing: hillStyle?.pattern_spacing ?? null,
+      patternLineWidth: hillStyle?.pattern_line_width ?? null,
+      patternDotRadius: hillStyle?.pattern_dot_radius ?? null,
     });
   }
 
   return overlays;
 }
 
-export function getPatternSpec(patternType: MapPatternType): PatternSpec {
+export function getPatternSpec(
+  patternType: MapPatternType,
+  overrides: PatternSpecOverrides = {},
+): PatternSpec {
   const spaced = patternType.endsWith("_spaced");
-  const step = spaced ? SPACED_PATTERN_STEP : PATTERN_STEP;
-  const lineWidth = spaced ? 1.15 : PATTERN_LINE_WIDTH;
-  const dotRadius = spaced ? 1.15 : 1.3;
+  const step =
+    normalizeMapStyleNumber(
+      overrides.patternSpacing,
+      MAP_PATTERN_SPACING_MIN,
+      MAP_PATTERN_SPACING_MAX,
+    ) ?? (spaced ? SPACED_PATTERN_STEP : PATTERN_STEP);
+  const lineWidth =
+    normalizeMapStyleNumber(
+      overrides.patternLineWidth,
+      MAP_PATTERN_LINE_WIDTH_MIN,
+      MAP_PATTERN_LINE_WIDTH_MAX,
+    ) ?? (spaced ? 1.15 : PATTERN_LINE_WIDTH);
+  const dotRadius =
+    normalizeMapStyleNumber(
+      overrides.patternDotRadius,
+      MAP_PATTERN_DOT_RADIUS_MIN,
+      MAP_PATTERN_DOT_RADIUS_MAX,
+    ) ?? (spaced ? 1.15 : 1.3);
 
   switch (patternType) {
     case "diagonal":
@@ -595,8 +674,9 @@ function addDots(
 export function generatePatternPrimitives(
   patternType: MapPatternType,
   extent: MapExtent,
+  overrides: PatternSpecOverrides = {},
 ): PatternPrimitive[] {
-  const spec = getPatternSpec(patternType);
+  const spec = getPatternSpec(patternType, overrides);
   const padding = getPatternPadding(extent, spec.step);
   const primitives: PatternPrimitive[] = [];
 
@@ -630,7 +710,7 @@ export function generatePatternPrimitives(
 }
 
 export function getControlSplitBandWidth(overlay: ControlSplitOverlay): number {
-  const spec = getPatternSpec(overlay.patternType);
+  const spec = getPatternSpec(overlay.patternType, overlay);
   const hasEmptySecondaryBands =
     overlay.secondaryColor === TRANSPARENT_CONTROL_COLOR;
   const rawBandWidth = hasEmptySecondaryBands
@@ -646,7 +726,7 @@ export function generateControlSplitPrimitives(
   overlay: ControlSplitOverlay,
   extent: MapExtent,
 ): ControlSplitPrimitive[] {
-  const spec = getPatternSpec(overlay.patternType);
+  const spec = getPatternSpec(overlay.patternType, overlay);
   const bandWidth = getControlSplitBandWidth(overlay);
   const [minX, minY, maxX, maxY] = extent;
   const padding = Math.max(maxX - minX, maxY - minY) + spec.step * 2;
@@ -724,6 +804,7 @@ export function generateControlSplitPrimitives(
     for (const primitive of generatePatternPrimitives(
       overlay.patternType,
       extent,
+      overlay,
     )) {
       if (primitive.type === "dot") {
         primitives.push(primitive);

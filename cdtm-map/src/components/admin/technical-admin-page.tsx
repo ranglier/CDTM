@@ -41,6 +41,9 @@ import {
   getFieldTypeLabel,
   getStyleTargetIdForRow,
   isHexColorInputValid,
+  isPatternDotRadiusInputValid,
+  isPatternLineWidthInputValid,
+  isPatternSpacingInputValid,
   isPatternTypeInputValid,
   isSecondaryRatioInputValid,
   rowValueToInputValue,
@@ -1005,6 +1008,9 @@ export function TechnicalAdminPage() {
 
                 if (fieldName === "pattern_type" && value === "none") {
                   nextValues.pattern_color = "";
+                  nextValues.pattern_spacing = "";
+                  nextValues.pattern_line_width = "";
+                  nextValues.pattern_dot_radius = "";
                 }
 
                 if (
@@ -1103,6 +1109,9 @@ export function TechnicalAdminPage() {
                 stroke: DEFAULT_STYLE_STROKE,
                 pattern_type: "none",
                 pattern_color: "",
+                pattern_spacing: "",
+                pattern_line_width: "",
+                pattern_dot_radius: "",
                 secondary_ratio: "",
               }
             : {}),
@@ -1168,6 +1177,39 @@ export function TechnicalAdminPage() {
         return;
       }
 
+      if (!isPatternSpacingInputValid(row.values.pattern_spacing ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Espacement du motif invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      if (!isPatternLineWidthInputValid(row.values.pattern_line_width ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Epaisseur du motif invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
+      if (!isPatternDotRadiusInputValid(row.values.pattern_dot_radius ?? "")) {
+        setReferenceRows((current) =>
+          current.map((item) =>
+            item.localId === row.localId
+              ? { ...item, error: "Taille des points invalide." }
+              : item,
+          ),
+        );
+        return;
+      }
+
       if (
         activeReferenceView?.styleTargetType === "controle_type" &&
         !isSecondaryRatioInputValid(row.values.secondary_ratio ?? "")
@@ -1209,6 +1251,9 @@ export function TechnicalAdminPage() {
             stroke: row.values.stroke ?? "",
             pattern_type: row.values.pattern_type ?? "none",
             pattern_color: row.values.pattern_color ?? "",
+            pattern_spacing: row.values.pattern_spacing ?? "",
+            pattern_line_width: row.values.pattern_line_width ?? "",
+            pattern_dot_radius: row.values.pattern_dot_radius ?? "",
             secondary_ratio: row.values.secondary_ratio ?? "",
           },
         };
@@ -1232,6 +1277,9 @@ export function TechnicalAdminPage() {
                 stroke: null,
                 pattern_type: null,
                 pattern_color: null,
+                pattern_spacing: null,
+                pattern_line_width: null,
+                pattern_dot_radius: null,
                 secondary_ratio: null,
               },
             ),
@@ -1310,6 +1358,9 @@ export function TechnicalAdminPage() {
               stroke: null,
               pattern_type: null,
               pattern_color: null,
+              pattern_spacing: null,
+              pattern_line_width: null,
+              pattern_dot_radius: null,
               secondary_ratio: null,
             }),
           });

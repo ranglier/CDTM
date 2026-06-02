@@ -10,6 +10,11 @@ import {
   getFriendlyFieldLabel,
   getReferenceRowSummary,
   isHexColorInputValid,
+  isDotPatternTypeInput,
+  isLinePatternTypeInput,
+  isPatternDotRadiusInputValid,
+  isPatternLineWidthInputValid,
+  isPatternSpacingInputValid,
   isPatternTypeInputValid,
   isSecondaryRatioInputValid,
   LOCKED_REFERENCE_FIELDS,
@@ -20,7 +25,15 @@ import {
 } from "@/components/admin/tech/reference-utils";
 import { StylePreview } from "@/components/admin/tech/style-preview";
 import type { ReferencePanelProps } from "@/components/admin/tech/types";
-import { normalizeHexColor } from "@/map/types";
+import {
+  MAP_PATTERN_DOT_RADIUS_MAX,
+  MAP_PATTERN_DOT_RADIUS_MIN,
+  MAP_PATTERN_LINE_WIDTH_MAX,
+  MAP_PATTERN_LINE_WIDTH_MIN,
+  MAP_PATTERN_SPACING_MAX,
+  MAP_PATTERN_SPACING_MIN,
+  normalizeHexColor,
+} from "@/map/types";
 
 export function ReferenceAdminPanel({
   activeReference,
@@ -122,6 +135,14 @@ export function ReferenceAdminPanel({
                   );
                   const showControlRatio =
                     activeReferenceView?.styleTargetType === "controle_type";
+                  const activePatternType = row.values.pattern_type ?? "none";
+                  const showPatternControls = activePatternType !== "none";
+                  const showPatternLineWidth =
+                    showPatternControls &&
+                    isLinePatternTypeInput(activePatternType);
+                  const showPatternDotRadius =
+                    showPatternControls &&
+                    isDotPatternTypeInput(activePatternType);
                   const hasImageFields =
                     activeReference.definition.fields.some(
                       (field) => field.name === "image_path",
@@ -168,6 +189,15 @@ export function ReferenceAdminPanel({
                               stroke={row.values.stroke ?? ""}
                               patternType={row.values.pattern_type ?? "none"}
                               patternColor={row.values.pattern_color ?? ""}
+                              patternSpacing={
+                                row.values.pattern_spacing ?? ""
+                              }
+                              patternLineWidth={
+                                row.values.pattern_line_width ?? ""
+                              }
+                              patternDotRadius={
+                                row.values.pattern_dot_radius ?? ""
+                              }
                             />
                           ) : null}
                           <div>
@@ -463,6 +493,115 @@ export function ReferenceAdminPanel({
                                 />
                               </div>
                             </div>
+
+                            {showPatternControls ? (
+                              <>
+                                <div>
+                                  <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                    Espacement du motif
+                                  </p>
+                                  <input
+                                    type="number"
+                                    min={MAP_PATTERN_SPACING_MIN}
+                                    max={MAP_PATTERN_SPACING_MAX}
+                                    step="0.5"
+                                    placeholder="Defaut"
+                                    className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                      isPatternSpacingInputValid(
+                                        row.values.pattern_spacing ?? "",
+                                      )
+                                        ? "border-border/70"
+                                        : "border-destructive/70"
+                                    }`}
+                                    value={row.values.pattern_spacing ?? ""}
+                                    disabled={row.saving}
+                                    onChange={(event) =>
+                                      onReferenceRowValueChange(
+                                        row.localId,
+                                        "pattern_spacing",
+                                        event.target.value,
+                                      )
+                                    }
+                                  />
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    {MAP_PATTERN_SPACING_MIN} a{" "}
+                                    {MAP_PATTERN_SPACING_MAX}. Vide = defaut.
+                                  </p>
+                                </div>
+
+                                {showPatternLineWidth ? (
+                                  <div>
+                                    <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                      Epaisseur du trait
+                                    </p>
+                                    <input
+                                      type="number"
+                                      min={MAP_PATTERN_LINE_WIDTH_MIN}
+                                      max={MAP_PATTERN_LINE_WIDTH_MAX}
+                                      step="0.1"
+                                      placeholder="Defaut"
+                                      className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                        isPatternLineWidthInputValid(
+                                          row.values.pattern_line_width ?? "",
+                                        )
+                                          ? "border-border/70"
+                                          : "border-destructive/70"
+                                      }`}
+                                      value={row.values.pattern_line_width ?? ""}
+                                      disabled={row.saving}
+                                      onChange={(event) =>
+                                        onReferenceRowValueChange(
+                                          row.localId,
+                                          "pattern_line_width",
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      {MAP_PATTERN_LINE_WIDTH_MIN} a{" "}
+                                      {MAP_PATTERN_LINE_WIDTH_MAX}. Vide =
+                                      defaut.
+                                    </p>
+                                  </div>
+                                ) : null}
+
+                                {showPatternDotRadius ? (
+                                  <div>
+                                    <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                                      Taille des points
+                                    </p>
+                                    <input
+                                      type="number"
+                                      min={MAP_PATTERN_DOT_RADIUS_MIN}
+                                      max={MAP_PATTERN_DOT_RADIUS_MAX}
+                                      step="0.1"
+                                      placeholder="Defaut"
+                                      className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                        isPatternDotRadiusInputValid(
+                                          row.values.pattern_dot_radius ?? "",
+                                        )
+                                          ? "border-border/70"
+                                          : "border-destructive/70"
+                                      }`}
+                                      value={row.values.pattern_dot_radius ?? ""}
+                                      disabled={row.saving}
+                                      onChange={(event) =>
+                                        onReferenceRowValueChange(
+                                          row.localId,
+                                          "pattern_dot_radius",
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      {MAP_PATTERN_DOT_RADIUS_MIN} a{" "}
+                                      {MAP_PATTERN_DOT_RADIUS_MAX}. Vide =
+                                      defaut.
+                                    </p>
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
 
                             {showControlRatio ? (
                               <div>

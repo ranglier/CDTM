@@ -6,7 +6,14 @@ import type {
   TechFieldDefinition,
 } from "@/admin/tech-types";
 import {
+  MAP_PATTERN_DOT_RADIUS_MAX,
+  MAP_PATTERN_DOT_RADIUS_MIN,
+  MAP_PATTERN_LINE_WIDTH_MAX,
+  MAP_PATTERN_LINE_WIDTH_MIN,
+  MAP_PATTERN_SPACING_MAX,
+  MAP_PATTERN_SPACING_MIN,
   normalizeHexColor,
+  normalizeMapStyleNumber,
   normalizePatternType,
   type MapPatternType,
 } from "@/map/types";
@@ -24,6 +31,9 @@ export const STYLE_FIELDS = [
   "stroke",
   "pattern_type",
   "pattern_color",
+  "pattern_spacing",
+  "pattern_line_width",
+  "pattern_dot_radius",
   "secondary_ratio",
 ] as const;
 export type StyleFieldName = (typeof STYLE_FIELDS)[number];
@@ -255,6 +265,9 @@ export function buildStylePayload(
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  pattern_spacing: number | null;
+  pattern_line_width: number | null;
+  pattern_dot_radius: number | null;
   secondary_ratio: number | null;
 } | null {
   const targetType = view?.styleTargetType ?? null;
@@ -280,6 +293,15 @@ export function buildStylePayload(
     normalizedSecondaryRatio.length > 0
       ? Number(normalizedSecondaryRatio) / 100
       : null;
+  const parsedPatternSpacing = parsedPatternType
+    ? parseOptionalNumberInput(values.pattern_spacing ?? "")
+    : null;
+  const parsedPatternLineWidth = parsedPatternType
+    ? parseOptionalNumberInput(values.pattern_line_width ?? "")
+    : null;
+  const parsedPatternDotRadius = parsedPatternType
+    ? parseOptionalNumberInput(values.pattern_dot_radius ?? "")
+    : null;
 
   if (
     normalizedFill.length === 0 &&
@@ -287,6 +309,9 @@ export function buildStylePayload(
       normalizedStroke.toLowerCase() === DEFAULT_STYLE_STROKE) &&
     (normalizedPatternType.length === 0 || normalizedPatternType === "none") &&
     normalizedPatternColor.length === 0 &&
+    parsedPatternSpacing === null &&
+    parsedPatternLineWidth === null &&
+    parsedPatternDotRadius === null &&
     parsedSecondaryRatio === null
   ) {
     return null;
@@ -299,68 +324,12 @@ export function buildStylePayload(
     stroke: normalizedStroke || null,
     pattern_type: parsedPatternType,
     pattern_color: normalizedPatternColor || null,
+    pattern_spacing: parsedPatternSpacing,
+    pattern_line_width: parsedPatternLineWidth,
+    pattern_dot_radius: parsedPatternDotRadius,
     secondary_ratio:
       targetType === "controle_type" ? parsedSecondaryRatio : null,
   };
-}
-
-export function getPatternCss(
-  patternType: MapPatternType | null,
-  patternColor: string,
-) {
-  const isSpaced = patternType?.endsWith("_spaced") ?? false;
-  const lineStart = isSpaced ? "16px" : "8px";
-  const lineEnd = isSpaced ? "18px" : "10px";
-  const dotPosition = isSpaced ? "5px 5px" : "3px 3px";
-  const dotRadius = isSpaced ? "1.4px" : "1.6px";
-  const dotTransparent = isSpaced ? "1.6px" : "1.8px";
-
-  switch (patternType) {
-    case "diagonal":
-    case "diagonal_spaced":
-      return {
-        backgroundImage: `repeating-linear-gradient(135deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-      };
-    case "diagonal_reverse":
-    case "diagonal_reverse_spaced":
-      return {
-        backgroundImage: `repeating-linear-gradient(45deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-      };
-    case "crosshatch":
-    case "crosshatch_spaced":
-      return {
-        backgroundImage: [
-          `repeating-linear-gradient(135deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-          `repeating-linear-gradient(45deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-        ].join(", "),
-      };
-    case "horizontal":
-    case "horizontal_spaced":
-      return {
-        backgroundImage: `repeating-linear-gradient(0deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-      };
-    case "vertical":
-    case "vertical_spaced":
-      return {
-        backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-      };
-    case "dots":
-    case "dots_spaced":
-      return {
-        backgroundImage: `radial-gradient(circle at ${dotPosition}, ${patternColor} 0 ${dotRadius}, transparent ${dotTransparent})`,
-        backgroundSize: isSpaced ? "18px 18px" : "10px 10px",
-      };
-    case "grid":
-    case "grid_spaced":
-      return {
-        backgroundImage: [
-          `repeating-linear-gradient(0deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-          `repeating-linear-gradient(90deg, transparent 0 ${lineStart}, ${patternColor} ${lineStart} ${lineEnd})`,
-        ].join(", "),
-      };
-    default:
-      return {};
-  }
 }
 
 export function createStylePreview(
@@ -368,6 +337,9 @@ export function createStylePreview(
   stroke: string,
   patternType: string,
   patternColor: string,
+  patternSpacing = "",
+  patternLineWidth = "",
+  patternDotRadius = "",
 ) {
   const normalizedFill = normalizeHexColor(fill);
   const normalizedStroke = normalizeHexColor(stroke) ?? DEFAULT_STYLE_STROKE;
@@ -380,7 +352,40 @@ export function createStylePreview(
     stroke: normalizedStroke,
     patternType: normalizedPatternType,
     patternColor: normalizedPatternColor,
+    patternSpacing: normalizedPatternType
+      ? normalizeMapStyleNumber(
+          patternSpacing,
+          MAP_PATTERN_SPACING_MIN,
+          MAP_PATTERN_SPACING_MAX,
+        )
+      : null,
+    patternLineWidth: normalizedPatternType
+      ? normalizeMapStyleNumber(
+          patternLineWidth,
+          MAP_PATTERN_LINE_WIDTH_MIN,
+          MAP_PATTERN_LINE_WIDTH_MAX,
+        )
+      : null,
+    patternDotRadius: normalizedPatternType
+      ? normalizeMapStyleNumber(
+          patternDotRadius,
+          MAP_PATTERN_DOT_RADIUS_MIN,
+          MAP_PATTERN_DOT_RADIUS_MAX,
+        )
+      : null,
   };
+}
+
+function parseOptionalNumberInput(value: string): number | null {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const numericValue = Number(trimmed);
+
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 export function isHexColorInputValid(value: string): boolean {
@@ -407,6 +412,58 @@ export function isSecondaryRatioInputValid(value: string): boolean {
   return (
     Number.isFinite(numericValue) && numericValue >= 0 && numericValue <= 100
   );
+}
+
+function isBoundedOptionalNumberInputValid(
+  value: string,
+  min: number,
+  max: number,
+): boolean {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return true;
+  }
+
+  const numericValue = Number(trimmed);
+
+  return Number.isFinite(numericValue) && numericValue >= min && numericValue <= max;
+}
+
+export function isPatternSpacingInputValid(value: string): boolean {
+  return isBoundedOptionalNumberInputValid(
+    value,
+    MAP_PATTERN_SPACING_MIN,
+    MAP_PATTERN_SPACING_MAX,
+  );
+}
+
+export function isPatternLineWidthInputValid(value: string): boolean {
+  return isBoundedOptionalNumberInputValid(
+    value,
+    MAP_PATTERN_LINE_WIDTH_MIN,
+    MAP_PATTERN_LINE_WIDTH_MAX,
+  );
+}
+
+export function isPatternDotRadiusInputValid(value: string): boolean {
+  return isBoundedOptionalNumberInputValid(
+    value,
+    MAP_PATTERN_DOT_RADIUS_MIN,
+    MAP_PATTERN_DOT_RADIUS_MAX,
+  );
+}
+
+export function isDotPatternTypeInput(value: string): boolean {
+  const patternType = normalizePatternType(value);
+
+  return patternType === "dots" || patternType === "dots_spaced";
+}
+
+export function isLinePatternTypeInput(value: string): boolean {
+  const patternType = normalizePatternType(value);
+
+  return patternType !== null && !isDotPatternTypeInput(value);
 }
 
 export function isPreviewImageUrl(value: string): boolean {
@@ -480,6 +537,20 @@ export function withStyleValues(
       stroke: style?.stroke ?? DEFAULT_STYLE_STROKE,
       pattern_type: style?.pattern_type ?? "none",
       pattern_color: style?.pattern_color ?? "",
+      pattern_spacing:
+        style?.pattern_spacing !== null && style?.pattern_spacing !== undefined
+          ? String(style.pattern_spacing)
+          : "",
+      pattern_line_width:
+        style?.pattern_line_width !== null &&
+        style?.pattern_line_width !== undefined
+          ? String(style.pattern_line_width)
+          : "",
+      pattern_dot_radius:
+        style?.pattern_dot_radius !== null &&
+        style?.pattern_dot_radius !== undefined
+          ? String(style.pattern_dot_radius)
+          : "",
       secondary_ratio:
         style?.secondary_ratio !== null && style?.secondary_ratio !== undefined
           ? String(Math.round(style.secondary_ratio * 100))

@@ -154,8 +154,12 @@ function drawPatternOverlay(
   extent: MapExtent,
   patternType: CasePatternOverlay & { type: "pattern" },
 ): void {
-  const spec = getPatternSpec(patternType.patternType);
-  const primitives = generatePatternPrimitives(patternType.patternType, extent);
+  const spec = getPatternSpec(patternType.patternType, patternType);
+  const primitives = generatePatternPrimitives(
+    patternType.patternType,
+    extent,
+    patternType,
+  );
 
   context.strokeStyle = patternType.patternColor;
   context.fillStyle = patternType.patternColor;
@@ -222,7 +226,7 @@ function drawControlSplitOverlay(
       continue;
     }
 
-    const spec = getPatternSpec(overlay.patternType);
+    const spec = getPatternSpec(overlay.patternType, overlay);
     const center = toPixel(primitive.center);
     context.beginPath();
     context.arc(

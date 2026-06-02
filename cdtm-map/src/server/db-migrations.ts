@@ -545,6 +545,9 @@ const databaseMigrations: DatabaseMigration[] = [
           stroke TEXT,
           pattern_type TEXT,
           pattern_color TEXT,
+          pattern_spacing NUMERIC,
+          pattern_line_width NUMERIC,
+          pattern_dot_radius NUMERIC,
           secondary_ratio NUMERIC,
           updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -558,6 +561,18 @@ const databaseMigrations: DatabaseMigration[] = [
       await client.query(`
         ALTER TABLE reference_styles
         ADD COLUMN IF NOT EXISTS pattern_color TEXT
+      `);
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_spacing NUMERIC
+      `);
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_line_width NUMERIC
+      `);
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_dot_radius NUMERIC
       `);
       await client.query(`
         ALTER TABLE reference_styles
@@ -1746,6 +1761,26 @@ const databaseMigrations: DatabaseMigration[] = [
         FROM actor_peuples
         WHERE control_current.id_case = actor_peuples.id_case
           AND actor_peuples.peuple_key IS NOT NULL
+      `);
+    },
+  },
+  {
+    version: "016",
+    name: "reference_style_pattern_tuning",
+    up: async (client) => {
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_spacing NUMERIC
+      `);
+
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_line_width NUMERIC
+      `);
+
+      await client.query(`
+        ALTER TABLE reference_styles
+        ADD COLUMN IF NOT EXISTS pattern_dot_radius NUMERIC
       `);
     },
   },

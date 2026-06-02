@@ -31,9 +31,17 @@ import {
   type TechFieldDefinition,
 } from "@/admin/tech-types";
 import {
+  MAP_PATTERN_DOT_RADIUS_MAX,
+  MAP_PATTERN_DOT_RADIUS_MIN,
+  MAP_PATTERN_LINE_WIDTH_MAX,
+  MAP_PATTERN_LINE_WIDTH_MIN,
+  MAP_PATTERN_SPACING_MAX,
+  MAP_PATTERN_SPACING_MIN,
   createEmptyPublicMapStyles,
   normalizeHexColor,
+  normalizeMapStyleNumber,
   normalizePatternType,
+  parseNullableMapStyleNumber,
   type MapStyleRecord,
   type MapPatternType,
   type MapStyleTargetType,
@@ -133,6 +141,9 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
   stroke: string | null;
   patternType: MapPatternType | null;
   patternColor: string | null;
+  patternSpacing: number | null;
+  patternLineWidth: number | null;
+  patternDotRadius: number | null;
   secondaryRatio: number | null;
 } {
   const targetType = normalizeMapStyleTargetType(input.target_type);
@@ -189,6 +200,31 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     throw new Error("Couleur du motif invalide.");
   }
 
+  const patternSpacing = patternType
+    ? parseNullableMapStyleNumber(
+        input.pattern_spacing,
+        MAP_PATTERN_SPACING_MIN,
+        MAP_PATTERN_SPACING_MAX,
+        "Espacement du motif invalide.",
+      )
+    : null;
+  const patternLineWidth = patternType
+    ? parseNullableMapStyleNumber(
+        input.pattern_line_width,
+        MAP_PATTERN_LINE_WIDTH_MIN,
+        MAP_PATTERN_LINE_WIDTH_MAX,
+        "Epaisseur du motif invalide.",
+      )
+    : null;
+  const patternDotRadius = patternType
+    ? parseNullableMapStyleNumber(
+        input.pattern_dot_radius,
+        MAP_PATTERN_DOT_RADIUS_MIN,
+        MAP_PATTERN_DOT_RADIUS_MAX,
+        "Taille des points invalide.",
+      )
+    : null;
+
   let secondaryRatio: number | null = null;
 
   if (targetType === "controle_type" && secondaryRatioRaw !== null) {
@@ -220,6 +256,9 @@ function normalizeMapStylePayload(input: AdminStyleUpsertInput): {
     stroke,
     patternType,
     patternColor,
+    patternSpacing,
+    patternLineWidth,
+    patternDotRadius,
     secondaryRatio,
   };
 }
@@ -231,6 +270,9 @@ function sanitizeMapStyleRow(row: {
   stroke: string | null;
   pattern_type: string | null;
   pattern_color: string | null;
+  pattern_spacing: string | number | null;
+  pattern_line_width: string | number | null;
+  pattern_dot_radius: string | number | null;
   secondary_ratio: string | number | null;
 }): MapStyleRecord | null {
   if (
@@ -249,6 +291,21 @@ function sanitizeMapStyleRow(row: {
   const patternColor = row.pattern_color
     ? normalizeHexColor(row.pattern_color)
     : null;
+  const patternSpacing = normalizeMapStyleNumber(
+    row.pattern_spacing,
+    MAP_PATTERN_SPACING_MIN,
+    MAP_PATTERN_SPACING_MAX,
+  );
+  const patternLineWidth = normalizeMapStyleNumber(
+    row.pattern_line_width,
+    MAP_PATTERN_LINE_WIDTH_MIN,
+    MAP_PATTERN_LINE_WIDTH_MAX,
+  );
+  const patternDotRadius = normalizeMapStyleNumber(
+    row.pattern_dot_radius,
+    MAP_PATTERN_DOT_RADIUS_MIN,
+    MAP_PATTERN_DOT_RADIUS_MAX,
+  );
   const secondaryRatio =
     typeof row.secondary_ratio === "number"
       ? row.secondary_ratio
@@ -265,6 +322,9 @@ function sanitizeMapStyleRow(row: {
     !stroke &&
     !patternType &&
     !patternColor &&
+    patternSpacing === null &&
+    patternLineWidth === null &&
+    patternDotRadius === null &&
     normalizedSecondaryRatio === null
   ) {
     return null;
@@ -277,6 +337,9 @@ function sanitizeMapStyleRow(row: {
     stroke,
     pattern_type: patternType,
     pattern_color: patternColor,
+    pattern_spacing: patternSpacing,
+    pattern_line_width: patternLineWidth,
+    pattern_dot_radius: patternDotRadius,
     secondary_ratio: normalizedSecondaryRatio,
   };
 }
@@ -335,6 +398,9 @@ async function listStylesForTargets(
     stroke: string | null;
     pattern_type: string | null;
     pattern_color: string | null;
+    pattern_spacing: string | number | null;
+    pattern_line_width: string | number | null;
+    pattern_dot_radius: string | number | null;
     secondary_ratio: string | number | null;
   }>(
     `
@@ -345,6 +411,9 @@ async function listStylesForTargets(
         stroke,
         pattern_type,
         pattern_color,
+        pattern_spacing,
+        pattern_line_width,
+        pattern_dot_radius,
         secondary_ratio
       FROM reference_styles
       WHERE cible_type = $1
@@ -365,6 +434,9 @@ async function listStylesForTargets(
           stroke: row.stroke,
           pattern_type: row.pattern_type,
           pattern_color: row.pattern_color,
+          pattern_spacing: row.pattern_spacing,
+          pattern_line_width: row.pattern_line_width,
+          pattern_dot_radius: row.pattern_dot_radius,
           secondary_ratio: row.secondary_ratio,
         },
       ]),
@@ -1349,6 +1421,9 @@ export async function saveMapStyle(
       !normalized.stroke &&
       !normalized.patternType &&
       !normalized.patternColor &&
+      normalized.patternSpacing === null &&
+      normalized.patternLineWidth === null &&
+      normalized.patternDotRadius === null &&
       normalized.secondaryRatio === null
     ) {
       await client.query(
@@ -1385,6 +1460,9 @@ export async function saveMapStyle(
       stroke: string | null;
       pattern_type: string | null;
       pattern_color: string | null;
+      pattern_spacing: string | number | null;
+      pattern_line_width: string | number | null;
+      pattern_dot_radius: string | number | null;
       secondary_ratio: string | number | null;
     }>(
       `
@@ -1396,10 +1474,13 @@ export async function saveMapStyle(
           stroke,
           pattern_type,
           pattern_color,
+          pattern_spacing,
+          pattern_line_width,
+          pattern_dot_radius,
           secondary_ratio,
           updated_by_user_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (id_style) DO UPDATE
         SET
           cible_type = EXCLUDED.cible_type,
@@ -1408,10 +1489,23 @@ export async function saveMapStyle(
           stroke = EXCLUDED.stroke,
           pattern_type = EXCLUDED.pattern_type,
           pattern_color = EXCLUDED.pattern_color,
+          pattern_spacing = EXCLUDED.pattern_spacing,
+          pattern_line_width = EXCLUDED.pattern_line_width,
+          pattern_dot_radius = EXCLUDED.pattern_dot_radius,
           secondary_ratio = EXCLUDED.secondary_ratio,
           updated_by_user_id = EXCLUDED.updated_by_user_id,
           updated_at = NOW()
-        RETURNING cible_type, cible_id, fill, stroke, pattern_type, pattern_color, secondary_ratio
+        RETURNING
+          cible_type,
+          cible_id,
+          fill,
+          stroke,
+          pattern_type,
+          pattern_color,
+          pattern_spacing,
+          pattern_line_width,
+          pattern_dot_radius,
+          secondary_ratio
       `,
       [
         stableStyleId,
@@ -1421,6 +1515,9 @@ export async function saveMapStyle(
         normalized.stroke,
         normalized.patternType,
         normalized.patternColor,
+        normalized.patternSpacing,
+        normalized.patternLineWidth,
+        normalized.patternDotRadius,
         normalized.secondaryRatio,
         userId,
       ],
@@ -1446,6 +1543,9 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
     stroke: string | null;
     pattern_type: string | null;
     pattern_color: string | null;
+    pattern_spacing: string | number | null;
+    pattern_line_width: string | number | null;
+    pattern_dot_radius: string | number | null;
     secondary_ratio: string | number | null;
   }>(
     `
@@ -1456,6 +1556,9 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
         stroke,
         pattern_type,
         pattern_color,
+        pattern_spacing,
+        pattern_line_width,
+        pattern_dot_radius,
         secondary_ratio
       FROM reference_styles
       WHERE cible_type = ANY($1::text[])

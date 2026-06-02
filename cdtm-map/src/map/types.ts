@@ -48,6 +48,13 @@ export type MapPatternType = (typeof MAP_PATTERN_TYPES)[number];
 
 export type MapDisplayMode = "faction" | "influence" | "topographic";
 
+export const MAP_PATTERN_SPACING_MIN = 4;
+export const MAP_PATTERN_SPACING_MAX = 64;
+export const MAP_PATTERN_LINE_WIDTH_MIN = 0.5;
+export const MAP_PATTERN_LINE_WIDTH_MAX = 6;
+export const MAP_PATTERN_DOT_RADIUS_MIN = 0.5;
+export const MAP_PATTERN_DOT_RADIUS_MAX = 8;
+
 export function normalizeMapDisplayMode(value: unknown): MapDisplayMode {
   if (value === "influence" || value === "political") {
     return "influence";
@@ -71,6 +78,9 @@ export type MapStyleRecord = {
   stroke: string | null;
   pattern_type: MapPatternType | null;
   pattern_color: string | null;
+  pattern_spacing: number | null;
+  pattern_line_width: number | null;
+  pattern_dot_radius: number | null;
   secondary_ratio: number | null;
 };
 
@@ -115,6 +125,53 @@ export function normalizePatternType(value: unknown): MapPatternType | null {
   }
 
   return null;
+}
+
+export function normalizeMapStyleNumber(
+  value: unknown,
+  min: number,
+  max: number,
+): number | null {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  return Math.min(max, Math.max(min, numericValue));
+}
+
+export function parseNullableMapStyleNumber(
+  value: unknown,
+  min: number,
+  max: number,
+  errorMessage: string,
+): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : Number.NaN;
+
+  if (typeof value === "string" && value.trim().length === 0) {
+    return null;
+  }
+
+  if (!Number.isFinite(numericValue) || numericValue < min || numericValue > max) {
+    throw new Error(errorMessage);
+  }
+
+  return numericValue;
 }
 
 type StableCaseGeometry =

@@ -100,6 +100,9 @@ export type StylePreviewProps = {
   stroke: string;
   patternType: string;
   patternColor: string;
+  patternSpacing: string;
+  patternLineWidth: string;
+  patternDotRadius: string;
 };
 
 export type ImagePreviewProps = {
