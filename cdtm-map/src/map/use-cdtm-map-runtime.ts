@@ -18,10 +18,6 @@ import {
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
-  attachCasePatternsOverlay,
-  type CasePatternsOverlayHandle,
-} from "@/map/openlayers/case-patterns-layer";
-import {
   createEditorPointsVectorLayer,
   createEditorPointsVectorSource,
   syncEditorPointsLayerVisibility,
@@ -226,7 +222,6 @@ export function useCdtmMapRuntime({
   const casesLayerRef = useRef<ReturnType<
     typeof createCasesVectorLayer
   > | null>(null);
-  const casePatternsOverlayRef = useRef<CasePatternsOverlayHandle | null>(null);
   const pointsSourceRef = useRef<ReturnType<
     typeof createEditorPointsVectorSource
   > | null>(null);
@@ -396,17 +391,6 @@ export function useCdtmMapRuntime({
     mapRef.current = handles.map;
     casesSourceRef.current = handles.casesSource;
     casesLayerRef.current = handles.casesLayer;
-    casePatternsOverlayRef.current?.dispose();
-    casePatternsOverlayRef.current = attachCasePatternsOverlay({
-      map: handles.map,
-      source: handles.casesSource,
-      context: {
-        getDisplayMode: () => displayModeRef.current,
-        getCasePropertiesById: () => casePropertiesByIdRef.current,
-        getPublicMapStyles: () => publicMapStylesRef.current,
-      },
-      visible: casesVisibleRef.current,
-    });
     routesSourceRef.current = handles.routesSource;
     routesLayerRef.current = handles.routesLayer;
     pointsSourceRef.current = handles.pointsSource;
@@ -414,8 +398,6 @@ export function useCdtmMapRuntime({
   }, []);
 
   const resetStandardHandles = useCallback(() => {
-    casePatternsOverlayRef.current?.dispose();
-    casePatternsOverlayRef.current = null;
     mapRef.current = null;
     casesSourceRef.current = null;
     casesLayerRef.current = null;
@@ -534,19 +516,16 @@ export function useCdtmMapRuntime({
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
     casesLayerRef.current?.changed();
-    casePatternsOverlayRef.current?.render();
   }, [casePropertiesById]);
 
   useEffect(() => {
     publicMapStylesRef.current = publicMapStyles;
     casesLayerRef.current?.changed();
-    casePatternsOverlayRef.current?.render();
   }, [publicMapStyles]);
 
   useEffect(() => {
     displayModeRef.current = normalizeMapDisplayMode(displayMode);
     casesLayerRef.current?.changed();
-    casePatternsOverlayRef.current?.render();
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
@@ -608,7 +587,6 @@ export function useCdtmMapRuntime({
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
-    casePatternsOverlayRef.current?.setVisible(casesVisible);
 
     if (!casesVisible) {
       const frame = requestAnimationFrame(() => {
@@ -662,7 +640,6 @@ export function useCdtmMapRuntime({
     mapRef,
     casesSourceRef,
     casesLayerRef,
-    casePatternsOverlayRef,
     pointsSourceRef,
     pointsLayerRef,
     routesSourceRef,

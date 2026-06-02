@@ -1,6 +1,6 @@
 import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
-import Style from "ol/style/Style";
+import Style, { type RenderFunction } from "ol/style/Style";
 
 import {
   normalizeHexColor,
@@ -37,21 +37,11 @@ const HILL_PATTERN_COLOR = "rgba(40, 30, 14, 0.46)";
 const PATTERN_STEP = 12;
 const SPACED_PATTERN_STEP = 18;
 const PATTERN_LINE_WIDTH = 1.25;
-const MIN_VISIBLE_PATTERN_STEP = 7;
-const MIN_VISIBLE_PATTERN_LINE_WIDTH = 1.45;
-const MIN_VISIBLE_PATTERN_DOT_RADIUS = 1.45;
-const CONTROL_SPLIT_MIN_VISIBLE_STEP = 12;
-const CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH = 3;
 const CONTROL_SPLIT_OVERLAY_ALPHA = 0.88;
 const TRANSPARENT_CONTROL_COLOR = "rgba(0, 0, 0, 0)";
-const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
 
 const styleCache = new Map<string, Style>();
-const patternTileCache = new Map<string, CanvasImageSource>();
-const canvasPatternCache = new WeakMap<
-  CanvasRenderingContext2D,
-  Map<string, CanvasPattern>
->();
+const overlayStyleCache = new Map<string, Style>();
 
 type ControlActorType = "faction" | "controleur";
 
@@ -425,8 +415,20 @@ type PatternSpec = {
   dotRadius: number;
 };
 
-type PixelExtent = [number, number, number, number];
-type PixelAnchor = { x: number; y: number };
+type MapExtent = [number, number, number, number];
+type Coordinate2D = [number, number];
+type CoordinatePair = {
+  map: Coordinate2D;
+  pixel: Coordinate2D;
+};
+type AffineTransform = {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+};
 
 function getPatternSpec(patternType: MapPatternType): PatternSpec {
   const spaced = patternType.endsWith("_spaced");
@@ -465,10 +467,6 @@ function isCoordinate(value: unknown): value is [number, number] {
     typeof value[0] === "number" &&
     typeof value[1] === "number"
   );
-}
-
-function normalizeCanvasPixelRatio(pixelRatio: number): number {
-  return Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
 }
 
 function appendRingPath(
@@ -518,55 +516,237 @@ function getFirstAlignedPosition(
   return min - positiveModulo(min - anchor, step);
 }
 
-function drawHorizontalLines(
-  context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
-  step: number,
-) {
-  const [minX, minY, maxX, maxY] = extent;
-  const startY = getFirstAlignedPosition(minY - step, anchor.y, step);
+function collectCoordinatePairs(
+  mapCoordinates: unknown,
+  pixelCoordinates: unknown,
+  pairs: CoordinatePair[],
+): void {
+  if (isCoordinate(mapCoordinates) && isCoordinate(pixelCoordinates)) {
+    pairs.push({
+      map: [mapCoordinates[0], mapCoordinates[1]],
+      pixel: [pixelCoordinates[0], pixelCoordinates[1]],
+    });
+    return;
+  }
 
-  for (let y = startY; y <= maxY + step; y += step) {
-    context.moveTo(minX - step, y);
-    context.lineTo(maxX + step, y);
+  if (!Array.isArray(mapCoordinates) || !Array.isArray(pixelCoordinates)) {
+    return;
+  }
+
+  const length = Math.min(mapCoordinates.length, pixelCoordinates.length);
+
+  for (let index = 0; index < length; index += 1) {
+    collectCoordinatePairs(
+      mapCoordinates[index],
+      pixelCoordinates[index],
+      pairs,
+    );
   }
 }
 
-function drawVerticalLines(
-  context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
-  step: number,
-) {
-  const [minX, minY, maxX, maxY] = extent;
-  const startX = getFirstAlignedPosition(minX - step, anchor.x, step);
+function solveAffineTransform(
+  first: CoordinatePair,
+  second: CoordinatePair,
+  third: CoordinatePair,
+): AffineTransform | null {
+  const [x0, y0] = first.map;
+  const [x1, y1] = second.map;
+  const [x2, y2] = third.map;
+  const [px0, py0] = first.pixel;
+  const [px1, py1] = second.pixel;
+  const [px2, py2] = third.pixel;
+  const determinant = x0 * (y1 - y2) + x1 * (y2 - y0) + x2 * (y0 - y1);
 
-  for (let x = startX; x <= maxX + step; x += step) {
-    context.moveTo(x, minY - step);
-    context.lineTo(x, maxY + step);
+  if (Math.abs(determinant) < 0.000001) {
+    return null;
+  }
+
+  return {
+    a: (px0 * (y1 - y2) + px1 * (y2 - y0) + px2 * (y0 - y1)) / determinant,
+    b: (x0 * (px1 - px2) + x1 * (px2 - px0) + x2 * (px0 - px1)) / determinant,
+    c:
+      (x0 * (y2 * px1 - y1 * px2) +
+        x1 * (y0 * px2 - y2 * px0) +
+        x2 * (y1 * px0 - y0 * px1)) /
+      determinant,
+    d: (py0 * (y1 - y2) + py1 * (y2 - y0) + py2 * (y0 - y1)) / determinant,
+    e: (x0 * (py1 - py2) + x1 * (py2 - py0) + x2 * (py0 - py1)) / determinant,
+    f:
+      (x0 * (y2 * py1 - y1 * py2) +
+        x1 * (y0 * py2 - y2 * py0) +
+        x2 * (y1 * py0 - y0 * py1)) /
+      determinant,
+  };
+}
+
+function createMapToPixelTransform(
+  mapCoordinates: unknown,
+  pixelCoordinates: unknown,
+): { transform: AffineTransform; extent: MapExtent } | null {
+  const pairs: CoordinatePair[] = [];
+
+  collectCoordinatePairs(mapCoordinates, pixelCoordinates, pairs);
+
+  if (pairs.length < 3) {
+    return null;
+  }
+
+  let transform: AffineTransform | null = null;
+
+  for (let secondIndex = 1; secondIndex < pairs.length - 1; secondIndex += 1) {
+    for (
+      let thirdIndex = secondIndex + 1;
+      thirdIndex < pairs.length;
+      thirdIndex += 1
+    ) {
+      transform = solveAffineTransform(
+        pairs[0],
+        pairs[secondIndex],
+        pairs[thirdIndex],
+      );
+
+      if (transform) {
+        break;
+      }
+    }
+
+    if (transform) {
+      break;
+    }
+  }
+
+  if (!transform) {
+    return null;
+  }
+
+  const xs = pairs.map((pair) => pair.map[0]);
+  const ys = pairs.map((pair) => pair.map[1]);
+
+  return {
+    transform,
+    extent: [
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
+    ],
+  };
+}
+
+function transformMapPoint(
+  transform: AffineTransform,
+  point: Coordinate2D,
+): Coordinate2D {
+  const [x, y] = point;
+
+  return [
+    transform.a * x + transform.b * y + transform.c,
+    transform.d * x + transform.e * y + transform.f,
+  ];
+}
+
+function getAveragePixelScale(transform: AffineTransform): number {
+  const horizontalScale = Math.hypot(transform.a, transform.d);
+  const verticalScale = Math.hypot(transform.b, transform.e);
+  const scale = (horizontalScale + verticalScale) / 2;
+
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+function moveToMapPoint(
+  context: CanvasRenderingContext2D,
+  transform: AffineTransform,
+  point: Coordinate2D,
+): void {
+  const [x, y] = transformMapPoint(transform, point);
+
+  context.moveTo(x, y);
+}
+
+function lineToMapPoint(
+  context: CanvasRenderingContext2D,
+  transform: AffineTransform,
+  point: Coordinate2D,
+): void {
+  const [x, y] = transformMapPoint(transform, point);
+
+  context.lineTo(x, y);
+}
+
+function addMapPolygonPath(
+  context: CanvasRenderingContext2D,
+  transform: AffineTransform,
+  points: Coordinate2D[],
+): void {
+  if (points.length === 0) {
+    return;
+  }
+
+  moveToMapPoint(context, transform, points[0]);
+
+  for (let index = 1; index < points.length; index += 1) {
+    lineToMapPoint(context, transform, points[index]);
+  }
+
+  context.closePath();
+}
+
+function drawWorldHorizontalLines(
+  context: CanvasRenderingContext2D,
+  extent: MapExtent,
+  transform: AffineTransform,
+  step: number,
+  padding: number,
+): void {
+  const [minX, minY, maxX, maxY] = extent;
+  const startY = getFirstAlignedPosition(minY - padding, 0, step);
+
+  for (let y = startY; y <= maxY + padding; y += step) {
+    moveToMapPoint(context, transform, [minX - padding, y]);
+    lineToMapPoint(context, transform, [maxX + padding, y]);
   }
 }
 
-function drawDiagonalLines(
+function drawWorldVerticalLines(
   context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
+  extent: MapExtent,
+  transform: AffineTransform,
   step: number,
+  padding: number,
+): void {
+  const [minX, minY, maxX, maxY] = extent;
+  const startX = getFirstAlignedPosition(minX - padding, 0, step);
+
+  for (let x = startX; x <= maxX + padding; x += step) {
+    moveToMapPoint(context, transform, [x, minY - padding]);
+    lineToMapPoint(context, transform, [x, maxY + padding]);
+  }
+}
+
+function drawWorldDiagonalLines(
+  context: CanvasRenderingContext2D,
+  extent: MapExtent,
+  transform: AffineTransform,
+  step: number,
+  padding: number,
   reverse = false,
-) {
+): void {
   const [minX, minY, maxX, maxY] = extent;
-  const padding = Math.max(maxX - minX, maxY - minY) + step;
 
   if (reverse) {
     const minConstant = minY - maxX - padding;
     const maxConstant = maxY - minX + padding;
-    const anchorConstant = anchor.y - anchor.x;
-    const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+    const start = getFirstAlignedPosition(minConstant, 0, step);
 
     for (let constant = start; constant <= maxConstant; constant += step) {
-      context.moveTo(minX - padding, minX - padding + constant);
-      context.lineTo(maxX + padding, maxX + padding + constant);
+      moveToMapPoint(context, transform, [
+        minX - padding,
+        minX - padding + constant,
+      ]);
+      lineToMapPoint(context, transform, [
+        maxX + padding,
+        maxX + padding + constant,
+      ]);
     }
 
     return;
@@ -574,268 +754,149 @@ function drawDiagonalLines(
 
   const minConstant = minX + minY - padding;
   const maxConstant = maxX + maxY + padding;
-  const anchorConstant = anchor.x + anchor.y;
-  const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+  const start = getFirstAlignedPosition(minConstant, 0, step);
 
   for (let constant = start; constant <= maxConstant; constant += step) {
-    context.moveTo(minX - padding, constant - (minX - padding));
-    context.lineTo(maxX + padding, constant - (maxX + padding));
+    moveToMapPoint(context, transform, [
+      minX - padding,
+      constant - (minX - padding),
+    ]);
+    lineToMapPoint(context, transform, [
+      maxX + padding,
+      constant - (maxX + padding),
+    ]);
   }
 }
 
-function drawDots(
+function drawWorldDots(
   context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
+  extent: MapExtent,
+  transform: AffineTransform,
   step: number,
   radius: number,
-) {
+  padding: number,
+): void {
   const [minX, minY, maxX, maxY] = extent;
-  const startX = getFirstAlignedPosition(minX - step, anchor.x, step);
-  const startY = getFirstAlignedPosition(minY - step, anchor.y, step);
+  const startX = getFirstAlignedPosition(minX - padding, 0, step);
+  const startY = getFirstAlignedPosition(minY - padding, 0, step);
 
-  for (let x = startX; x <= maxX + step; x += step) {
-    for (let y = startY; y <= maxY + step; y += step) {
+  for (let x = startX; x <= maxX + padding; x += step) {
+    for (let y = startY; y <= maxY + padding; y += step) {
+      const [pixelX, pixelY] = transformMapPoint(transform, [x, y]);
+
       context.beginPath();
-      context.arc(x, y, radius, 0, Math.PI * 2);
+      context.arc(pixelX, pixelY, radius, 0, Math.PI * 2);
       context.fill();
     }
   }
 }
 
-function createPatternCanvas(
-  width: number,
-  height: number,
-): HTMLCanvasElement | null {
-  const canvasWidth = Math.max(1, Math.ceil(width));
-  const canvasHeight = Math.max(1, Math.ceil(height));
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
-  return canvas;
-}
-
-function getPatternCanvasSize(canvas: CanvasImageSource): {
-  width: number;
-  height: number;
-} {
-  if (
-    typeof HTMLCanvasElement !== "undefined" &&
-    canvas instanceof HTMLCanvasElement
-  ) {
-    return { width: canvas.width, height: canvas.height };
-  }
-
-  if (
-    typeof OffscreenCanvas !== "undefined" &&
-    canvas instanceof OffscreenCanvas
-  ) {
-    return { width: canvas.width, height: canvas.height };
-  }
-
-  return { width: 1, height: 1 };
-}
-
-function getPatternTile(
+function drawWorldPattern(
+  context: CanvasRenderingContext2D,
+  extent: MapExtent,
+  transform: AffineTransform,
   patternType: MapPatternType,
   patternColor: string,
-  pixelRatio: number,
-): CanvasImageSource | null {
-  const ratio = normalizeCanvasPixelRatio(pixelRatio);
+): void {
   const spec = getPatternSpec(patternType);
-  const step = Math.max(MIN_VISIBLE_PATTERN_STEP, spec.step) * ratio;
-  const lineWidth =
-    Math.max(MIN_VISIBLE_PATTERN_LINE_WIDTH, spec.lineWidth) * ratio;
-  const dotRadius =
-    Math.max(MIN_VISIBLE_PATTERN_DOT_RADIUS, spec.dotRadius) * ratio;
-  const cacheKey = [
-    "pattern",
-    patternType,
-    patternColor,
-    Math.round(ratio * 100),
-  ].join("|");
-  const cached = patternTileCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const canvas = createPatternCanvas(step, step);
-  const context = canvas?.getContext("2d") ?? null;
-
-  if (!canvas || !context) {
-    return null;
-  }
+  const scale = getAveragePixelScale(transform);
+  const padding =
+    Math.max(extent[2] - extent[0], extent[3] - extent[1]) + spec.step;
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
-  context.lineWidth = lineWidth;
+  context.lineWidth = Math.max(0.45, spec.lineWidth * scale);
   context.lineCap = "round";
 
   if (spec.kind === "dots") {
-    drawDots(
+    drawWorldDots(
       context,
-      [0, 0, step, step],
-      SCREEN_PATTERN_ANCHOR,
-      step,
-      dotRadius,
+      extent,
+      transform,
+      spec.step,
+      Math.max(0.45, spec.dotRadius * scale),
+      padding,
     );
-  } else {
-    context.beginPath();
-
-    switch (spec.kind) {
-      case "diagonal":
-        drawDiagonalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-          false,
-        );
-        break;
-      case "diagonal_reverse":
-        drawDiagonalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-          true,
-        );
-        break;
-      case "crosshatch":
-        drawDiagonalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-          false,
-        );
-        drawDiagonalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-          true,
-        );
-        break;
-      case "horizontal":
-        drawHorizontalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-        );
-        break;
-      case "vertical":
-        drawVerticalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-        );
-        break;
-      case "grid":
-        drawHorizontalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-        );
-        drawVerticalLines(
-          context,
-          [0, 0, step, step],
-          SCREEN_PATTERN_ANCHOR,
-          step,
-        );
-        break;
-    }
-
-    context.stroke();
+    return;
   }
 
-  patternTileCache.set(cacheKey, canvas);
-  return canvas;
-}
-
-function getContextPattern(
-  context: CanvasRenderingContext2D,
-  cacheKey: string,
-  tile: CanvasImageSource,
-): CanvasPattern | null {
-  let contextCache = canvasPatternCache.get(context);
-
-  if (!contextCache) {
-    contextCache = new Map();
-    canvasPatternCache.set(context, contextCache);
-  }
-
-  const cached = contextCache.get(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
-  const pattern = context.createPattern(tile, "repeat");
-
-  if (pattern) {
-    contextCache.set(cacheKey, pattern);
-  }
-
-  return pattern;
-}
-
-function fillClippedWithPattern(
-  context: CanvasRenderingContext2D,
-  coordinates: unknown,
-  pattern: CanvasPattern,
-) {
-  const canvasSize = getPatternCanvasSize(context.canvas);
-
-  context.save();
   context.beginPath();
-  appendGeometryPath(context, coordinates);
-  context.clip("evenodd");
-  context.fillStyle = pattern;
-  context.fillRect(0, 0, canvasSize.width, canvasSize.height);
-  context.restore();
+
+  switch (spec.kind) {
+    case "diagonal":
+      drawWorldDiagonalLines(context, extent, transform, spec.step, padding);
+      break;
+    case "diagonal_reverse":
+      drawWorldDiagonalLines(
+        context,
+        extent,
+        transform,
+        spec.step,
+        padding,
+        true,
+      );
+      break;
+    case "crosshatch":
+      drawWorldDiagonalLines(context, extent, transform, spec.step, padding);
+      drawWorldDiagonalLines(
+        context,
+        extent,
+        transform,
+        spec.step,
+        padding,
+        true,
+      );
+      break;
+    case "horizontal":
+      drawWorldHorizontalLines(context, extent, transform, spec.step, padding);
+      break;
+    case "vertical":
+      drawWorldVerticalLines(context, extent, transform, spec.step, padding);
+      break;
+    case "grid":
+      drawWorldHorizontalLines(context, extent, transform, spec.step, padding);
+      drawWorldVerticalLines(context, extent, transform, spec.step, padding);
+      break;
+  }
+
+  context.stroke();
 }
 
-function drawControlSplitBands(
+function fillMapBand(
   context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
+  transform: AffineTransform,
+  points: Coordinate2D[],
+): void {
+  context.beginPath();
+  addMapPolygonPath(context, transform, points);
+  context.fill();
+}
+
+function drawWorldControlSplitBands(
+  context: CanvasRenderingContext2D,
+  extent: MapExtent,
+  transform: AffineTransform,
   overlay: ControlSplitOverlay,
-) {
+): void {
   const spec = getPatternSpec(overlay.patternType);
-  const step = Math.max(CONTROL_SPLIT_MIN_VISIBLE_STEP, spec.step);
+  const step = spec.step;
   const hasEmptySecondaryBands =
     overlay.secondaryColor === TRANSPARENT_CONTROL_COLOR;
   const rawBandWidth = hasEmptySecondaryBands
     ? step * (1 - overlay.secondaryRatio)
     : step * overlay.secondaryRatio;
   const bandWidth =
-    rawBandWidth <= 0
-      ? 0
-      : Math.min(
-          step,
-          Math.max(CONTROL_SPLIT_MIN_VISIBLE_BAND_WIDTH, rawBandWidth),
-        );
+    rawBandWidth <= 0 ? 0 : Math.min(step, Math.max(0.01, rawBandWidth));
   const [minX, minY, maxX, maxY] = extent;
   const padding = Math.max(maxX - minX, maxY - minY) + step * 2;
 
   if (!hasEmptySecondaryBands) {
     context.fillStyle = overlay.primaryColor;
-    context.fillRect(
-      minX - padding,
-      minY - padding,
-      maxX - minX + padding * 2,
-      maxY - minY + padding * 2,
-    );
+    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+  }
+
+  if (bandWidth <= 0) {
+    return;
   }
 
   context.fillStyle = hasEmptySecondaryBands
@@ -843,69 +904,66 @@ function drawControlSplitBands(
     : overlay.secondaryColor;
 
   function fillHorizontalBands() {
-    const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
+    const startY = getFirstAlignedPosition(minY - padding, 0, step);
 
     for (let y = startY; y <= maxY + padding; y += step) {
-      context.fillRect(minX - padding, y, maxX - minX + padding * 2, bandWidth);
+      fillMapBand(context, transform, [
+        [minX - padding, y],
+        [maxX + padding, y],
+        [maxX + padding, y + bandWidth],
+        [minX - padding, y + bandWidth],
+      ]);
     }
   }
 
   function fillVerticalBands() {
-    const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
+    const startX = getFirstAlignedPosition(minX - padding, 0, step);
 
     for (let x = startX; x <= maxX + padding; x += step) {
-      context.fillRect(x, minY - padding, bandWidth, maxY - minY + padding * 2);
+      fillMapBand(context, transform, [
+        [x, minY - padding],
+        [x + bandWidth, minY - padding],
+        [x + bandWidth, maxY + padding],
+        [x, maxY + padding],
+      ]);
     }
   }
 
   function fillDiagonalBands(reverse = false) {
-    if (bandWidth <= 0) {
-      return;
-    }
-
     const minConstant = reverse ? minY - maxX - padding : minX + minY - padding;
     const maxConstant = reverse ? maxY - minX + padding : maxX + maxY + padding;
-    const anchorConstant = reverse ? anchor.y - anchor.x : anchor.x + anchor.y;
-    const start = getFirstAlignedPosition(minConstant, anchorConstant, step);
+    const start = getFirstAlignedPosition(minConstant, 0, step);
 
     for (let constant = start; constant <= maxConstant; constant += step) {
       const nextConstant = constant + bandWidth;
 
-      context.beginPath();
-
       if (reverse) {
-        context.moveTo(minX - padding, minX - padding + constant);
-        context.lineTo(maxX + padding, maxX + padding + constant);
-        context.lineTo(maxX + padding, maxX + padding + nextConstant);
-        context.lineTo(minX - padding, minX - padding + nextConstant);
-      } else {
-        context.moveTo(minX - padding, constant - (minX - padding));
-        context.lineTo(maxX + padding, constant - (maxX + padding));
-        context.lineTo(maxX + padding, nextConstant - (maxX + padding));
-        context.lineTo(minX - padding, nextConstant - (minX - padding));
+        fillMapBand(context, transform, [
+          [minX - padding, minX - padding + constant],
+          [maxX + padding, maxX + padding + constant],
+          [maxX + padding, maxX + padding + nextConstant],
+          [minX - padding, minX - padding + nextConstant],
+        ]);
+        continue;
       }
 
-      context.closePath();
-      context.fill();
+      fillMapBand(context, transform, [
+        [minX - padding, constant - (minX - padding)],
+        [maxX + padding, constant - (maxX + padding)],
+        [maxX + padding, nextConstant - (maxX + padding)],
+        [minX - padding, nextConstant - (minX - padding)],
+      ]);
     }
   }
 
   function fillDots() {
-    if (bandWidth <= 0) {
-      return;
-    }
+    const scale = getAveragePixelScale(transform);
+    const radius = Math.max(
+      0.45,
+      Math.min(step * 0.35, bandWidth * 0.5) * scale,
+    );
 
-    const radius = Math.max(1, Math.min(step * 0.35, bandWidth * 0.5));
-    const startX = getFirstAlignedPosition(minX - padding, anchor.x, step);
-    const startY = getFirstAlignedPosition(minY - padding, anchor.y, step);
-
-    for (let x = startX; x <= maxX + padding; x += step) {
-      for (let y = startY; y <= maxY + padding; y += step) {
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fill();
-      }
-    }
+    drawWorldDots(context, extent, transform, step, radius, padding);
   }
 
   switch (spec.kind) {
@@ -935,44 +993,102 @@ function drawControlSplitBands(
   }
 }
 
-function getControlSplitTile(
-  overlay: ControlSplitOverlay,
-  pixelRatio: number,
-): CanvasImageSource | null {
-  const ratio = normalizeCanvasPixelRatio(pixelRatio);
-  const spec = getPatternSpec(overlay.patternType);
-  const step = Math.max(CONTROL_SPLIT_MIN_VISIBLE_STEP, spec.step) * ratio;
-  const cacheKey = [
-    "control",
-    overlay.primaryColor,
-    overlay.secondaryColor,
-    overlay.secondaryRatio,
-    overlay.patternType,
-    Math.round(ratio * 100),
-  ].join("|");
-  const cached = patternTileCache.get(cacheKey);
+function renderCasePatternOverlay(
+  context: CanvasRenderingContext2D,
+  pixelCoordinates: unknown,
+  mapCoordinates: unknown,
+  overlay: CasePatternOverlay,
+): void {
+  const transformContext = createMapToPixelTransform(
+    mapCoordinates,
+    pixelCoordinates,
+  );
+
+  if (!transformContext) {
+    return;
+  }
+
+  context.save();
+  context.beginPath();
+  appendGeometryPath(context, pixelCoordinates);
+  context.clip("evenodd");
+
+  if (overlay.type === "control-split") {
+    context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
+    drawWorldControlSplitBands(
+      context,
+      transformContext.extent,
+      transformContext.transform,
+      overlay.overlay,
+    );
+  } else {
+    drawWorldPattern(
+      context,
+      transformContext.extent,
+      transformContext.transform,
+      overlay.patternType,
+      overlay.patternColor,
+    );
+  }
+
+  context.restore();
+}
+
+function createCasePatternRenderer(
+  overlay: CasePatternOverlay,
+): RenderFunction {
+  return (pixelCoordinates, state) => {
+    const mapCoordinates = state.geometry.getCoordinates();
+
+    if (!mapCoordinates) {
+      return;
+    }
+
+    renderCasePatternOverlay(
+      state.context,
+      pixelCoordinates,
+      mapCoordinates,
+      overlay,
+    );
+  };
+}
+
+function getOverlayStyle(
+  overlay: CasePatternOverlay,
+  zIndex: number,
+  index: number,
+): Style {
+  const cacheKey =
+    overlay.type === "control-split"
+      ? [
+          "control",
+          overlay.overlay.primaryColor,
+          overlay.overlay.secondaryColor,
+          overlay.overlay.secondaryRatio,
+          overlay.overlay.patternType,
+          zIndex,
+          index,
+        ].join("|")
+      : [
+          "pattern",
+          overlay.patternType,
+          overlay.patternColor,
+          zIndex,
+          index,
+        ].join("|");
+  const cached = overlayStyleCache.get(cacheKey);
 
   if (cached) {
     return cached;
   }
 
-  const canvas = createPatternCanvas(step, step);
-  const context = canvas?.getContext("2d") ?? null;
+  const style = new Style({
+    renderer: createCasePatternRenderer(overlay),
+    zIndex: zIndex + 0.1 + index * 0.01,
+  });
 
-  if (!canvas || !context) {
-    return null;
-  }
-
-  context.scale(ratio, ratio);
-  drawControlSplitBands(
-    context,
-    [0, 0, step / ratio, step / ratio],
-    SCREEN_PATTERN_ANCHOR,
-    overlay,
-  );
-
-  patternTileCache.set(cacheKey, canvas);
-  return canvas;
+  overlayStyleCache.set(cacheKey, style);
+  return style;
 }
 
 function buildCacheKey(
@@ -1055,25 +1171,39 @@ export function getCaseStyle({
     strokeWidth,
     zIndex,
   );
-  const cached = styleCache.get(cacheKey);
+  let style = styleCache.get(cacheKey);
 
-  if (cached) {
-    return cached;
+  if (!style) {
+    style = new Style({
+      fill: new Fill({
+        color: fillColorWithSelection,
+      }),
+      stroke: new Stroke({
+        color: strokeColor,
+        width: strokeWidth,
+      }),
+      zIndex,
+    });
+
+    styleCache.set(cacheKey, style);
   }
 
-  const style = new Style({
-    fill: new Fill({
-      color: fillColorWithSelection,
-    }),
-    stroke: new Stroke({
-      color: strokeColor,
-      width: strokeWidth,
-    }),
-    zIndex,
+  const overlays = getCasePatternOverlays({
+    displayMode,
+    properties,
+    styles,
   });
 
-  styleCache.set(cacheKey, style);
-  return style;
+  if (overlays.length === 0) {
+    return style;
+  }
+
+  return [
+    style,
+    ...overlays.map((overlay, index) =>
+      getOverlayStyle(overlay, zIndex, index),
+    ),
+  ];
 }
 
 export function getCasePatternOverlays({
@@ -1118,69 +1248,4 @@ export function getCasePatternOverlays({
   }
 
   return overlays;
-}
-
-export function paintCasePatternOverlay(
-  context: CanvasRenderingContext2D,
-  coordinates: unknown,
-  overlay: CasePatternOverlay,
-  pixelRatio: number,
-): void {
-  if (overlay.type === "control-split") {
-    const tile = getControlSplitTile(overlay.overlay, pixelRatio);
-
-    if (!tile) {
-      return;
-    }
-
-    const pattern = getContextPattern(
-      context,
-      [
-        "control",
-        overlay.overlay.primaryColor,
-        overlay.overlay.secondaryColor,
-        overlay.overlay.secondaryRatio,
-        overlay.overlay.patternType,
-        Math.round(normalizeCanvasPixelRatio(pixelRatio) * 100),
-      ].join("|"),
-      tile,
-    );
-
-    if (!pattern) {
-      return;
-    }
-
-    context.save();
-    context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
-    fillClippedWithPattern(context, coordinates, pattern);
-    context.restore();
-    return;
-  }
-
-  const tile = getPatternTile(
-    overlay.patternType,
-    overlay.patternColor,
-    pixelRatio,
-  );
-
-  if (!tile) {
-    return;
-  }
-
-  const pattern = getContextPattern(
-    context,
-    [
-      "pattern",
-      overlay.patternType,
-      overlay.patternColor,
-      Math.round(normalizeCanvasPixelRatio(pixelRatio) * 100),
-    ].join("|"),
-    tile,
-  );
-
-  if (!pattern) {
-    return;
-  }
-
-  fillClippedWithPattern(context, coordinates, pattern);
 }
