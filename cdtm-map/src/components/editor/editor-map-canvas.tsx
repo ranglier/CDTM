@@ -900,7 +900,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     mapElementRef,
     mapRef,
     casesSourceRef,
+    caseFillLayerRef,
     casesLayerRef,
+    casePatternsRendererRef,
     pointsSourceRef,
     pointsLayerRef,
     routesSourceRef,
@@ -1959,6 +1961,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     );
     const map = createMap(mapElementRef.current, [
       standardLayers.backgroundLayer,
+      standardLayers.caseFillLayer,
       standardLayers.casesLayer,
       standardLayers.routesLayer,
       routePreviewLayer,
@@ -1983,6 +1986,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     bindStandardHandles({
       map,
       casesSource: standardLayers.casesSource,
+      caseFillLayer: standardLayers.caseFillLayer,
       casesLayer: standardLayers.casesLayer,
       routesSource: standardLayers.routesSource,
       routesLayer: standardLayers.routesLayer,
@@ -2616,7 +2620,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
         casesSourceRef.current.clear(true);
         casesSourceRef.current.addFeatures(features);
+        caseFillLayerRef.current?.changed();
         casesLayerRef.current?.changed();
+        casePatternsRendererRef.current?.render();
         setStableCases(nextStableCases);
         if (
           selectedCaseIdsRef.current.size === 0 &&
@@ -2860,6 +2866,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     mapElementRef,
     activeCaseIdRef,
     casePropertiesByIdRef,
+    caseFillLayerRef,
+    casePatternsRendererRef,
     casesLayerRef,
     casesSourceRef,
     resetStandardHandles,
@@ -3096,7 +3104,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           );
           casePropertiesByIdRef.current =
             buildCasePropertiesById(nextStableCases);
+          caseFillLayerRef.current?.changed();
           casesLayerRef.current?.changed();
+          casePatternsRendererRef.current?.render();
           return nextStableCases;
         });
         resetBulkAdminEditor(refreshedRecords);
@@ -3126,7 +3136,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           );
           casePropertiesByIdRef.current =
             buildCasePropertiesById(nextStableCases);
+          caseFillLayerRef.current?.changed();
           casesLayerRef.current?.changed();
+          casePatternsRendererRef.current?.render();
           return nextStableCases;
         });
         resetSingleAdminEditor(
@@ -3152,6 +3164,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     resetBulkAdminEditor,
     resetSingleAdminEditor,
     casePropertiesByIdRef,
+    caseFillLayerRef,
+    casePatternsRendererRef,
     casesLayerRef,
     selectedCaseIds,
     singleDraft,

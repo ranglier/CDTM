@@ -10,7 +10,7 @@ import {
   MAP_VECTOR_UPDATE_WHILE_ANIMATING,
   MAP_VECTOR_UPDATE_WHILE_INTERACTING,
 } from "@/map/config";
-import { getCaseStyle } from "@/map/styles";
+import { getCaseStyle, type CaseStylePart } from "@/map/styles";
 import {
   createEmptyPublicMapStyles,
   type MapDisplayMode,
@@ -39,6 +39,7 @@ type CreateCasesVectorLayerOptions = {
   renderBuffer?: number;
   updateWhileAnimating?: boolean;
   updateWhileInteracting?: boolean;
+  stylePart?: CaseStylePart;
 };
 
 const geoJsonFormat = new GeoJSON();
@@ -92,6 +93,7 @@ export function createCasesVectorLayer(
     renderBuffer = MAP_CASES_RENDER_BUFFER,
     updateWhileAnimating = MAP_VECTOR_UPDATE_WHILE_ANIMATING,
     updateWhileInteracting = MAP_VECTOR_UPDATE_WHILE_INTERACTING,
+    stylePart = "full",
   } = options;
 
   return new VectorLayer({
@@ -124,6 +126,7 @@ export function createCasesVectorLayer(
         displayMode,
         properties,
         styles,
+        part: stylePart,
       });
     },
   });

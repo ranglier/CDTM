@@ -330,6 +330,7 @@ export function CasesMap({
     const standardLayers = createStandardLayers();
     const map = createMap(mapElementRef.current, [
       standardLayers.backgroundLayer,
+      standardLayers.caseFillLayer,
       standardLayers.casesLayer,
       standardLayers.routesLayer,
       standardLayers.pointsLayer,
@@ -487,6 +488,7 @@ export function CasesMap({
     bindStandardHandles({
       map,
       casesSource: standardLayers.casesSource,
+      caseFillLayer: standardLayers.caseFillLayer,
       casesLayer: standardLayers.casesLayer,
       routesSource: standardLayers.routesSource,
       routesLayer: standardLayers.routesLayer,

@@ -18,6 +18,10 @@ import {
   syncCaseLayerVisibility,
 } from "@/map/openlayers/cases-layer";
 import {
+  attachCasePatternsRenderer,
+  type CasePatternsRendererHandle,
+} from "@/map/openlayers/case-patterns-renderer";
+import {
   createEditorPointsVectorLayer,
   createEditorPointsVectorSource,
   syncEditorPointsLayerVisibility,
@@ -56,6 +60,7 @@ export type CdtmMapObjectDisplayMode = "icons" | "points";
 type StandardLayers = {
   backgroundLayer: ReturnType<typeof createCdtmBackgroundLayer>;
   casesSource: ReturnType<typeof createCasesVectorSource>;
+  caseFillLayer: ReturnType<typeof createCasesVectorLayer>;
   casesLayer: ReturnType<typeof createCasesVectorLayer>;
   routesSource: ReturnType<typeof createEditorRoutesVectorSource>;
   routesLayer: ReturnType<typeof createEditorRoutesVectorLayer>;
@@ -219,9 +224,15 @@ export function useCdtmMapRuntime({
   const casesSourceRef = useRef<ReturnType<
     typeof createCasesVectorSource
   > | null>(null);
+  const caseFillLayerRef = useRef<ReturnType<
+    typeof createCasesVectorLayer
+  > | null>(null);
   const casesLayerRef = useRef<ReturnType<
     typeof createCasesVectorLayer
   > | null>(null);
+  const casePatternsRendererRef = useRef<CasePatternsRendererHandle | null>(
+    null,
+  );
   const pointsSourceRef = useRef<ReturnType<
     typeof createEditorPointsVectorSource
   > | null>(null);
@@ -329,23 +340,29 @@ export function useCdtmMapRuntime({
     const casesSource = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
     const pointsSource = createEditorPointsVectorSource();
-    const casesLayer = createCasesVectorLayer(
+    const caseLayerContext = {
+      getDisplayMode: () => displayModeRef.current,
+      getCasePropertiesById: () => casePropertiesByIdRef.current,
+      getPublicMapStyles: () => publicMapStylesRef.current,
+      getSelectionState: (idCase: string | null) =>
+        idCase === activeCaseIdRef.current
+          ? "active"
+          : idCase !== null && selectedCaseIdsRef.current.has(idCase)
+            ? "selected"
+            : "default",
+    };
+    const caseFillLayer = createCasesVectorLayer(
       casesSource,
-      {
-        getDisplayMode: () => displayModeRef.current,
-        getCasePropertiesById: () => casePropertiesByIdRef.current,
-        getPublicMapStyles: () => publicMapStylesRef.current,
-        getSelectionState: (idCase) =>
-          idCase === activeCaseIdRef.current
-            ? "active"
-            : idCase !== null && selectedCaseIdsRef.current.has(idCase)
-              ? "selected"
-              : "default",
-      },
+      caseLayerContext,
       {
         visible: casesVisibleRef.current,
+        stylePart: "fill",
       },
     );
+    const casesLayer = createCasesVectorLayer(casesSource, caseLayerContext, {
+      visible: casesVisibleRef.current,
+      stylePart: "stroke",
+    });
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
     });
@@ -371,6 +388,7 @@ export function useCdtmMapRuntime({
     return {
       backgroundLayer,
       casesSource,
+      caseFillLayer,
       casesLayer,
       routesSource,
       routesLayer,
@@ -390,7 +408,20 @@ export function useCdtmMapRuntime({
   const bindStandardHandles = useCallback((handles: RuntimeHandles) => {
     mapRef.current = handles.map;
     casesSourceRef.current = handles.casesSource;
+    caseFillLayerRef.current = handles.caseFillLayer;
     casesLayerRef.current = handles.casesLayer;
+    casePatternsRendererRef.current?.dispose();
+    casePatternsRendererRef.current = attachCasePatternsRenderer({
+      map: handles.map,
+      layer: handles.caseFillLayer,
+      source: handles.casesSource,
+      context: {
+        getDisplayMode: () => displayModeRef.current,
+        getCasePropertiesById: () => casePropertiesByIdRef.current,
+        getPublicMapStyles: () => publicMapStylesRef.current,
+      },
+      visible: casesVisibleRef.current,
+    });
     routesSourceRef.current = handles.routesSource;
     routesLayerRef.current = handles.routesLayer;
     pointsSourceRef.current = handles.pointsSource;
@@ -398,8 +429,11 @@ export function useCdtmMapRuntime({
   }, []);
 
   const resetStandardHandles = useCallback(() => {
+    casePatternsRendererRef.current?.dispose();
+    casePatternsRendererRef.current = null;
     mapRef.current = null;
     casesSourceRef.current = null;
+    caseFillLayerRef.current = null;
     casesLayerRef.current = null;
     routesSourceRef.current = null;
     routesLayerRef.current = null;
@@ -515,17 +549,23 @@ export function useCdtmMapRuntime({
 
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
+    caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
+    casePatternsRendererRef.current?.render();
   }, [casePropertiesById]);
 
   useEffect(() => {
     publicMapStylesRef.current = publicMapStyles;
+    caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
+    casePatternsRendererRef.current?.render();
   }, [publicMapStyles]);
 
   useEffect(() => {
     displayModeRef.current = normalizeMapDisplayMode(displayMode);
+    caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
+    casePatternsRendererRef.current?.render();
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
@@ -582,11 +622,16 @@ export function useCdtmMapRuntime({
     for (const idCase of changedIds) {
       source.getFeatureById(idCase)?.changed();
     }
+
+    caseFillLayerRef.current?.changed();
+    casesLayerRef.current?.changed();
   }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
     casesVisibleRef.current = casesVisible;
+    syncCaseLayerVisibility(caseFillLayerRef.current, casesVisible);
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
+    casePatternsRendererRef.current?.setVisible(casesVisible);
 
     if (!casesVisible) {
       const frame = requestAnimationFrame(() => {
@@ -639,7 +684,9 @@ export function useCdtmMapRuntime({
     mapElementRef,
     mapRef,
     casesSourceRef,
+    caseFillLayerRef,
     casesLayerRef,
+    casePatternsRendererRef,
     pointsSourceRef,
     pointsLayerRef,
     routesSourceRef,
