@@ -49,6 +49,11 @@ const SCREEN_PATTERN_ANCHOR: PixelAnchor = { x: 0, y: 0 };
 const styleCache = new Map<string, Style>();
 const patternOverlayCache = new Map<string, Style>();
 const controlSplitOverlayCache = new Map<string, Style>();
+const patternTileCache = new Map<string, CanvasImageSource>();
+const canvasPatternCache = new WeakMap<
+  CanvasRenderingContext2D,
+  Map<string, CanvasPattern>
+>();
 
 type ControlActorType = "faction" | "controleur";
 
@@ -453,75 +458,8 @@ function isCoordinate(value: unknown): value is [number, number] {
   );
 }
 
-function flattenCoordinates(value: unknown, output: Array<[number, number]>) {
-  if (isCoordinate(value)) {
-    output.push(value);
-    return;
-  }
-
-  if (!Array.isArray(value)) {
-    return;
-  }
-
-  for (const item of value) {
-    flattenCoordinates(item, output);
-  }
-}
-
-function getPixelExtent(coordinates: unknown): PixelExtent | null {
-  const flattened: Array<[number, number]> = [];
-  flattenCoordinates(coordinates, flattened);
-
-  if (flattened.length === 0) {
-    return null;
-  }
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const [x, y] of flattened) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-
-  return [minX, minY, maxX, maxY];
-}
-
 function normalizeCanvasPixelRatio(pixelRatio: number): number {
   return Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-}
-
-function toCssPixelCoordinates(value: unknown, pixelRatio: number): unknown {
-  if (isCoordinate(value)) {
-    return [value[0] / pixelRatio, value[1] / pixelRatio];
-  }
-
-  if (!Array.isArray(value)) {
-    return value;
-  }
-
-  return value.map((item) => toCssPixelCoordinates(item, pixelRatio));
-}
-
-function prepareCssPixelRenderer(
-  context: CanvasRenderingContext2D,
-  coordinates: unknown,
-  pixelRatio: number,
-): { coordinates: unknown; extent: PixelExtent } | null {
-  const ratio = normalizeCanvasPixelRatio(pixelRatio);
-  const cssCoordinates = toCssPixelCoordinates(coordinates, ratio);
-  const cssExtent = getPixelExtent(cssCoordinates);
-
-  if (!cssExtent) {
-    return null;
-  }
-
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  return { coordinates: cssCoordinates, extent: cssExtent };
 }
 
 function appendRingPath(
@@ -656,23 +594,74 @@ function drawDots(
   }
 }
 
-function drawAnchoredPattern(
-  context: CanvasRenderingContext2D,
-  extent: PixelExtent,
-  anchor: PixelAnchor,
+function createPatternCanvas(
+  width: number,
+  height: number,
+): HTMLCanvasElement | null {
+  const canvasWidth = Math.max(1, Math.ceil(width));
+  const canvasHeight = Math.max(1, Math.ceil(height));
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  return canvas;
+}
+
+function getPatternCanvasSize(canvas: CanvasImageSource): {
+  width: number;
+  height: number;
+} {
+  if (
+    typeof HTMLCanvasElement !== "undefined" &&
+    canvas instanceof HTMLCanvasElement
+  ) {
+    return { width: canvas.width, height: canvas.height };
+  }
+
+  if (
+    typeof OffscreenCanvas !== "undefined" &&
+    canvas instanceof OffscreenCanvas
+  ) {
+    return { width: canvas.width, height: canvas.height };
+  }
+
+  return { width: 1, height: 1 };
+}
+
+function getPatternTile(
   patternType: MapPatternType,
   patternColor: string,
-) {
+  pixelRatio: number,
+): CanvasImageSource | null {
+  const ratio = normalizeCanvasPixelRatio(pixelRatio);
   const spec = getPatternSpec(patternType);
-  const step = Math.max(MIN_VISIBLE_PATTERN_STEP, spec.step);
-  const lineWidth = Math.max(
-    MIN_VISIBLE_PATTERN_LINE_WIDTH,
-    spec.lineWidth,
-  );
-  const dotRadius = Math.max(
-    MIN_VISIBLE_PATTERN_DOT_RADIUS,
-    spec.dotRadius,
-  );
+  const step = Math.max(MIN_VISIBLE_PATTERN_STEP, spec.step) * ratio;
+  const lineWidth =
+    Math.max(MIN_VISIBLE_PATTERN_LINE_WIDTH, spec.lineWidth) * ratio;
+  const dotRadius =
+    Math.max(MIN_VISIBLE_PATTERN_DOT_RADIUS, spec.dotRadius) * ratio;
+  const cacheKey = [
+    "pattern",
+    patternType,
+    patternColor,
+    Math.round(ratio * 100),
+  ].join("|");
+  const cached = patternTileCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = createPatternCanvas(step, step);
+  const context = canvas?.getContext("2d") ?? null;
+
+  if (!canvas || !context) {
+    return null;
+  }
 
   context.strokeStyle = patternColor;
   context.fillStyle = patternColor;
@@ -680,36 +669,131 @@ function drawAnchoredPattern(
   context.lineCap = "round";
 
   if (spec.kind === "dots") {
-    drawDots(context, extent, anchor, step, dotRadius);
-    return;
+    drawDots(
+      context,
+      [0, 0, step, step],
+      SCREEN_PATTERN_ANCHOR,
+      step,
+      dotRadius,
+    );
+  } else {
+    context.beginPath();
+
+    switch (spec.kind) {
+      case "diagonal":
+        drawDiagonalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+          false,
+        );
+        break;
+      case "diagonal_reverse":
+        drawDiagonalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+          true,
+        );
+        break;
+      case "crosshatch":
+        drawDiagonalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+          false,
+        );
+        drawDiagonalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+          true,
+        );
+        break;
+      case "horizontal":
+        drawHorizontalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+        );
+        break;
+      case "vertical":
+        drawVerticalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+        );
+        break;
+      case "grid":
+        drawHorizontalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+        );
+        drawVerticalLines(
+          context,
+          [0, 0, step, step],
+          SCREEN_PATTERN_ANCHOR,
+          step,
+        );
+        break;
+    }
+
+    context.stroke();
   }
 
+  patternTileCache.set(cacheKey, canvas);
+  return canvas;
+}
+
+function getContextPattern(
+  context: CanvasRenderingContext2D,
+  cacheKey: string,
+  tile: CanvasImageSource,
+): CanvasPattern | null {
+  let contextCache = canvasPatternCache.get(context);
+
+  if (!contextCache) {
+    contextCache = new Map();
+    canvasPatternCache.set(context, contextCache);
+  }
+
+  const cached = contextCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const pattern = context.createPattern(tile, "repeat");
+
+  if (pattern) {
+    contextCache.set(cacheKey, pattern);
+  }
+
+  return pattern;
+}
+
+function fillClippedWithPattern(
+  context: CanvasRenderingContext2D,
+  coordinates: unknown,
+  pattern: CanvasPattern,
+) {
+  const canvasSize = getPatternCanvasSize(context.canvas);
+
+  context.save();
   context.beginPath();
-
-  switch (spec.kind) {
-    case "diagonal":
-      drawDiagonalLines(context, extent, anchor, step, false);
-      break;
-    case "diagonal_reverse":
-      drawDiagonalLines(context, extent, anchor, step, true);
-      break;
-    case "crosshatch":
-      drawDiagonalLines(context, extent, anchor, step, false);
-      drawDiagonalLines(context, extent, anchor, step, true);
-      break;
-    case "horizontal":
-      drawHorizontalLines(context, extent, anchor, step);
-      break;
-    case "vertical":
-      drawVerticalLines(context, extent, anchor, step);
-      break;
-    case "grid":
-      drawHorizontalLines(context, extent, anchor, step);
-      drawVerticalLines(context, extent, anchor, step);
-      break;
-  }
-
-  context.stroke();
+  appendGeometryPath(context, coordinates);
+  context.clip("evenodd");
+  context.fillStyle = pattern;
+  context.fillRect(0, 0, canvasSize.width, canvasSize.height);
+  context.restore();
 }
 
 function getPatternOverlayStyle(
@@ -725,29 +809,28 @@ function getPatternOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    state.context.save();
-    const prepared = prepareCssPixelRenderer(
-      state.context,
-      coordinates,
-      state.pixelRatio,
-    );
+    const tile = getPatternTile(patternType, patternColor, state.pixelRatio);
 
-    if (!prepared) {
-      state.context.restore();
+    if (!tile) {
       return;
     }
 
-    state.context.beginPath();
-    appendGeometryPath(state.context, prepared.coordinates);
-    state.context.clip("evenodd");
-    drawAnchoredPattern(
+    const pattern = getContextPattern(
       state.context,
-      prepared.extent,
-      SCREEN_PATTERN_ANCHOR,
-      patternType,
-      patternColor,
+      [
+        "pattern",
+        patternType,
+        patternColor,
+        Math.round(normalizeCanvasPixelRatio(state.pixelRatio) * 100),
+      ].join("|"),
+      tile,
     );
-    state.context.restore();
+
+    if (!pattern) {
+      return;
+    }
+
+    fillClippedWithPattern(state.context, coordinates, pattern);
   };
 
   const style = new Style({
@@ -888,6 +971,46 @@ function drawControlSplitBands(
   }
 }
 
+function getControlSplitTile(
+  overlay: ControlSplitOverlay,
+  pixelRatio: number,
+): CanvasImageSource | null {
+  const ratio = normalizeCanvasPixelRatio(pixelRatio);
+  const spec = getPatternSpec(overlay.patternType);
+  const step = Math.max(CONTROL_SPLIT_MIN_VISIBLE_STEP, spec.step) * ratio;
+  const cacheKey = [
+    "control",
+    overlay.primaryColor,
+    overlay.secondaryColor,
+    overlay.secondaryRatio,
+    overlay.patternType,
+    Math.round(ratio * 100),
+  ].join("|");
+  const cached = patternTileCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = createPatternCanvas(step, step);
+  const context = canvas?.getContext("2d") ?? null;
+
+  if (!canvas || !context) {
+    return null;
+  }
+
+  context.scale(ratio, ratio);
+  drawControlSplitBands(
+    context,
+    [0, 0, step / ratio, step / ratio],
+    SCREEN_PATTERN_ANCHOR,
+    overlay,
+  );
+
+  patternTileCache.set(cacheKey, canvas);
+  return canvas;
+}
+
 function getControlSplitOverlayStyle(
   overlay: ControlSplitOverlay,
   zIndex: number,
@@ -906,28 +1029,32 @@ function getControlSplitOverlayStyle(
   }
 
   const renderer: RenderFunction = (coordinates, state) => {
-    state.context.save();
-    const prepared = prepareCssPixelRenderer(
-      state.context,
-      coordinates,
-      state.pixelRatio,
-    );
+    const tile = getControlSplitTile(overlay, state.pixelRatio);
 
-    if (!prepared) {
-      state.context.restore();
+    if (!tile) {
       return;
     }
 
-    state.context.beginPath();
-    appendGeometryPath(state.context, prepared.coordinates);
-    state.context.clip("evenodd");
-    state.context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
-    drawControlSplitBands(
+    const pattern = getContextPattern(
       state.context,
-      prepared.extent,
-      SCREEN_PATTERN_ANCHOR,
-      overlay,
+      [
+        "control",
+        overlay.primaryColor,
+        overlay.secondaryColor,
+        overlay.secondaryRatio,
+        overlay.patternType,
+        Math.round(normalizeCanvasPixelRatio(state.pixelRatio) * 100),
+      ].join("|"),
+      tile,
     );
+
+    if (!pattern) {
+      return;
+    }
+
+    state.context.save();
+    state.context.globalAlpha = CONTROL_SPLIT_OVERLAY_ALPHA;
+    fillClippedWithPattern(state.context, coordinates, pattern);
     state.context.restore();
   };
 
