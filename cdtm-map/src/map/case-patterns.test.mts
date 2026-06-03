@@ -79,6 +79,14 @@ test("une meme geometrie garde le meme nombre de hachures quel que soit le zoom"
   assert.ok(zoomMaxCount > 0);
 });
 
+test("une meme geometrie garde le meme nombre de points quel que soit le zoom", () => {
+  const zoomMaxCount = generatePatternPrimitives("dots", CASE_EXTENT).length;
+  const zoomMinCount = generatePatternPrimitives("dots", CASE_EXTENT).length;
+
+  assert.equal(zoomMaxCount, zoomMinCount);
+  assert.ok(zoomMaxCount > 0);
+});
+
 test("toutes les familles de motifs generent des primitives", () => {
   for (const patternType of PATTERN_TYPES) {
     assert.ok(
@@ -114,6 +122,11 @@ test("pattern_spacing modifie le nombre de primitives", () => {
     generatePatternPrimitives("diagonal", CASE_EXTENT, {
       patternSpacing: 24,
     }).length < generatePatternPrimitives("diagonal", CASE_EXTENT).length,
+  );
+  assert.ok(
+    generatePatternPrimitives("dots", CASE_EXTENT, {
+      patternSpacing: 24,
+    }).length < generatePatternPrimitives("dots", CASE_EXTENT).length,
   );
 });
 

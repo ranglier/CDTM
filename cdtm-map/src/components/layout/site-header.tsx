@@ -26,6 +26,8 @@ export function SiteHeader({
   navigationItems = [{ href: "#carte", label: "Carte", current: true }],
   showAdminAction = true,
 }: SiteHeaderProps) {
+  const currentNavigationLabel =
+    navigationItems.find((item) => item.current)?.label ?? null;
   const adminActionIcon = !adminAuthenticated ? (
     <Lock />
   ) : adminModeEnabled ? (
@@ -51,6 +53,11 @@ export function SiteHeader({
               Chroniques de la Terre du Milieu
             </h1>
           </a>
+          {adminAuthenticated && currentNavigationLabel ? (
+            <p className="mt-2 inline-flex rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-primary">
+              {currentNavigationLabel}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">

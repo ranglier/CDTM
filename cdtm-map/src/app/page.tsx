@@ -13,6 +13,7 @@ import type {
   PublicCaseProperties,
 } from "@/admin/types";
 import { AdminLoginDialog } from "@/components/admin/admin-login-dialog";
+import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { SiteHeader } from "@/components/layout/site-header";
 import { CaseInfoPanel } from "@/components/map/case-info-panel";
@@ -73,22 +74,21 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 function buildEditorHref(
   activeCaseId: string | null,
   selectedCaseIds: string[],
+  displayMode: MapDisplayMode,
 ): string | null {
-  if (selectedCaseIds.length === 0) {
-    return null;
-  }
-
   const params = new URLSearchParams();
 
   if (selectedCaseIds.length === 1) {
     params.set("case", activeCaseId ?? selectedCaseIds[0]);
-  } else {
+  } else if (selectedCaseIds.length > 1) {
     params.set("cases", selectedCaseIds.join(","));
 
     if (activeCaseId) {
       params.set("case", activeCaseId);
     }
   }
+
+  params.set("mode", displayMode);
 
   return `/editeur?${params.toString()}`;
 }
@@ -185,8 +185,8 @@ export default function HomePage() {
     [activeCaseId, adminRecordsById],
   );
   const editorHref = useMemo(
-    () => buildEditorHref(activeCaseId, selectedCaseIds),
-    [activeCaseId, selectedCaseIds],
+    () => buildEditorHref(activeCaseId, selectedCaseIds, mapDisplayMode),
+    [activeCaseId, mapDisplayMode, selectedCaseIds],
   );
 
   const handleDisplayModeChange = useCallback((mode: unknown) => {
@@ -353,29 +353,33 @@ export default function HomePage() {
     [applySelectionState, searchOptions, stableCasesById],
   );
 
-  const handleLoginSubmit = useCallback(async (payload: LoginPayload) => {
-    setLoginPending(true);
-    setLoginError(null);
+  const handleLoginSubmit = useCallback(
+    async (payload: LoginPayload) => {
+      setLoginPending(true);
+      setLoginError(null);
 
-    try {
-      const session = await fetchJson<AdminSession>("/api/admin/session", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      try {
+        const session = await fetchJson<AdminSession>("/api/admin/session", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
 
-      setAdminSession(session);
-      setAdminModeEnabled(true);
-      setLoginOpen(false);
-      setLoginUsername("");
-      setLoginPassword("");
-    } catch (error) {
-      setLoginError(
-        error instanceof Error ? error.message : "Connexion impossible.",
-      );
-    } finally {
-      setLoginPending(false);
-    }
-  }, []);
+        setAdminSession(session);
+        setAdminModeEnabled(true);
+        setLoginOpen(false);
+        setLoginUsername("");
+        setLoginPassword("");
+        window.location.href = editorHref ?? `/editeur?mode=${mapDisplayMode}`;
+      } catch (error) {
+        setLoginError(
+          error instanceof Error ? error.message : "Connexion impossible.",
+        );
+      } finally {
+        setLoginPending(false);
+      }
+    },
+    [editorHref, mapDisplayMode],
+  );
 
   const handleLogout = useCallback(async () => {
     try {
@@ -601,13 +605,12 @@ export default function HomePage() {
         adminAuthenticated={adminSession.authenticated}
         adminModeEnabled={adminModeEnabled}
         navigationItems={[
-          { href: "#carte", label: "Carte", current: true },
-          ...(adminSession.authenticated
-            ? [{ href: "/editeur", label: "Editeur" }]
-            : []),
-          ...(adminSession.is_tech_admin
-            ? [{ href: "/admin/tech", label: "Administration" }]
-            : []),
+          ...buildAppNavigationItems({
+            session: adminSession,
+            currentPage: "public",
+            editorHref: editorHref ?? `/editeur?mode=${mapDisplayMode}`,
+            publicHref: "#carte",
+          }),
         ]}
         onAdminAction={handleAdminModeAction}
         onAdminLogout={handleLogout}

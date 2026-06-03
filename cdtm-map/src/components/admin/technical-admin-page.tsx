@@ -23,6 +23,7 @@ import type {
 import type { AdminSession } from "@/admin/types";
 import { ReferenceAdminPanel } from "@/components/admin/tech/reference-admin-panel";
 import { TechAdminSidebar } from "@/components/admin/tech/tech-admin-sidebar";
+import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
 import type {
   EditableRow,
   ReferenceView,
@@ -1666,7 +1667,10 @@ export function TechnicalAdminPage() {
         <SiteHeader
           adminAuthenticated
           adminModeEnabled
-          navigationItems={[{ href: "/?admin=1", label: "Carte" }]}
+          navigationItems={buildAppNavigationItems({
+            session,
+            currentPage: "technical-admin",
+          })}
           showAdminAction={false}
           onAdminAction={() => {}}
           onAdminLogout={() => void handleLogout()}
@@ -1693,15 +1697,10 @@ export function TechnicalAdminPage() {
       <SiteHeader
         adminAuthenticated
         adminModeEnabled
-        navigationItems={[
-          { href: "/?admin=1", label: "Carte" },
-          ...(session.is_tech_admin
-            ? [{ href: "/editeur", label: "Editeur" }]
-            : []),
-          ...(session.is_tech_admin
-            ? [{ href: "/admin/tech", label: "Administration", current: true }]
-            : []),
-        ]}
+        navigationItems={buildAppNavigationItems({
+          session,
+          currentPage: "technical-admin",
+        })}
         showAdminAction={false}
         onAdminAction={() => {}}
         onAdminLogout={() => void handleLogout()}

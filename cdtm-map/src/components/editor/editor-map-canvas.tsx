@@ -95,6 +95,7 @@ import {
   CASES_DATA_URL,
   createEmptyPublicMapStyles,
   isStableCaseFeatureCollection,
+  normalizeMapDisplayMode,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
@@ -276,6 +277,16 @@ function readInitialCaseSelection(availableCaseIds: Set<string>): {
       : (selectedCaseIds.at(-1) ?? null);
 
   return { activeCaseId, selectedCaseIds };
+}
+
+function readInitialDisplayMode(): MapDisplayMode {
+  if (typeof window === "undefined") {
+    return "influence";
+  }
+
+  return normalizeMapDisplayMode(
+    new URLSearchParams(window.location.search).get("mode"),
+  );
 }
 
 function createLocalityEditDraft(
@@ -773,7 +784,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [localityDisplayMode, setLocalityDisplayMode] =
     useState<LocalityDisplayMode>("points");
   const [mapDisplayMode, setMapDisplayMode] =
-    useState<MapDisplayMode>("influence");
+    useState<MapDisplayMode>(() => readInitialDisplayMode());
   const [searchValue, setSearchValue] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
   const [editorTool, setEditorTool] = useState<EditorTool>("select");

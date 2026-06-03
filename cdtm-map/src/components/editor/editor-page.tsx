@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { AdminSession } from "@/admin/types";
 import { EditorMapCanvas } from "@/components/editor/editor-map-canvas";
+import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -105,7 +106,10 @@ export function EditorPage() {
         <SiteHeader
           adminAuthenticated={session.authenticated}
           adminModeEnabled={session.authenticated}
-          navigationItems={[{ href: "/?admin=1", label: "Carte" }]}
+          navigationItems={buildAppNavigationItems({
+            session,
+            currentPage: "editor",
+          })}
           showAdminAction={false}
           onAdminAction={() => {}}
           onAdminLogout={() => void handleLogout()}
@@ -132,13 +136,10 @@ export function EditorPage() {
       <SiteHeader
         adminAuthenticated
         adminModeEnabled
-        navigationItems={[
-          { href: "/?admin=1", label: "Carte" },
-          { href: "/editeur", label: "Editeur", current: true },
-          ...(session.is_tech_admin
-            ? [{ href: "/admin/tech", label: "Administration" }]
-            : []),
-        ]}
+        navigationItems={buildAppNavigationItems({
+          session,
+          currentPage: "editor",
+        })}
         showAdminAction={false}
         onAdminAction={() => {}}
         onAdminLogout={() => void handleLogout()}
