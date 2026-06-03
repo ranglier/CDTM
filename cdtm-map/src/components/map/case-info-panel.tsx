@@ -4,6 +4,7 @@ import type { AdminCaseRecord } from "@/admin/types";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { SlotCalculationResult } from "@/map/rules";
 import type { StableCaseProperties } from "@/map/types";
 
@@ -24,6 +25,8 @@ type CaseInfoPanelProps = {
   onSearchValueChange: (value: string) => void;
   onSearchSubmit: () => void;
   onPanelPointerEnter?: () => void;
+  variant?: "side" | "bottom-sheet";
+  onClose?: () => void;
 };
 
 const fieldClassName =
@@ -278,10 +281,13 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
     onSearchValueChange,
     onSearchSubmit,
     onPanelPointerEnter,
+    variant = "side",
+    onClose,
   } = props;
 
   const isMultiSelection = selectedCaseIds.length > 1;
   const hasSelection = selectedCaseIds.length > 0;
+  const isBottomSheet = variant === "bottom-sheet";
   const slotDetails =
     adminModeEnabled && !isMultiSelection && activeAdminRecord ? (
       <SlotCalculationDetails calculation={activeAdminRecord.emplacements} />
@@ -380,16 +386,55 @@ export function CaseInfoPanel(props: CaseInfoPanelProps) {
   ];
   return (
     <aside
-      className="h-full min-h-0 [overflow-anchor:none]"
+      className={cn(
+        "[overflow-anchor:none]",
+        isBottomSheet
+          ? "fixed inset-x-2 bottom-2 z-40 max-h-[70dvh] min-h-0 sm:inset-x-4"
+          : "h-full min-h-0",
+      )}
       aria-live="polite"
       onPointerEnter={onPanelPointerEnter}
     >
-      <SectionPanel className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 sm:p-5">
+      <SectionPanel
+        className={cn(
+          "flex min-h-0 flex-col overflow-hidden",
+          isBottomSheet
+            ? "max-h-[70dvh] rounded-[24px] border-primary/25 bg-panel/95"
+            : "h-full",
+        )}
+      >
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+            isBottomSheet ? "p-3 pb-4 sm:p-5" : "p-4 sm:p-5",
+          )}
+        >
           <header className="space-y-3">
-            <h2 className="font-chronicle text-2xl tracking-[0.04em] text-foreground">
-              Informations de case
-            </h2>
+            {isBottomSheet ? (
+              <div className="flex items-center justify-center">
+                <span className="h-1.5 w-12 rounded-full bg-border/80" />
+              </div>
+            ) : null}
+            <div className="flex items-start justify-between gap-3">
+              <h2
+                className={cn(
+                  "font-chronicle tracking-[0.04em] text-foreground",
+                  isBottomSheet ? "text-xl" : "text-2xl",
+                )}
+              >
+                {isBottomSheet ? "Informations" : "Informations de case"}
+              </h2>
+              {isBottomSheet && onClose ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClose}
+                >
+                  Fermer
+                </Button>
+              ) : null}
+            </div>
             <MapSearchBox
               searchValue={searchValue}
               searchError={searchError}

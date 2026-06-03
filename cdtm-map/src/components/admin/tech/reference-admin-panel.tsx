@@ -60,9 +60,9 @@ export function ReferenceAdminPanel({
   if (activeReference) {
     return (
       <>
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h2 className="text-2xl font-semibold text-foreground">
                 {activeReferenceView?.title ?? activeReference.definition.title}
               </h2>
@@ -76,7 +76,7 @@ export function ReferenceAdminPanel({
             </div>
 
             <form
-              className="flex gap-3"
+              className="flex min-w-0 flex-wrap gap-2 sm:gap-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 setReferenceSearch(referenceSearchInput.trim());
@@ -111,7 +111,7 @@ export function ReferenceAdminPanel({
               Aucune ligne pour cette vue.
             </p>
           ) : (
-            <section className="rounded-[20px] border border-border/70 bg-background/35 p-4">
+            <section className="min-w-0 rounded-[20px] border border-border/70 bg-background/35 p-3 sm:p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">Valeurs</p>
                 <p className="text-sm text-muted-foreground">
@@ -182,7 +182,7 @@ export function ReferenceAdminPanel({
                           );
                         }}
                       >
-                        <div className="flex items-center gap-4 text-left">
+                        <div className="flex min-w-0 items-center gap-3 text-left sm:gap-4">
                           {showStyles ? (
                             <StylePreview
                               fill={row.values.fill ?? ""}
@@ -200,7 +200,7 @@ export function ReferenceAdminPanel({
                               }
                             />
                           ) : null}
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-semibold text-foreground">
                               {row.values.label ||
                                 row.values.nom ||
@@ -210,12 +210,12 @@ export function ReferenceAdminPanel({
                                 ] ||
                                 "Nouvelle ligne"}
                             </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <p className="mt-1 break-words text-sm text-muted-foreground">
                               {summaryText}
                             </p>
                           </div>
                         </div>
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-2 sm:gap-3">
                           <Button
                             type="button"
                             variant="outline"
@@ -238,7 +238,7 @@ export function ReferenceAdminPanel({
                         </div>
                       </summary>
 
-                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
                         {displayFields.map((field) => (
                           <div
                             key={`${row.localId}:${field.name}`}
@@ -331,7 +331,7 @@ export function ReferenceAdminPanel({
                               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                 Couleur de fond
                               </p>
-                              <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
@@ -349,7 +349,7 @@ export function ReferenceAdminPanel({
                                   }
                                 />
                                 <input
-                                  className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                  className={`min-w-0 w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
                                     isHexColorInputValid(row.values.fill ?? "")
                                       ? "border-border/70"
                                       : "border-destructive/70"
@@ -371,7 +371,7 @@ export function ReferenceAdminPanel({
                               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                 Couleur de contour
                               </p>
-                              <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
@@ -390,7 +390,7 @@ export function ReferenceAdminPanel({
                                   }
                                 />
                                 <input
-                                  className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                  className={`min-w-0 w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
                                     isHexColorInputValid(
                                       row.values.stroke ?? "",
                                     )
@@ -447,7 +447,7 @@ export function ReferenceAdminPanel({
                               <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                                 Couleur du motif
                               </p>
-                              <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <input
                                   type="color"
                                   className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
@@ -470,7 +470,7 @@ export function ReferenceAdminPanel({
                                   }
                                 />
                                 <input
-                                  className={`w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
+                                  className={`min-w-0 w-full rounded-[14px] border bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 ${
                                     isHexColorInputValid(
                                       row.values.pattern_color ?? "",
                                     )

@@ -3969,9 +3969,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     publishedObjectsLocked && selectedRoute?.status === "published";
 
   return (
-    <section className="grid min-h-[calc(100svh-5rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="relative min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 lg:min-h-[calc(100svh-5rem)]">
-        <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 sm:left-24">
+    <section className="grid min-h-0 gap-3 sm:gap-4 lg:min-h-[calc(100svh-5rem)] lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="relative min-h-[calc(100dvh-8.5rem)] min-w-0 overflow-hidden rounded-[20px] bg-background/70 sm:min-h-[72svh] sm:rounded-[28px] lg:min-h-[calc(100svh-5rem)]">
+        <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 sm:left-24 sm:right-4 sm:top-4">
           <div className="pointer-events-auto">
             <MapToolbar
               casesVisible={casesVisible}
@@ -3983,7 +3983,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               displayMode={mapDisplayMode}
               showObjectControls={canEditMapObjects}
               showPanelToggle={false}
-              className="w-full bg-background/92 px-3 py-2 lg:flex-nowrap"
+              className="w-full bg-background/92 px-2 py-2 sm:px-3 lg:flex-nowrap"
               onDisplayModeChange={setMapDisplayMode}
               onToggleCases={handleToggleCasesVisibility}
               onToggleLocalities={() => {
@@ -4117,12 +4117,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         ) : null}
         <div
           ref={mapElementRef}
-          className="h-[72svh] w-full lg:h-[calc(100svh-5rem)]"
+          className="h-[calc(100dvh-8.5rem)] min-h-[28rem] w-full sm:h-[72svh] lg:h-[calc(100svh-5rem)]"
           aria-label="Carte editeur"
         />
       </div>
       <aside
-        className="max-h-[calc(100svh-5rem)] overflow-y-auto overscroll-contain rounded-[28px] border border-border/80 bg-background/82 px-4 py-4 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+        className="min-w-0 max-w-full max-h-[75dvh] overflow-y-auto overscroll-contain rounded-[22px] border border-border/80 bg-background/82 px-3 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] sm:rounded-[28px] sm:px-4 sm:py-4 lg:max-h-[calc(100svh-5rem)]"
         onPointerEnter={() => setHoverInfo(null)}
       >
         <h2 className="text-xl font-semibold text-foreground">{panelTitle}</h2>

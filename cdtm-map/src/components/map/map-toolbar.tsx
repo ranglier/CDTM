@@ -54,17 +54,17 @@ export function MapToolbar({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-border/80 bg-background/82 p-1.5 shadow-[0_18px_40px_hsl(var(--shadow)/0.45)] backdrop-blur-md",
+        "flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-between gap-1.5 rounded-[18px] border border-border/80 bg-background/82 p-1.5 shadow-[0_18px_40px_hsl(var(--shadow)/0.45)] backdrop-blur-md sm:max-w-[calc(100vw-2rem)] sm:gap-2 sm:rounded-[20px]",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
         <details className="group relative">
-          <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+          <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/80 bg-background/70 px-3 text-sm font-medium text-foreground outline-none transition hover:bg-background sm:gap-2 sm:px-4 [&::-webkit-details-marker]:hidden">
             <span>Cases</span>
             <ChevronDown className="size-4 transition group-open:rotate-180" />
           </summary>
-          <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+          <div className="absolute left-0 top-11 z-30 min-w-52 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)] sm:min-w-56">
             <div className="flex flex-col gap-2">
               <Button
                 type="button"
@@ -107,11 +107,11 @@ export function MapToolbar({
         </details>
         {showObjectControls ? (
           <details className="group relative">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-full border border-border/80 bg-background/70 px-4 text-sm font-medium text-foreground outline-none transition hover:bg-background [&::-webkit-details-marker]:hidden">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/80 bg-background/70 px-3 text-sm font-medium text-foreground outline-none transition hover:bg-background sm:gap-2 sm:px-4 [&::-webkit-details-marker]:hidden">
               <span>Objets</span>
               <ChevronDown className="size-4 transition group-open:rotate-180" />
             </summary>
-            <div className="absolute left-0 top-11 z-30 min-w-56 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)]">
+            <div className="absolute left-0 top-11 z-30 min-w-52 rounded-2xl border border-border/80 bg-background/96 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.24)] sm:min-w-56">
               <div className="flex flex-col gap-2">
                 <Button
                   type="button"
@@ -158,29 +158,44 @@ export function MapToolbar({
             type="button"
             variant="outline"
             size="sm"
+            className="px-3 sm:px-3.5"
             onClick={onToggleObjectDisplayMode}
           >
-            {objectDisplayMode === "icons"
-              ? "Objets : icones"
-              : "Objets : points"}
+            <span className="sm:hidden">
+              {objectDisplayMode === "icons" ? "Icones" : "Points"}
+            </span>
+            <span className="hidden sm:inline">
+              {objectDisplayMode === "icons"
+                ? "Objets : icones"
+                : "Objets : points"}
+            </span>
           </Button>
         ) : null}
       </div>
       {rightActions || showPanelToggle ? (
-        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
           {rightActions}
           {showPanelToggle ? (
             <>
-              <Separator orientation="vertical" className="mx-1 h-6" />
+              <Separator
+                orientation="vertical"
+                className="mx-1 hidden h-6 sm:block"
+              />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="px-3 sm:px-3.5"
                 onClick={onTogglePanel}
                 aria-pressed={panelVisible}
               >
                 {panelVisible ? <PanelRightClose /> : <PanelRightOpen />}
-                {panelVisible ? "Masquer le panneau" : "Afficher le panneau"}
+                <span className="sm:hidden">
+                  {panelVisible ? "Fermer" : "Infos"}
+                </span>
+                <span className="hidden sm:inline">
+                  {panelVisible ? "Masquer le panneau" : "Afficher le panneau"}
+                </span>
               </Button>
             </>
           ) : null}

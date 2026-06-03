@@ -42,21 +42,21 @@ export function SiteHeader({
   return (
     <header
       id="top"
-      className="sticky top-4 z-30 rounded-[28px] border border-border/70 bg-panel/88 px-4 py-3 shadow-[0_24px_60px_hsl(var(--shadow)/0.45)] backdrop-blur-xl sm:px-5"
+      className="sticky top-2 z-30 rounded-[20px] border border-border/70 bg-panel/88 px-3 py-2.5 shadow-[0_24px_60px_hsl(var(--shadow)/0.45)] backdrop-blur-xl sm:top-4 sm:rounded-[28px] sm:px-5 sm:py-3"
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <a href="#carte" className="block">
-            <h1 className="font-chronicle text-3xl leading-none tracking-[0.04em] text-foreground sm:text-4xl">
+            <h1 className="text-balance font-chronicle text-[1.65rem] leading-none tracking-[0.04em] text-foreground sm:text-4xl">
               Chroniques de la Terre du Milieu
             </h1>
           </a>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
           <nav
             aria-label="Navigation principale"
-            className="flex items-center gap-2"
+            className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden"
           >
             {navigationItems.map((item) => (
               <Button
@@ -65,6 +65,7 @@ export function SiteHeader({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="shrink-0"
               >
                 {item.href.startsWith("/") ? (
                   <Link
@@ -90,6 +91,7 @@ export function SiteHeader({
               type="button"
               variant={adminModeEnabled ? "secondary" : "outline"}
               size="sm"
+              className="w-full sm:w-auto"
               onClick={onAdminAction}
               aria-pressed={adminModeEnabled}
             >
@@ -103,6 +105,7 @@ export function SiteHeader({
               type="button"
               variant="ghost"
               size="sm"
+              className="w-full sm:w-auto"
               onClick={onAdminLogout}
             >
               Deconnexion

@@ -19,6 +19,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { CaseInfoPanel } from "@/components/map/case-info-panel";
 import { CasesMap } from "@/components/map/cases-map";
 import { loadJsonData } from "@/data/loaders";
+import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 import { getRegistryCaseId } from "@/map/case-data";
 import type { PublicMapObjectsResponse } from "@/map/public-objects";
 import {
@@ -102,9 +103,11 @@ function areCaseSelectionsEqual(left: string[], right: string[]): boolean {
 }
 
 export default function HomePage() {
+  const isMobileViewport = useIsMobileViewport();
   const [totalCases, setTotalCases] = useState(0);
   const [casesVisible, setCasesVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
   const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(
     createEmptyPublicMapStyles(),
@@ -188,6 +191,7 @@ export default function HomePage() {
     () => buildEditorHref(activeCaseId, selectedCaseIds, mapDisplayMode),
     [activeCaseId, mapDisplayMode, selectedCaseIds],
   );
+  const publicPanelVisible = isMobileViewport ? mobilePanelOpen : panelVisible;
 
   const handleDisplayModeChange = useCallback((mode: unknown) => {
     setMapDisplayMode(normalizeMapDisplayMode(mode));
@@ -228,9 +232,22 @@ export default function HomePage() {
 
       if (!visible) {
         applySelectionState(null, []);
+        setMobilePanelOpen(false);
       }
     },
     [applySelectionState],
+  );
+
+  const handlePanelVisibilityChange = useCallback(
+    (visible: boolean) => {
+      if (isMobileViewport) {
+        setMobilePanelOpen(visible);
+        return;
+      }
+
+      setPanelVisible(visible);
+    },
+    [isMobileViewport],
   );
 
   const handleCaseSelectionChange = useCallback(
@@ -251,6 +268,11 @@ export default function HomePage() {
         }
 
         applySelectionState(nextCaseId, nextSelectedCaseIds);
+
+        if (nextSelectedCaseIds.length > 0) {
+          setMobilePanelOpen(true);
+        }
+
         return;
       }
 
@@ -272,6 +294,10 @@ export default function HomePage() {
         setActiveCaseId(nextActiveCaseId);
         setSearchError(null);
         setAdminError(null);
+
+        if (nextSelectedCaseIds.length > 0) {
+          setMobilePanelOpen(true);
+        }
 
         return nextSelectedCaseIds;
       });
@@ -297,6 +323,7 @@ export default function HomePage() {
 
         setCasesVisible(true);
         setPanelVisible(true);
+        setMobilePanelOpen(true);
         setSearchValue(searchTarget.value);
         setSearchError(null);
         setFocusSearchTarget(null);
@@ -310,6 +337,7 @@ export default function HomePage() {
       if (searchTarget && searchTarget.kind !== "case") {
         setCasesVisible(true);
         setPanelVisible(true);
+        setMobilePanelOpen(true);
         setSearchValue(searchTarget.value);
         setSearchError(null);
         setFocusCaseId(null);
@@ -344,6 +372,7 @@ export default function HomePage() {
 
       setCasesVisible(true);
       setPanelVisible(true);
+      setMobilePanelOpen(true);
       setSearchValue(stableCase.id_case);
       setFocusCaseIds([]);
       setFocusCaseId(registryId);
@@ -619,9 +648,11 @@ export default function HomePage() {
       <section
         id="carte"
         className={
-          panelVisible
-            ? "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
-            : "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0"
+          isMobileViewport
+            ? "relative grid min-h-0 flex-1 items-stretch [overflow-anchor:none]"
+            : publicPanelVisible
+              ? "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0 xl:grid-cols-[minmax(0,1.65fr)_24rem]"
+              : "grid min-h-[calc(100svh-6rem)] flex-1 items-stretch gap-6 [overflow-anchor:none] xl:h-[calc(100svh-6rem)] xl:min-h-0"
         }
         aria-label="Carte publique des cases"
       >
@@ -640,14 +671,16 @@ export default function HomePage() {
           focusSearchRequest={focusSearchRequest}
           clearHoverRequest={clearMapHoverRequest}
           casesVisible={casesVisible}
-          panelVisible={panelVisible}
+          panelVisible={publicPanelVisible}
+          mobileLayout={isMobileViewport}
+          hoverTooltipsEnabled={!isMobileViewport}
           onDisplayModeChange={handleDisplayModeChange}
           onCaseSelectionChange={handleCaseSelectionChange}
           onCasesVisibilityChange={handleCasesVisibilityChange}
-          onPanelVisibilityChange={setPanelVisible}
+          onPanelVisibilityChange={handlePanelVisibilityChange}
           onFeaturesLoad={setTotalCases}
         />
-        {panelVisible ? (
+        {publicPanelVisible ? (
           <CaseInfoPanel
             activeCase={activeCase}
             selectedCases={selectedCases}
@@ -670,7 +703,34 @@ export default function HomePage() {
             onPanelPointerEnter={() =>
               setClearMapHoverRequest((value) => value + 1)
             }
+            variant={isMobileViewport ? "bottom-sheet" : "side"}
+            onClose={() => handlePanelVisibilityChange(false)}
           />
+        ) : null}
+        {isMobileViewport && !publicPanelVisible ? (
+          <button
+            type="button"
+            className="fixed inset-x-2 bottom-2 z-40 rounded-[22px] border border-border/80 bg-panel/95 px-4 py-3 text-left shadow-[0_18px_50px_hsl(var(--shadow)/0.55)] backdrop-blur-xl"
+            onClick={() => setMobilePanelOpen(true)}
+          >
+            <span className="mx-auto mb-2 block h-1.5 w-12 rounded-full bg-border/80" />
+            <span className="flex items-center justify-between gap-3">
+              <span>
+                <span className="block text-sm font-semibold text-foreground">
+                  {selectedCaseIds.length > 0
+                    ? `${selectedCaseIds.length} case(s) selectionnee(s)`
+                    : "Recherche et informations"}
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {activeCase?.id_case ??
+                    `${totalCases || "..."} case(s) chargee(s)`}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs uppercase tracking-[0.18em] text-primary">
+                Ouvrir
+              </span>
+            </span>
+          </button>
         ) : null}
       </section>
       <AdminLoginDialog

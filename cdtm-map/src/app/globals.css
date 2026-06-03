@@ -117,3 +117,20 @@ a {
 .ol-attribution {
   display: none;
 }
+
+@media (max-width: 767px) {
+  .ol-viewport {
+    border-radius: 1.25rem;
+  }
+
+  .ol-zoom {
+    top: 0.75rem;
+    left: 0.75rem;
+  }
+
+  .ol-zoom button {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1rem;
+  }
+}

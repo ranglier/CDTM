@@ -7,6 +7,7 @@ import { unByKey } from "ol/Observable";
 
 import { MapToolbar } from "@/components/map/map-toolbar";
 import { loadJsonData } from "@/data/loaders";
+import { cn } from "@/lib/utils";
 import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
 import {
   buildPublicLandmarkHoverRows,
@@ -71,6 +72,8 @@ type CasesMapProps = {
   clearHoverRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
+  mobileLayout?: boolean;
+  hoverTooltipsEnabled?: boolean;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
   onCaseSelectionChange: (
     selectedCase: StableCaseProperties | null,
@@ -107,6 +110,8 @@ export function CasesMap({
   clearHoverRequest,
   casesVisible,
   panelVisible,
+  mobileLayout = false,
+  hoverTooltipsEnabled = true,
   onDisplayModeChange,
   onCaseSelectionChange,
   onCasesVisibilityChange,
@@ -116,6 +121,7 @@ export function CasesMap({
   const onCaseSelectionChangeRef = useRef(onCaseSelectionChange);
   const onFeaturesLoadRef = useRef(onFeaturesLoad);
   const focusCaseIdRef = useRef(focusCaseId);
+  const hoverTooltipsEnabledRef = useRef(hoverTooltipsEnabled);
   const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
   const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
@@ -236,6 +242,14 @@ export function CasesMap({
   useEffect(() => {
     onFeaturesLoadRef.current = onFeaturesLoad;
   }, [onFeaturesLoad]);
+
+  useEffect(() => {
+    hoverTooltipsEnabledRef.current = hoverTooltipsEnabled;
+
+    if (!hoverTooltipsEnabled) {
+      clearHover();
+    }
+  }, [clearHover, hoverTooltipsEnabled]);
 
   useEffect(() => {
     focusCaseIdRef.current = focusCaseId;
@@ -365,6 +379,12 @@ export function CasesMap({
     };
 
     const runPointerMoveHitTests = (rawEvent: unknown) => {
+      if (!hoverTooltipsEnabledRef.current) {
+        map.getTargetElement().style.cursor = "";
+        clearHover();
+        return;
+      }
+
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
       const target = map.getTargetElement();
 
@@ -694,8 +714,22 @@ export function CasesMap({
   ]);
 
   return (
-    <section className="relative h-[72svh] min-h-[72svh] overflow-hidden rounded-[28px] bg-background/70 xl:h-[calc(100svh-6rem)] xl:min-h-0">
-      <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex justify-end">
+    <section
+      className={cn(
+        "relative overflow-hidden bg-background/70",
+        mobileLayout
+          ? "h-[calc(100dvh-8.5rem)] min-h-[28rem] rounded-[20px] sm:h-[72svh] sm:min-h-[72svh] sm:rounded-[28px]"
+          : "h-[72svh] min-h-[72svh] rounded-[28px] xl:h-[calc(100svh-6rem)] xl:min-h-0",
+      )}
+    >
+      <div
+        className={cn(
+          "pointer-events-none absolute z-20 flex justify-end",
+          mobileLayout
+            ? "inset-x-2 top-2 sm:inset-x-4 sm:top-4"
+            : "inset-x-4 top-4",
+        )}
+      >
         <div className="pointer-events-auto">
           <MapToolbar
             casesVisible={casesVisible}
@@ -733,7 +767,12 @@ export function CasesMap({
       </div>
       <div
         ref={mapElementRef}
-        className="h-[72svh] w-full xl:h-[calc(100svh-6rem)]"
+        className={cn(
+          "w-full",
+          mobileLayout
+            ? "h-[calc(100dvh-8.5rem)] min-h-[28rem] sm:h-[72svh] sm:min-h-[72svh]"
+            : "h-[72svh] xl:h-[calc(100svh-6rem)]",
+        )}
         aria-label="Carte des cases publiques"
       />
       {hoverInfo &&

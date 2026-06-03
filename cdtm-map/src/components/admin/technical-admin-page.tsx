@@ -1706,8 +1706,8 @@ export function TechnicalAdminPage() {
         onAdminLogout={() => void handleLogout()}
       />
 
-      <section className="grid flex-1 gap-6 xl:grid-cols-[19rem_minmax(0,1fr)]">
-        <SectionPanel className="p-5 sm:p-6">
+      <section className="grid min-w-0 flex-1 gap-3 sm:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)] xl:gap-6">
+        <SectionPanel className="min-w-0 p-4 sm:p-6">
           <h1 className="font-chronicle text-3xl tracking-[0.04em] text-foreground">
             Administration
           </h1>
@@ -1764,7 +1764,7 @@ export function TechnicalAdminPage() {
           />
         </SectionPanel>
 
-        <SectionPanel className="p-5 sm:p-6">
+        <SectionPanel className="min-w-0 max-w-full p-4 sm:p-6">
           {activeTab === "references" ? (
             <ReferenceAdminPanel
               activeReference={activeReference}
