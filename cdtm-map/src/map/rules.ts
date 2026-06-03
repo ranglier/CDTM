@@ -57,8 +57,6 @@ export const TERRAIN_DEFINITIONS = [
 ] as const;
 
 export type TerrainDefinition = (typeof TERRAIN_DEFINITIONS)[number];
-export type TerrainSlug = TerrainDefinition["slug"];
-export type TerrainCategorySlug = TerrainDefinition["category"];
 
 export const TERRAIN_DEFINITIONS_BY_SLUG: Record<string, TerrainDefinition> =
   Object.fromEntries(

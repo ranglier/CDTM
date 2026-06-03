@@ -2097,24 +2097,6 @@ export async function addDynamicCaseTableField(
   }
 }
 
-export async function listDynamicCaseTableDefinitions(): Promise<
-  DynamicCaseTableDefinition[]
-> {
-  const hasDatabase = await ensureDatabaseReady();
-
-  if (!hasDatabase) {
-    throw new Error("La base de donnees n'est pas configuree.");
-  }
-
-  const client = await getPool().connect();
-
-  try {
-    return await listDynamicCaseTableDefinitionsInternal(client);
-  } finally {
-    client.release();
-  }
-}
-
 export async function getDynamicCaseSectionsForCase(
   client: PoolClient,
   idCase: string,

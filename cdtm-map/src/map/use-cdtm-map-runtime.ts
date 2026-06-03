@@ -9,7 +9,6 @@ import type VectorLayer from "ol/layer/Vector";
 import type Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
-import type { EventsKey } from "ol/events";
 
 import { MAP_MAX_ZOOM } from "@/map/config";
 import {
@@ -720,12 +719,4 @@ export function useCdtmMapRuntime({
     focusPoint,
     focusRoute,
   };
-}
-
-export type CdtmMapRuntime = ReturnType<typeof useCdtmMapRuntime>;
-
-export function cleanupEvents(keys: EventsKey[]) {
-  for (const key of keys) {
-    unByKey(key);
-  }
 }

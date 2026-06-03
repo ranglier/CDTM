@@ -612,6 +612,7 @@ export default function HomePage() {
             publicHref: "#carte",
           }),
         ]}
+        showAdminAction={!adminSession.authenticated}
         onAdminAction={handleAdminModeAction}
         onAdminLogout={handleLogout}
       />

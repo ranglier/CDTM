@@ -23,32 +23,6 @@ export function createLoggedOutSession(): AdminSession {
   };
 }
 
-export function resolveCaseSearchMatch(
-  stableCases: StableCaseProperties[],
-  rawQuery: string,
-): StableCaseProperties | null {
-  const query = rawQuery.trim().toLowerCase();
-
-  if (query.length === 0) {
-    return null;
-  }
-
-  const exactMatch =
-    stableCases.find(
-      (stableCase) => stableCase.id_case.toLowerCase() === query,
-    ) ?? null;
-
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  const prefixMatches = stableCases.filter((stableCase) =>
-    stableCase.id_case.toLowerCase().startsWith(query),
-  );
-
-  return prefixMatches.length === 1 ? prefixMatches[0] : null;
-}
-
 export function getDraftSnapshot(draft: AdminCaseDraft): string {
   return JSON.stringify(draft);
 }
