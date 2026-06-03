@@ -8,6 +8,7 @@ import {
   getCasePatternOverlays,
   getControlSplitBandWidth,
   getPatternSpec,
+  resolveCaseBaseStyle,
   resolveCaseControlSplitOverlay,
   type MapExtent,
 } from "./case-patterns.ts";
@@ -53,6 +54,30 @@ function createStyles() {
     target_type: "faction",
     target_id: "mordor",
     fill: "#aa2222",
+    stroke: "#111111",
+    pattern_type: null,
+    pattern_color: null,
+    pattern_spacing: null,
+    pattern_line_width: null,
+    pattern_dot_radius: null,
+    secondary_ratio: null,
+  };
+  styles.faction.royaume_des_hommes = {
+    target_type: "faction",
+    target_id: "royaume_des_hommes",
+    fill: "#44aa55",
+    stroke: "#111111",
+    pattern_type: null,
+    pattern_color: null,
+    pattern_spacing: null,
+    pattern_line_width: null,
+    pattern_dot_radius: null,
+    secondary_ratio: null,
+  };
+  styles.controleur.deorl = {
+    target_type: "controleur",
+    target_id: "deorl",
+    fill: "#66cc88",
     stroke: "#111111",
     pattern_type: null,
     pattern_color: null,
@@ -244,6 +269,27 @@ test("les types de controle respectent secondary_ratio du referentiel", () => {
     getControlSplitBandWidth(overlay),
     getPatternSpec("vertical_spaced").step * 0.25,
   );
+});
+
+test("en mode faction, une case vassale prend la couleur du suzerain sans hachurage relationnel", () => {
+  const styles = createStyles();
+  const properties = {
+    id_case: "case_vassale",
+    faction: "royaume_des_hommes",
+    controleur: "deorl",
+    controle_type: "vassalise",
+    controle_principal_type: "controleur",
+    controle_principal_id: "deorl",
+    controle_secondaire_type: "faction",
+    controle_secondaire_id: "gondor",
+  };
+
+  assert.equal(
+    resolveCaseBaseStyle("faction", properties, styles)?.fill,
+    "#2255aa",
+  );
+  assert.equal(resolveCaseControlSplitOverlay("faction", properties, styles), null);
+  assert.ok(resolveCaseControlSplitOverlay("influence", properties, styles));
 });
 
 test("le controle partiel produit des bandes de couleur sur fond vide", () => {

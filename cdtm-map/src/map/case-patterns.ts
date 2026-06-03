@@ -342,6 +342,44 @@ function getControlActorStyle(
   );
 }
 
+function isVassalControlType(controlType: string | null): boolean {
+  return (
+    controlType === "vassal" ||
+    controlType === "vassalite" ||
+    controlType === "vassalise"
+  );
+}
+
+function getVassalSuzerainActor(
+  properties: StableCaseProperties,
+): ControlActorTarget | null {
+  const explicitSecondaryActor = getExplicitControlActor(
+    properties,
+    "secondaire",
+  );
+
+  if (explicitSecondaryActor) {
+    return explicitSecondaryActor;
+  }
+
+  const explicitPrimaryActor = getExplicitControlActor(properties, "principal");
+  const primaryActor =
+    explicitPrimaryActor ??
+    createControlActorTarget("controleur", properties.controleur) ??
+    createControlActorTarget("faction", properties.faction);
+
+  if (!primaryActor) {
+    return null;
+  }
+
+  return (
+    getOtherCurrentControlActor(properties, primaryActor) ??
+    (!explicitPrimaryActor
+      ? createControlActorTarget("controleur", properties.controleur)
+      : null)
+  );
+}
+
 function getControlSplitRule(
   controlType: string | null,
 ): ControlSplitRule | null {
@@ -389,7 +427,11 @@ export function resolveCaseControlSplitOverlay(
   const controlType = normalizeControlType(properties.controle_type);
   const splitRule = getControlSplitRule(controlType);
 
-  if (!controlType || !splitRule) {
+  if (
+    !controlType ||
+    !splitRule ||
+    (displayMode === "faction" && isVassalControlType(controlType))
+  ) {
     return null;
   }
 
@@ -451,8 +493,26 @@ export function resolveCaseBaseStyle(
   }
 
   switch (displayMode) {
-    case "faction":
+    case "faction": {
+      const controlType = normalizeControlType(properties.controle_type);
+
+      if (isVassalControlType(controlType)) {
+        const suzerainActor = getVassalSuzerainActor(properties);
+        const suzerainStyle = suzerainActor
+          ? getControlActorStyle(
+              styles,
+              suzerainActor.targetType,
+              suzerainActor.id,
+            )
+          : null;
+
+        if (suzerainStyle) {
+          return suzerainStyle;
+        }
+      }
+
       return getStyleForTarget(styles, "faction", properties.faction);
+    }
     case "influence":
       return (
         getStyleForTarget(styles, "controleur", properties.controleur) ??

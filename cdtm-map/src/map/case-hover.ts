@@ -13,6 +13,10 @@ function normalizeControlType(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function isVassalControlType(value: string | null): boolean {
+  return value === "vassal" || value === "vassalite" || value === "vassalise";
+}
+
 function formatCaseActor(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
 
@@ -94,6 +98,10 @@ function buildControlTypeHoverRow(
   const normalizedControlType = normalizeControlType(controlType);
 
   if (normalizedControlType === "total" || normalizedControlType === "aucun") {
+    return null;
+  }
+
+  if (displayMode === "faction" && isVassalControlType(normalizedControlType)) {
     return null;
   }
 

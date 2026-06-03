@@ -885,9 +885,26 @@ export async function saveAdminCaseRecord(
       userId,
     );
 
+    const existingControl = await getCaseControlValues(client, idCase);
+    const nextFaction = normalizeNullableField(draft.control.faction);
+    const nextControleur = normalizeNullableField(draft.control.controleur);
+    const previousPrimaryActor = derivePrimaryControlActor(
+      existingControl.faction,
+      existingControl.controleur,
+    );
+    const nextPrimaryActor = derivePrimaryControlActor(
+      nextFaction,
+      nextControleur,
+    );
+    const primaryActorChanged =
+      previousPrimaryActor.type !== nextPrimaryActor.type ||
+      previousPrimaryActor.id !== nextPrimaryActor.id;
+    const draftPeuple = normalizeNullableField(draft.control.peuple);
+    const shouldDerivePeuple =
+      primaryActorChanged && draftPeuple === existingControl.peuple;
     const controlPatch = await buildControlSectionPatch(client, {
-      faction: normalizeNullableField(draft.control.faction),
-      controleur: normalizeNullableField(draft.control.controleur),
+      faction: nextFaction,
+      controleur: nextControleur,
       controle_type: normalizeNullableField(draft.control.controle_type),
       controle_secondaire_type: normalizeNullableField(
         draft.control.controle_secondaire_type,
@@ -895,7 +912,7 @@ export async function saveAdminCaseRecord(
       controle_secondaire_id: normalizeNullableField(
         draft.control.controle_secondaire_id,
       ),
-      peuple: normalizeNullableField(draft.control.peuple) ?? undefined,
+      peuple: shouldDerivePeuple ? undefined : (draftPeuple ?? undefined),
     });
 
     await applyCurrentSectionPatch(

@@ -563,6 +563,10 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
   }
 
   function handleSingleControlFieldChange(field: string, value: string) {
+    const previousAutoPeuple = resolvePeupleForControlSelection(
+      singleDraft.control.faction,
+      singleDraft.control.controleur,
+    );
     onSingleFieldChange("control", field, value);
 
     if (field !== "faction" && field !== "controleur") {
@@ -573,6 +577,12 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
       field === "faction" ? value : singleDraft.control.faction;
     const nextControleur =
       field === "controleur" ? value : singleDraft.control.controleur;
+    const currentPeuple = singleDraft.control.peuple.trim();
+
+    if (currentPeuple && currentPeuple !== previousAutoPeuple) {
+      return;
+    }
+
     onSingleFieldChange(
       "control",
       "peuple",

@@ -82,6 +82,22 @@ test("le controle conteste conserve un repli historique faction plus controleur"
   );
 });
 
+test("le mode faction masque la relation de vassalite au survol", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("faction", {
+      id_case: "case_vassale",
+      faction: "royaume_des_hommes",
+      controleur: "deorl",
+      controle_type: "vassalise",
+      controle_principal_type: "controleur",
+      controle_principal_id: "deorl",
+      controle_secondaire_type: "faction",
+      controle_secondaire_id: "royaume_des_hommes",
+    }),
+    [{ label: "Faction", value: "royaume_des_hommes" }],
+  );
+});
+
 test("le survol evite les relations explicites reflexives", () => {
   assert.deepEqual(
     buildCaseHoverRows("influence", {

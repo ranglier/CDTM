@@ -16,10 +16,10 @@ import {
   isPatternLineWidthInputValid,
   isPatternSpacingInputValid,
   isPatternTypeInputValid,
+  isReferenceTechnicalField,
   isSecondaryRatioInputValid,
   LOCKED_REFERENCE_FIELDS,
   PATTERN_TYPE_OPTIONS,
-  REFERENCE_TECHNICAL_FIELDS,
   STYLE_FIELDS,
   type StyleFieldName,
 } from "@/components/admin/tech/reference-utils";
@@ -123,12 +123,18 @@ export function ReferenceAdminPanel({
                   const displayFields =
                     activeReference.definition.fields.filter(
                       (field) =>
-                        !REFERENCE_TECHNICAL_FIELDS.has(field.name) &&
+                        !isReferenceTechnicalField(
+                          activeReference.definition,
+                          field,
+                        ) &&
                         !STYLE_FIELDS.includes(field.name as StyleFieldName),
                     );
                   const technicalFields =
                     activeReference.definition.fields.filter((field) =>
-                      REFERENCE_TECHNICAL_FIELDS.has(field.name),
+                      isReferenceTechnicalField(
+                        activeReference.definition,
+                        field,
+                      ),
                     );
                   const showStyles = Boolean(
                     activeReferenceView?.styleTargetType,

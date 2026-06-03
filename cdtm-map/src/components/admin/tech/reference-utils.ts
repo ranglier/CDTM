@@ -84,6 +84,20 @@ export const REFERENCE_TECHNICAL_FIELDS = new Set([
   "updated_at",
 ]);
 
+export function isReferenceTechnicalField(
+  definition: ReferenceTableDefinition,
+  field: TechFieldDefinition,
+): boolean {
+  if (
+    field.name === "peuple_key" &&
+    (definition.key === "factions" || definition.key === "controleurs")
+  ) {
+    return false;
+  }
+
+  return REFERENCE_TECHNICAL_FIELDS.has(field.name);
+}
+
 export const LOCKED_REFERENCE_FIELDS = new Set([
   "image_path",
   "image_original_name",
@@ -620,6 +634,8 @@ export function getFriendlyFieldLabel(fieldName: string): string {
       return "Race";
     case "peuple_key":
       return "Identifiant peuple";
+    case "peuple_associe":
+      return "Peuple associe";
     default:
       return fieldName;
   }

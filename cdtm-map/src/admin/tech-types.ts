@@ -286,7 +286,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "nom", label: "nom", type: "text", searchable: true },
       {
         name: "peuple_key",
-        label: "peuple_key",
+        label: "peuple_associe",
         type: "reference",
         searchable: true,
         reference_table_key: "peuples",
@@ -335,7 +335,7 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
       { name: "nom", label: "nom", type: "text", searchable: true },
       {
         name: "peuple_key",
-        label: "peuple_key",
+        label: "peuple_associe",
         type: "reference",
         searchable: true,
         reference_table_key: "peuples",
