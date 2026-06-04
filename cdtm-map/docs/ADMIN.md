@@ -78,6 +78,23 @@ Les types associes sont :
 
 Les routes API d'edition cartographique sont reservees a `tech_admin`.
 
+### Fond de carte
+
+L'admin technique expose une entree `Fond de carte` dans la section `Objets cartographiques`.
+
+Un `tech_admin` peut importer un fond PNG ou WebP si le fichier respecte toutes les contraintes :
+
+- dimensions exactes `3200 x 4000` ;
+- taille maximale 25 Mo ;
+- extension et type MIME coherents ;
+- signature PNG/WebP valide ;
+- image non animee.
+
+Apres validation, le serveur genere les tuiles WebP dans le volume persistant
+`/app/uploads/map-backgrounds/{id}/tiles`. Le nouveau fond n'est active qu'apres
+generation complete. Les anciens fonds restent listes dans l'historique et
+peuvent etre reactives si leur statut est `ready`.
+
 ## Uploads d'icones
 
 Les formats acceptes sont :

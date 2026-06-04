@@ -6,7 +6,7 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run generate:map-tiles && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "test": "node --test src/**/*.test.mts",
@@ -14,7 +14,8 @@
     "format:check": "prettier . --check",
     "typecheck": "tsc --noEmit",
     "validate:data": "node scripts/validate-data.mjs",
-    "create:admin": "node scripts/create-admin-user.mjs"
+    "create:admin": "node scripts/create-admin-user.mjs",
+    "generate:map-tiles": "node scripts/generate-map-tiles.mjs"
   },
   "dependencies": {
     "@radix-ui/react-separator": "^1.1.8",
@@ -29,6 +30,7 @@
     "postcss": "^8.5.15",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0"
   },

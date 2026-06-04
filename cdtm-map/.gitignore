@@ -5,6 +5,7 @@ dist/
 build/
 *.tsbuildinfo
 *.gpkg
+public/maps/tiles/
 .env
 .env.*
 !.env.example

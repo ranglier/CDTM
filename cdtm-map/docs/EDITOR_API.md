@@ -4,6 +4,33 @@
 
 Toutes les routes d'edition cartographique sont reservees a `tech_admin`.
 
+## Fond de carte
+
+### `GET /api/map/background`
+
+Retourne le manifeste public du fond actif. Si aucun fond uploade pret n'est
+actif, la route retourne le fond par defaut et ses tuiles generees au build.
+
+### `GET /uploads/map-backgrounds/[id]/tiles/[z]/[x]/[y].webp`
+
+Retourne une tuile WebP issue d'un fond uploade. Les reponses sont cachees
+longuement car l'identifiant du fond est immuable.
+
+### `GET /api/admin/tech/map-backgrounds`
+
+Retourne l'historique admin des fonds importes.
+
+### `POST /api/admin/tech/map-backgrounds`
+
+Upload multipart reserve a `tech_admin`. Le champ `file` est obligatoire et le
+champ `label` est optionnel. Le serveur valide le fichier, genere les tuiles,
+puis active le fond uniquement si la generation est complete.
+
+### `PATCH /api/admin/tech/map-backgrounds/[id]`
+
+Reactive un fond existant uniquement si son statut est `ready` et si toutes ses
+tuiles sont presentes.
+
 ## Referentiels
 
 ### `GET /api/admin/editor/reference-data`

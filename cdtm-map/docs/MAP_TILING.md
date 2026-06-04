@@ -1,7 +1,7 @@
-# Cadrage du tuilage du fond de carte
+# Tuilage du fond de carte
 
-Ce document cadre un chantier futur. Il ne decrit pas une fonctionnalite deja
-livree et ne suppose pas que le script de generation existe aujourd'hui.
+Ce document conserve le cadrage initial et decrit l'implementation actuelle du
+fond de carte tuile et administrable.
 
 ## Objectif
 
@@ -10,14 +10,19 @@ d'ameliorer la fluidite du pan et du zoom sur la carte publique et dans
 `/editeur`, tout en conservant les couches vectorielles existantes dans le meme
 repere pixel.
 
-Le tuilage doit rester un changement de rendu frontend et de packaging. Il ne
-doit pas entrainer de migration BDD ni de changement API.
+Le fond peut maintenant etre remplace par un `tech_admin` depuis l'admin
+technique. Les coordonnees, la projection, les cases, les objets cartographiques
+et les API metier existantes restent inchanges.
 
 ## Etat actuel
 
-- Le fond de carte est servi depuis `public/maps/CTM.png`.
+- Le fond par defaut reste `public/maps/CTM.png`.
+- Les tuiles du fond par defaut sont generees au build dans
+  `public/maps/tiles/ctm/{z}/{x}/{y}.webp`.
+- La carte charge `GET /api/map/background` avant de construire la couche de
+  fond.
 - La couche OpenLayers est construite dans `src/map/openlayers/map-core.ts` avec
-  `ImageStatic`.
+  un `TileLayer` et un `TileGrid` en projection locale.
 - La projection locale est `CDTM-LOCAL`.
 - L'extent de reference est `[0, -4000, 3200, 0]`, defini dans
   `src/map/config.ts`.
@@ -25,6 +30,8 @@ doit pas entrainer de migration BDD ni de changement API.
   pixel que le fond.
 - Les couches vectorielles doivent continuer a se superposer sans transformation
   de coordonnees.
+- Le fallback temporaire `NEXT_PUBLIC_CDTM_MAP_BACKGROUND=static` force
+  `ImageStatic` + `public/maps/CTM.png`.
 
 ## Qualification du cout
 
@@ -49,27 +56,31 @@ Risques secondaires :
 
 Hors perimetre :
 
-- migration BDD ou API ;
 - serveur de tuiles dynamique ;
 - changement de projection ;
 - simplification ou generalisation des geometries vectorielles ;
 - modification des coordonnees des cases, objets ou routes.
 
-## Cible technique
+## Implementation retenue
 
-La cible retenue est une generation au build depuis le fond source actuel.
+La cible retenue combine une generation au build pour le fond par defaut et une
+generation serveur apres upload pour les fonds administrables.
 
 - Outil de generation : `sharp`.
-- Script prevu : `scripts/generate-map-tiles.mjs`.
+- Script : `scripts/generate-map-tiles.mjs`.
 - Source : `public/maps/CTM.png`.
 - Sortie : `public/maps/tiles/ctm/{z}/{x}/{y}.webp`.
-- Branchement OpenLayers : `TileLayer` avec une source `XYZ` ou `TileImage` et
-  un `TileGrid` adapte au repere pixel `CDTM-LOCAL`.
-- Fallback temporaire : conserver la possibilite de revenir a
-  `ImageStatic` + `CTM.png` tant que l'alignement n'est pas valide.
+- Uploads admin : `/app/uploads/map-backgrounds/{id}/`.
+- Branchement OpenLayers : `TileLayer` avec une source `ImageTile` et un
+  `TileGrid` adapte au repere pixel `CDTM-LOCAL`.
+- Fallback temporaire : `NEXT_PUBLIC_CDTM_MAP_BACKGROUND=static`.
 
 Le script doit etre deterministe : meme source, memes options, meme arborescence
 de tuiles.
+
+Les uploads admin sont acceptes uniquement en PNG ou WebP, avec signature
+coherente, image non animee, taille maximale 25 Mo et dimensions exactes
+`3200 x 4000`.
 
 ## Proposition de grille
 
@@ -84,18 +95,45 @@ Niveaux recommandes pour la premiere version :
 - `z5` et au-dela : a eviter au debut sauf besoin explicite, car ils
   agrandissent le fond source sans detail supplementaire.
 
-Ordre de grandeur avec une grille 256 px et `z0` a `z4` : environ 285 tuiles.
-Ce volume est acceptable pour un build applicatif et pour un deploiement Docker.
+Avec une grille 256 px et les resolutions `[16, 8, 4, 2, 1]`, `z0` a `z4`
+produisent 285 tuiles :
+
+- `z0` : 1 x 1
+- `z1` : 2 x 2
+- `z2` : 4 x 4
+- `z3` : 7 x 8
+- `z4` : 13 x 16
 
 La definition exacte des resolutions doit etre verifiee dans OpenLayers avec le
 fond et les vecteurs visibles simultanement. C'est le point de controle le plus
 important du chantier.
 
+## Fond administrable
+
+La table `map_backgrounds` conserve l'historique des fonds importes. Une
+contrainte unique partielle garantit qu'un seul fond uploade peut etre actif a la
+fois.
+
+Routes principales :
+
+- `GET /api/map/background` : manifeste public du fond actif, avec fallback vers
+  le fond par defaut.
+- `GET /uploads/map-backgrounds/[id]/tiles/[z]/[x]/[y].webp` : tuile uploadee,
+  cachee longuement car l'id est immuable.
+- `GET /api/admin/tech/map-backgrounds` : historique admin.
+- `POST /api/admin/tech/map-backgrounds` : upload, validation, generation et
+  activation si la generation reussit.
+- `PATCH /api/admin/tech/map-backgrounds/[id]` : reactivation d'un fond deja
+  genere.
+
+En cas d'echec de generation, le nouveau fond est marque `failed`, l'erreur est
+affichee dans l'admin, et l'ancien fond actif reste conserve.
+
 ## Decoupage propose
 
 ### Lot 1 - Pipeline de generation
 
-- Ajouter `sharp` en dependance de developpement.
+- Ajouter `sharp` en dependance runtime.
 - Creer `scripts/generate-map-tiles.mjs`.
 - Generer les tuiles WebP dans `public/maps/tiles/ctm/{z}/{x}/{y}.webp`.
 - Ajouter une commande npm dediee, par exemple `generate:map-tiles`.
@@ -147,7 +185,7 @@ Livrable attendu :
 - L'image Docker standalone contient les tuiles generees.
 - Le fallback vers `public/maps/CTM.png` reste possible pendant la phase de
   validation.
-- Aucun changement BDD ou API n'est introduit.
+- Aucun changement de coordonnees, projection ou API metier n'est introduit.
 
 ## Validation conseillee
 

@@ -8,7 +8,7 @@ import type {
 } from "@/admin/tech-types";
 import type { MapStyleTargetType } from "@/map/types";
 
-export type TabKey = "references" | "schema" | "accounts";
+export type TabKey = "references" | "schema" | "accounts" | "map-backgrounds";
 
 export type EditableRow = {
   localId: string;
@@ -43,6 +43,12 @@ export type SidebarSection = {
     | { kind: "reference"; id: string; label: string; count: number | null }
     | { kind: "schema"; id: string; label: string; count: number | null }
     | { kind: "account"; id: string; label: string; count: number | null }
+    | {
+        kind: "map-backgrounds";
+        id: string;
+        label: string;
+        count: number | null;
+      }
   >;
 };
 

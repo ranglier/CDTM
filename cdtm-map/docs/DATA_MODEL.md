@@ -135,6 +135,17 @@ Les localites utilisent par defaut l'icone definie sur leur type, mais peuvent a
 Les landmarks utilisent par defaut l'icone definie sur leur type.
 Les lieux uniques peuvent choisir manuellement une icone de `reference_map_icons`.
 
+## Fonds de carte
+
+La table `map_backgrounds` conserve les fonds importes depuis l'admin technique.
+Elle stocke la source uploadee, le chemin des tuiles generees, les dimensions,
+les options de tuilage, le statut de generation et l'utilisateur ayant effectue
+la derniere mise a jour.
+
+Un index unique partiel garantit qu'un seul fond uploade peut etre actif. Si
+aucun fond uploade `ready` n'est actif, le manifeste public retombe sur le fond
+par defaut `public/maps/CTM.png` et ses tuiles generees au build.
+
 ## Supprime
 
 Les concepts suivants ne font plus partie du modele actif :

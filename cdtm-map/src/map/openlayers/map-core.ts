@@ -4,12 +4,20 @@ import { defaults as defaultControls } from "ol/control/defaults";
 import { defaults as defaultInteractions } from "ol/interaction/defaults";
 import type BaseLayer from "ol/layer/Base";
 import ImageLayer from "ol/layer/Image";
+import TileLayer from "ol/layer/Tile";
 import Map from "ol/Map";
 import { addProjection } from "ol/proj";
 import Projection from "ol/proj/Projection";
+import ImageTileSource from "ol/source/ImageTile";
 import ImageStatic from "ol/source/ImageStatic";
+import TileGrid from "ol/tilegrid/TileGrid";
 import View from "ol/View";
 
+import {
+  createDefaultMapBackgroundManifest,
+  normalizePublicMapBackgroundManifest,
+  type PublicMapBackgroundManifest,
+} from "@/map/background";
 import {
   CASES_EXTENT,
   MAP_BACKGROUND_PATH,
@@ -20,6 +28,22 @@ import {
 } from "@/map/config";
 
 let backgroundImagePreloadPromise: Promise<void> | null = null;
+
+export function shouldUseStaticMapBackground(): boolean {
+  return process.env.NEXT_PUBLIC_CDTM_MAP_BACKGROUND === "static";
+}
+
+function formatMapTileUrl(
+  tileUrlTemplate: string,
+  z: number,
+  x: number,
+  y: number,
+): string {
+  return tileUrlTemplate
+    .replace("{z}", String(z))
+    .replace("{x}", String(x))
+    .replace("{y}", String(y));
+}
 
 export const cdtmProjection = new Projection({
   code: MAP_PROJECTION_CODE,
@@ -39,10 +63,64 @@ export function createCdtmView() {
   });
 }
 
-export function createCdtmBackgroundLayer() {
+export async function loadCdtmMapBackgroundManifest(): Promise<PublicMapBackgroundManifest> {
+  if (shouldUseStaticMapBackground() || typeof window === "undefined") {
+    return createDefaultMapBackgroundManifest(
+      shouldUseStaticMapBackground() ? "static" : "tiles",
+    );
+  }
+
+  try {
+    const response = await fetch("/api/map/background", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const manifest = normalizePublicMapBackgroundManifest(
+      await response.json(),
+    );
+
+    return manifest ?? createDefaultMapBackgroundManifest("tiles");
+  } catch (error) {
+    console.error("Impossible de charger le manifeste du fond de carte.", error);
+    return createDefaultMapBackgroundManifest("tiles");
+  }
+}
+
+export function createCdtmBackgroundLayer(
+  manifest: PublicMapBackgroundManifest = createDefaultMapBackgroundManifest(
+    shouldUseStaticMapBackground() ? "static" : "tiles",
+  ),
+) {
+  if (
+    manifest.mode === "tiles" &&
+    manifest.tileUrlTemplate &&
+    !shouldUseStaticMapBackground()
+  ) {
+    return new TileLayer({
+      extent: MAP_EXTENT,
+      source: new ImageTileSource({
+        projection: cdtmProjection,
+        tileGrid: new TileGrid({
+          extent: MAP_EXTENT,
+          minZoom: manifest.minZoom,
+          origin: [MAP_EXTENT[0], MAP_EXTENT[3]],
+          resolutions: manifest.resolutions,
+          tileSize: manifest.tileSize,
+        }),
+        url: (z, x, y) => formatMapTileUrl(manifest.tileUrlTemplate!, z, x, y),
+        wrapX: false,
+        transition: 0,
+      }),
+    });
+  }
+
   return new ImageLayer({
     source: new ImageStatic({
-      url: MAP_BACKGROUND_PATH,
+      url: manifest.imageUrl ?? MAP_BACKGROUND_PATH,
       imageExtent: MAP_EXTENT,
       projection: cdtmProjection,
     }),

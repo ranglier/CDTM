@@ -22,6 +22,7 @@ type TechAdminSidebarProps = {
   onSelectReferenceView: (sectionId: string, viewId: string) => void;
   onSelectSchemaItem: (itemId: string) => void;
   onSelectAccountItem: (itemId: string) => void;
+  onSelectMapBackgrounds: () => void;
 };
 
 export function TechAdminSidebar({
@@ -41,6 +42,7 @@ export function TechAdminSidebar({
   onSelectReferenceView,
   onSelectSchemaItem,
   onSelectAccountItem,
+  onSelectMapBackgrounds,
 }: TechAdminSidebarProps) {
   return (
     <div className="mt-6 space-y-4">
@@ -52,7 +54,9 @@ export function TechAdminSidebar({
             (activeTab === "references" &&
               activeSidebarRootId === section.id) ||
             (activeTab === "schema" && section.id === "schema") ||
-            (activeTab === "accounts" && section.id === "accounts")
+            (activeTab === "accounts" && section.id === "accounts") ||
+            (activeTab === "map-backgrounds" &&
+              section.id === "objets-cartographiques")
           }
           onSelect={() => {
             if (referenceViewSectionsIds.includes(section.id)) {
@@ -91,8 +95,10 @@ export function TechAdminSidebar({
                     item.id === activeReferenceViewId
                   : item.kind === "schema"
                     ? activeTab === "schema" && item.id === activeSchemaKey
-                    : activeTab === "accounts" &&
-                      item.id === String(activeAccountId);
+                    : item.kind === "account"
+                      ? activeTab === "accounts" &&
+                        item.id === String(activeAccountId)
+                      : activeTab === "map-backgrounds";
 
               return (
                 <button
@@ -114,7 +120,12 @@ export function TechAdminSidebar({
                       return;
                     }
 
-                    onSelectAccountItem(item.id);
+                    if (item.kind === "account") {
+                      onSelectAccountItem(item.id);
+                      return;
+                    }
+
+                    onSelectMapBackgrounds();
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">

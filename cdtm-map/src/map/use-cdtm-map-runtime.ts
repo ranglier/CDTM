@@ -20,6 +20,7 @@ import {
   attachCasePatternsRenderer,
   type CasePatternsRendererHandle,
 } from "@/map/openlayers/case-patterns-renderer";
+import type { PublicMapBackgroundManifest } from "@/map/background";
 import {
   createEditorPointsVectorLayer,
   createEditorPointsVectorSource,
@@ -34,7 +35,9 @@ import {
   createCdtmBackgroundLayer,
   createCdtmMap,
   fitCdtmCasesExtent,
+  loadCdtmMapBackgroundManifest,
   preloadCdtmBackgroundImage,
+  shouldUseStaticMapBackground,
 } from "@/map/openlayers/map-core";
 import {
   createEmptyPublicMapStyles,
@@ -269,6 +272,9 @@ export function useCdtmMapRuntime({
   const landmarkCategoryByTypeRef = useRef<
     Record<string, "landmark" | "unique" | null>
   >({});
+  const mapBackgroundManifestRef =
+    useRef<PublicMapBackgroundManifest | null>(null);
+  const [mapBackgroundReady, setMapBackgroundReady] = useState(false);
   const [hoverInfo, setHoverInfo] = useState<CdtmMapHoverInfo | null>(null);
 
   const clearHover = useCallback(() => {
@@ -335,7 +341,9 @@ export function useCdtmMapRuntime({
   );
 
   const createStandardLayers = useCallback((): StandardLayers => {
-    const backgroundLayer = createCdtmBackgroundLayer();
+    const backgroundLayer = createCdtmBackgroundLayer(
+      mapBackgroundManifestRef.current ?? undefined,
+    );
     const casesSource = createCasesVectorSource();
     const routesSource = createEditorRoutesVectorSource();
     const pointsSource = createEditorPointsVectorSource();
@@ -398,7 +406,10 @@ export function useCdtmMapRuntime({
 
   const createMap = useCallback(
     (target: HTMLElement, layers: VectorLayer[] | BaseLayer[]): Map => {
-      void preloadCdtmBackgroundImage();
+      if (shouldUseStaticMapBackground()) {
+        void preloadCdtmBackgroundImage();
+      }
+
       return createCdtmMap(target, layers);
     },
     [],
@@ -545,6 +556,27 @@ export function useCdtmMapRuntime({
     },
     [],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMapBackground() {
+      const manifest = await loadCdtmMapBackgroundManifest();
+
+      if (cancelled) {
+        return;
+      }
+
+      mapBackgroundManifestRef.current = manifest;
+      setMapBackgroundReady(true);
+    }
+
+    void loadMapBackground();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     casePropertiesByIdRef.current = casePropertiesById;
@@ -704,6 +736,7 @@ export function useCdtmMapRuntime({
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
     landmarkCategoryByTypeRef,
+    mapBackgroundReady,
     hoverInfo,
     setHoverInfo,
     clearHover,

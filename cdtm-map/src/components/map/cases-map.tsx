@@ -165,6 +165,7 @@ export function CasesMap({
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
     landmarkCategoryByTypeRef,
+    mapBackgroundReady,
     hoverInfo,
     setHoverInfo,
     clearHover,
@@ -337,7 +338,7 @@ export function CasesMap({
   }, [mapRef, panelVisible]);
 
   useEffect(() => {
-    if (!mapElementRef.current || mapRef.current) {
+    if (!mapBackgroundReady || !mapElementRef.current || mapRef.current) {
       return;
     }
 
@@ -537,6 +538,7 @@ export function CasesMap({
     localitiesVisibleRef,
     landmarksVisibleRef,
     mapElementRef,
+    mapBackgroundReady,
     mapRef,
     resetStandardHandles,
     routesVisibleRef,

@@ -1784,6 +1784,68 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "017",
+    name: "map_backgrounds",
+    up: async (client) => {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS map_backgrounds (
+          id_background TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          source_path TEXT NOT NULL,
+          tiles_path TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          width INTEGER NOT NULL,
+          height INTEGER NOT NULL,
+          tile_size INTEGER NOT NULL,
+          min_zoom INTEGER NOT NULL,
+          max_zoom INTEGER NOT NULL,
+          webp_quality INTEGER NOT NULL,
+          generation_status TEXT NOT NULL DEFAULT 'generating'
+            CHECK (generation_status IN ('generating', 'ready', 'failed')),
+          generation_error TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT FALSE,
+          generated_at TIMESTAMPTZ,
+          activated_at TIMESTAMPTZ,
+          updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        ALTER TABLE map_backgrounds
+        ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'generating'
+      `);
+
+      await client.query(`
+        ALTER TABLE map_backgrounds
+        ADD COLUMN IF NOT EXISTS generation_error TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE map_backgrounds
+        ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ
+      `);
+
+      await client.query(`
+        ALTER TABLE map_backgrounds
+        ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ
+      `);
+
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS map_backgrounds_single_active_idx
+        ON map_backgrounds(is_active)
+        WHERE is_active = TRUE
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS map_backgrounds_created_at_idx
+        ON map_backgrounds(created_at DESC)
+      `);
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

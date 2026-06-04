@@ -21,6 +21,7 @@ import type {
   StaffAccountSummary,
 } from "@/admin/tech-types";
 import type { AdminSession } from "@/admin/types";
+import { MapBackgroundAdminPanel } from "@/components/admin/tech/map-background-admin-panel";
 import { ReferenceAdminPanel } from "@/components/admin/tech/reference-admin-panel";
 import { TechAdminSidebar } from "@/components/admin/tech/tech-admin-sidebar";
 import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
@@ -57,6 +58,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
+import type { MapBackgroundAdminRecord } from "@/map/background";
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
@@ -122,6 +124,41 @@ async function uploadMapIconFile(file: File): Promise<MapIconUploadMetadata> {
   }
 
   return (await response.json()) as MapIconUploadMetadata;
+}
+
+async function uploadMapBackgroundFile({
+  file,
+  label,
+}: {
+  file: File;
+  label: string;
+}): Promise<MapBackgroundAdminRecord> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  if (label.trim().length > 0) {
+    formData.set("label", label.trim());
+  }
+
+  const response = await fetch("/api/admin/tech/map-backgrounds", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Upload impossible.";
+
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data.error) {
+        message = data.error;
+      }
+    } catch {}
+
+    throw new Error(message);
+  }
+
+  return (await response.json()) as MapBackgroundAdminRecord;
 }
 
 const dynamicFieldTypeOptions: Array<{
@@ -232,6 +269,22 @@ export function TechnicalAdminPage() {
     null,
   );
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+  const [mapBackgrounds, setMapBackgrounds] = useState<
+    MapBackgroundAdminRecord[]
+  >([]);
+  const [mapBackgroundsLoading, setMapBackgroundsLoading] = useState(false);
+  const [mapBackgroundError, setMapBackgroundError] = useState<string | null>(
+    null,
+  );
+  const [mapBackgroundUploadLabel, setMapBackgroundUploadLabel] =
+    useState("");
+  const [mapBackgroundUploading, setMapBackgroundUploading] = useState(false);
+  const [mapBackgroundUploadError, setMapBackgroundUploadError] = useState<
+    string | null
+  >(null);
+  const [activatingMapBackgroundId, setActivatingMapBackgroundId] = useState<
+    string | null
+  >(null);
 
   const nomenclatureStatus = useMemo(
     () =>
@@ -497,15 +550,22 @@ export function TechnicalAdminPage() {
       {
         id: "objets-cartographiques",
         title: "Objets cartographiques",
-        items:
-          referenceViewSections
+        items: [
+          {
+            kind: "map-backgrounds" as const,
+            id: "__map_backgrounds__",
+            label: "Fond de carte",
+            count: mapBackgrounds.length > 0 ? mapBackgrounds.length : null,
+          },
+          ...(referenceViewSections
             .find((section) => section.id === "objets-cartographiques")
             ?.views.map((view) => ({
               kind: "reference" as const,
               id: view.id,
               label: view.title,
               count: view.rowCount,
-            })) ?? [],
+            })) ?? []),
+        ],
       },
       {
         id: "emplacements",
@@ -561,7 +621,12 @@ export function TechnicalAdminPage() {
               ],
       },
     ],
-    [referenceViewSections, schemaSummaries, staffAccounts],
+    [
+      mapBackgrounds.length,
+      referenceViewSections,
+      schemaSummaries,
+      staffAccounts,
+    ],
   );
   const activeSidebarSectionIds = useMemo(() => {
     const activeIds: string[] = [];
@@ -582,6 +647,10 @@ export function TechnicalAdminPage() {
 
     if (activeTab === "accounts") {
       activeIds.push("accounts");
+    }
+
+    if (activeTab === "map-backgrounds") {
+      activeIds.push("objets-cartographiques");
     }
 
     return activeIds;
@@ -792,6 +861,27 @@ export function TechnicalAdminPage() {
     }
   }, []);
 
+  const loadMapBackgrounds = useCallback(async () => {
+    setMapBackgroundsLoading(true);
+    setMapBackgroundError(null);
+
+    try {
+      const nextBackgrounds = await fetchJson<MapBackgroundAdminRecord[]>(
+        "/api/admin/tech/map-backgrounds",
+      );
+      setMapBackgrounds(nextBackgrounds);
+    } catch (error) {
+      setMapBackgroundError(
+        error instanceof Error
+          ? error.message
+          : "Chargement des fonds impossible.",
+      );
+      setMapBackgrounds([]);
+    } finally {
+      setMapBackgroundsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -804,6 +894,7 @@ export function TechnicalAdminPage() {
         setReferencesLoading(false);
         setSchemaLoading(false);
         setAccountsLoading(false);
+        setMapBackgroundsLoading(false);
       }
     });
 
@@ -821,7 +912,9 @@ export function TechnicalAdminPage() {
     void loadTerrainCategoryOptions();
     void loadSchemaSummaries();
     void loadStaffAccounts();
+    void loadMapBackgrounds();
   }, [
+    loadMapBackgrounds,
     loadReferenceStatuses,
     loadSchemaSummaries,
     loadStaffAccounts,
@@ -1089,6 +1182,59 @@ export function TechnicalAdminPage() {
       }
     },
     [],
+  );
+
+  const handleMapBackgroundUpload = useCallback(
+    async (file: File | null) => {
+      if (!file) {
+        return;
+      }
+
+      setMapBackgroundUploading(true);
+      setMapBackgroundUploadError(null);
+      setMapBackgroundError(null);
+
+      try {
+        await uploadMapBackgroundFile({
+          file,
+          label: mapBackgroundUploadLabel,
+        });
+        setMapBackgroundUploadLabel("");
+        await loadMapBackgrounds();
+      } catch (error) {
+        setMapBackgroundUploadError(
+          error instanceof Error ? error.message : "Upload impossible.",
+        );
+      } finally {
+        setMapBackgroundUploading(false);
+      }
+    },
+    [loadMapBackgrounds, mapBackgroundUploadLabel],
+  );
+
+  const handleActivateMapBackground = useCallback(
+    async (idBackground: string) => {
+      setActivatingMapBackgroundId(idBackground);
+      setMapBackgroundError(null);
+
+      try {
+        await fetchJson<MapBackgroundAdminRecord>(
+          `/api/admin/tech/map-backgrounds/${idBackground}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({}),
+          },
+        );
+        await loadMapBackgrounds();
+      } catch (error) {
+        setMapBackgroundError(
+          error instanceof Error ? error.message : "Activation impossible.",
+        );
+      } finally {
+        setActivatingMapBackgroundId(null);
+      }
+    },
+    [loadMapBackgrounds],
   );
 
   const handleAddReferenceRow = useCallback(() => {
@@ -1628,7 +1774,10 @@ export function TechnicalAdminPage() {
   if (
     !session ||
     (session.is_tech_admin &&
-      (referencesLoading || schemaLoading || accountsLoading))
+      (referencesLoading ||
+        schemaLoading ||
+        accountsLoading ||
+        mapBackgroundsLoading))
   ) {
     return (
       <AppShell>
@@ -1761,6 +1910,11 @@ export function TechnicalAdminPage() {
                 itemId === "__accounts__" ? null : Number(itemId),
               );
             }}
+            onSelectMapBackgrounds={() => {
+              setActiveTab("map-backgrounds");
+              setActiveSidebarRootId("objets-cartographiques");
+              setActiveReferenceViewId(null);
+            }}
           />
         </SectionPanel>
 
@@ -1787,6 +1941,20 @@ export function TechnicalAdminPage() {
               referenceFieldOptions={referenceFieldOptions}
               terrainCategoryOptions={terrainCategoryOptions}
               terrainCategoryLabelByKey={terrainCategoryLabelByKey}
+            />
+          ) : activeTab === "map-backgrounds" ? (
+            <MapBackgroundAdminPanel
+              backgrounds={mapBackgrounds}
+              loading={mapBackgroundsLoading}
+              error={mapBackgroundError}
+              uploadLabel={mapBackgroundUploadLabel}
+              setUploadLabel={setMapBackgroundUploadLabel}
+              uploading={mapBackgroundUploading}
+              uploadError={mapBackgroundUploadError}
+              activatingId={activatingMapBackgroundId}
+              onUpload={handleMapBackgroundUpload}
+              onActivate={handleActivateMapBackground}
+              onRefresh={loadMapBackgrounds}
             />
           ) : activeTab === "schema" ? (
             <>

@@ -929,6 +929,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
     landmarkCategoryByTypeRef,
+    mapBackgroundReady,
     hoverInfo,
     setHoverInfo,
     clearHover,
@@ -1951,7 +1952,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   }, []);
 
   useEffect(() => {
-    if (!mapElementRef.current || mapRef.current) {
+    if (!mapBackgroundReady || !mapElementRef.current || mapRef.current) {
       return;
     }
 
@@ -2873,6 +2874,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     localitiesVisibleRef,
     mapDisplayModeRef,
     mapRef,
+    mapBackgroundReady,
     pointsSourceRef,
     mapElementRef,
     activeCaseIdRef,
