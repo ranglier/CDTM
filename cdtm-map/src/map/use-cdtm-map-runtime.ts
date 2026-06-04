@@ -97,7 +97,7 @@ type UseCdtmMapRuntimeOptions = {
   routesVisible: boolean;
   objectDisplayMode: CdtmMapObjectDisplayMode;
   caseTileManifest?: PublicMapCaseTileManifest | null;
-  caseRenderingMode?: "vector" | "raster-interaction";
+  caseRenderingMode?: "vector" | "raster-interaction" | "raster-picking";
   clearHoverRequest?: number;
   onCasesHidden?: () => void;
 };
@@ -301,9 +301,9 @@ export function useCdtmMapRuntime({
   const caseTileManifestRef = useRef<PublicMapCaseTileManifest | null>(
     caseTileManifest,
   );
-  const caseRenderingModeRef = useRef<"vector" | "raster-interaction">(
-    caseRenderingMode,
-  );
+  const caseRenderingModeRef = useRef<
+    "vector" | "raster-interaction" | "raster-picking"
+  >(caseRenderingMode);
   const [mapBackgroundReady, setMapBackgroundReady] = useState(false);
   const [hoverInfo, setHoverInfo] = useState<CdtmMapHoverInfo | null>(null);
 
@@ -389,7 +389,7 @@ export function useCdtmMapRuntime({
             : "default",
     };
     const useRasterCases =
-      caseRenderingModeRef.current === "raster-interaction" &&
+      caseRenderingModeRef.current !== "vector" &&
       caseTileManifestRef.current?.mode === "raster";
     const caseFillLayer = createCasesVectorLayer(
       casesSource,
@@ -466,7 +466,7 @@ export function useCdtmMapRuntime({
     caseRasterLayerRef.current = handles.caseRasterLayer;
     casePatternsRendererRef.current?.dispose();
     casePatternsRendererRef.current =
-      caseRenderingModeRef.current === "raster-interaction"
+      caseRenderingModeRef.current !== "vector"
         ? null
         : attachCasePatternsRenderer({
             map: handles.map,
@@ -716,7 +716,7 @@ export function useCdtmMapRuntime({
   }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
-    const useRasterCases = caseRenderingModeRef.current === "raster-interaction";
+    const useRasterCases = caseRenderingModeRef.current !== "vector";
 
     casesVisibleRef.current = casesVisible;
     syncCaseLayerVisibility(

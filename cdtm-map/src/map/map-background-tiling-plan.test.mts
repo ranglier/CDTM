@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CASE_TILE_DISPLAY_MODES,
+  CASE_TILE_OUTPUT_MODES,
+  CASE_TILE_PICKING_MODE,
+  getExpectedMapCaseDisplayTileCount,
+  getExpectedMapCaseTileCount,
+} from "./case-tiles.ts";
+import {
   MAP_BACKGROUND_HEIGHT,
   MAP_BACKGROUND_WIDTH,
   MAP_TILE_MAX_ZOOM,
@@ -64,10 +71,29 @@ test("le nombre attendu de tuiles inclut les tuiles de bord", () => {
 test("les tuiles raster de cases couvrent les trois modes publics", () => {
   const plan = getTilePlan();
   const tileCount = plan.reduce((sum, level) => sum + level.tileCount, 0);
-  const displayModes = ["faction", "influence", "topographic"];
 
-  assert.equal(displayModes.length, 3);
-  assert.equal(tileCount * displayModes.length, 855);
+  assert.deepEqual(CASE_TILE_DISPLAY_MODES, [
+    "faction",
+    "influence",
+    "topographic",
+  ]);
+  assert.equal(getExpectedMapCaseDisplayTileCount(), tileCount * 3);
+  assert.equal(getExpectedMapCaseDisplayTileCount(), 855);
+});
+
+test("les tuiles raster de cases incluent le mode technique de picking", () => {
+  const plan = getTilePlan();
+  const tileCount = plan.reduce((sum, level) => sum + level.tileCount, 0);
+
+  assert.equal(CASE_TILE_PICKING_MODE, "picking");
+  assert.deepEqual(CASE_TILE_OUTPUT_MODES, [
+    "faction",
+    "influence",
+    "topographic",
+    "picking",
+  ]);
+  assert.equal(getExpectedMapCaseTileCount(), tileCount * 4);
+  assert.equal(getExpectedMapCaseTileCount(), 1140);
 });
 
 test("la conversion svg inverse l'axe y local de la carte", () => {

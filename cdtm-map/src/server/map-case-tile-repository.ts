@@ -26,6 +26,7 @@ import {
   getMapCaseTileSetTilesDir,
   getMapCaseTileSetTilesPublicPath,
   getMapCaseTileUrlTemplate,
+  readMapCasePickingIndex,
 } from "@/server/map-case-tiling";
 
 type MapCaseTileSetRow = {
@@ -94,16 +95,19 @@ function normalizeErrorMessage(error: unknown): string {
   return message.length > 1000 ? `${message.slice(0, 997)}...` : message;
 }
 
-function toPublicManifest(
+async function toPublicManifest(
   row: MapCaseTileSetRow,
   currentStateHash: string | null,
-): PublicMapCaseTileManifest {
+): Promise<PublicMapCaseTileManifest> {
   const templates = Object.fromEntries(
     CASE_TILE_DISPLAY_MODES.map((mode) => [
       mode,
       getMapCaseTileUrlTemplate(row.tiles_path, mode),
     ]),
   ) as Record<CaseTileDisplayMode, string>;
+  const picking = await readMapCasePickingIndex(
+    getMapCaseTileSetTilesDir(row.id_tile_set),
+  );
 
   return {
     mode: "raster",
@@ -119,6 +123,7 @@ function toPublicManifest(
     stale: currentStateHash ? row.state_hash !== currentStateHash : true,
     generatedAt: toIsoStringOrNull(row.generated_at),
     tileUrlTemplates: templates,
+    picking,
   };
 }
 
@@ -179,7 +184,7 @@ export async function getPublicMapCaseTileManifest(): Promise<PublicMapCaseTileM
   const currentStateHash = await currentStateHashPromise;
 
   return activeTileSet
-    ? toPublicManifest(activeTileSet, currentStateHash)
+    ? await toPublicManifest(activeTileSet, currentStateHash)
     : createVectorFallbackMapCaseTileManifest(currentStateHash);
 }
 

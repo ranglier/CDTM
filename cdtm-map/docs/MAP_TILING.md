@@ -153,11 +153,15 @@ Le pipeline serveur `src/server/map-case-tiling.ts` :
 
 - utilise `sharp` avec un SVG intermediaire ;
 - genere les modes `faction`, `influence` et `topographic` ;
+- genere aussi un mode technique `picking`, invisible, dont chaque case porte
+  une couleur unique reliee a son identifiant par un index embarque dans le jeu
+  de tuiles ;
 - utilise la meme grille que le fond, soit 256 px, `z0` a `z4`, resolutions
   `[16, 8, 4, 2, 1]` ;
 - ecrit les tuiles dans
   `/app/uploads/map-case-tiles/{id}/tiles/{mode}/{z}/{x}/{y}.webp` ;
-- produit 855 tuiles par jeu, soit 285 tuiles pour chacun des 3 modes.
+- produit 1140 tuiles par jeu, soit 285 tuiles pour chacun des 3 modes publics
+  et 285 tuiles de picking.
 
 Routes principales :
 
@@ -172,21 +176,15 @@ Routes principales :
 
 La carte publique charge ce manifeste avant de construire OpenLayers. Si un jeu
 `ready` existe, elle ajoute un `TileLayer` raster au-dessus du fond et garde une
-couche vectorielle legere pour clic, survol, recherche et selection. Si aucun
-jeu n'est pret, ou si `NEXT_PUBLIC_CDTM_CASE_TILES=vector` est defini, elle
-revient au rendu vectoriel actuel.
+couche vectorielle legere pour selection et focus.
 
-## Geometrie d'interaction publique
-
-La carte publique ne charge plus le GeoJSON canonique complet pour l'interaction.
-Le script `scripts/generate-case-interaction-data.mjs` produit
-`public/data/cases.interaction.geojson` a partir de `public/data/cases.geojson`.
-
-- simplification Douglas-Peucker avec tolerance `1` unite carte ;
-- proprietes limitees a `id_case` et `registry_id_case` ;
-- usage public limite a clic, survol, focus et selection ;
-- recherche et panneau hydrates par `/api/cases/public-index` ;
-- editeur et generation des tuiles raster conservent le GeoJSON exact.
+Quand le jeu actif contient l'index de picking, les clics et survols de cases
+lisent la tuile `picking` au zoom natif et recuperent l'identifiant de case par
+couleur. Les contours exacts des cases selectionnees sont ensuite charges a la
+demande via `/api/map/cases/geometries`, sans charger toute la couche dans
+OpenLayers. Si l'index de picking est absent, si aucun jeu n'est pret, ou si
+`NEXT_PUBLIC_CDTM_CASE_TILES=vector` est defini, la carte revient au rendu
+vectoriel actuel.
 
 ## Decoupage propose
 

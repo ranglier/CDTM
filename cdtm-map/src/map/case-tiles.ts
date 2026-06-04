@@ -6,8 +6,8 @@ import {
   MAP_TILE_MIN_ZOOM,
   MAP_TILE_RESOLUTIONS,
   MAP_TILE_SIZE,
-} from "@/map/config";
-import type { MapDisplayMode } from "@/map/types";
+} from "./config.ts";
+import type { MapDisplayMode } from "./types.ts";
 
 export const CASE_TILE_DISPLAY_MODES = [
   "faction",
@@ -17,7 +17,20 @@ export const CASE_TILE_DISPLAY_MODES = [
 
 export type CaseTileDisplayMode = (typeof CASE_TILE_DISPLAY_MODES)[number];
 
+export const CASE_TILE_PICKING_MODE = "picking";
+export const CASE_TILE_OUTPUT_MODES = [
+  ...CASE_TILE_DISPLAY_MODES,
+  CASE_TILE_PICKING_MODE,
+] as const;
+
+export type CaseTileOutputMode = (typeof CASE_TILE_OUTPUT_MODES)[number];
+
 export type MapCaseTileGenerationStatus = "generating" | "ready" | "failed";
+
+export type MapCasePickingManifest = {
+  tileUrlTemplate: string;
+  idByValue: string[];
+};
 
 export type PublicMapCaseTileManifest =
   | {
@@ -34,6 +47,7 @@ export type PublicMapCaseTileManifest =
       stale: boolean;
       generatedAt: null;
       tileUrlTemplates: null;
+      picking: null;
     }
   | {
       mode: "raster";
@@ -49,6 +63,7 @@ export type PublicMapCaseTileManifest =
       stale: boolean;
       generatedAt: string | null;
       tileUrlTemplates: Record<CaseTileDisplayMode, string>;
+      picking: MapCasePickingManifest | null;
     };
 
 export type MapCaseTileSetAdminRecord = {
@@ -94,6 +109,7 @@ export function createVectorFallbackMapCaseTileManifest(
     stale: false,
     generatedAt: null,
     tileUrlTemplates: null,
+    picking: null,
   };
 }
 
@@ -126,6 +142,23 @@ function isTileTemplateMap(
     (mode) =>
       typeof candidate[mode] === "string" &&
       candidate[mode].trim().length > 0,
+  );
+}
+
+function isCasePickingManifest(value: unknown): value is MapCasePickingManifest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return (
+    typeof candidate.tileUrlTemplate === "string" &&
+    candidate.tileUrlTemplate.trim().length > 0 &&
+    Array.isArray(candidate.idByValue) &&
+    candidate.idByValue.every(
+      (idCase) => typeof idCase === "string" && idCase.trim().length > 0,
+    )
   );
 }
 
@@ -168,6 +201,7 @@ export function normalizePublicMapCaseTileManifest(
       stale: false,
       generatedAt: null,
       tileUrlTemplates: null,
+      picking: null,
     };
   }
 
@@ -203,6 +237,12 @@ export function normalizePublicMapCaseTileManifest(
       influence: candidate.tileUrlTemplates.influence,
       topographic: candidate.tileUrlTemplates.topographic,
     },
+    picking: isCasePickingManifest(candidate.picking)
+      ? {
+          tileUrlTemplate: candidate.picking.tileUrlTemplate,
+          idByValue: candidate.picking.idByValue,
+        }
+      : null,
   };
 }
 
@@ -228,7 +268,64 @@ export function getMapCaseTilePlan() {
 
 export function getExpectedMapCaseTileCount(): number {
   return (
+    CASE_TILE_OUTPUT_MODES.length *
+    getMapCaseTilePlan().reduce((sum, level) => sum + level.tileCount, 0)
+  );
+}
+
+export function getExpectedMapCaseDisplayTileCount(): number {
+  return (
     CASE_TILE_DISPLAY_MODES.length *
     getMapCaseTilePlan().reduce((sum, level) => sum + level.tileCount, 0)
   );
+}
+
+export function encodeCasePickingColor(value: number): {
+  r: number;
+  g: number;
+  b: number;
+} {
+  const normalized = Math.max(0, Math.floor(value));
+
+  return {
+    r: normalized & 0xff,
+    g: (normalized >> 8) & 0xff,
+    b: (normalized >> 16) & 0xff,
+  };
+}
+
+export function decodeCasePickingColorValue({
+  r,
+  g,
+  b,
+  alpha = 255,
+}: {
+  r: number;
+  g: number;
+  b: number;
+  alpha?: number;
+}): number {
+  if (alpha < 128) {
+    return 0;
+  }
+
+  return r + (g << 8) + (b << 16);
+}
+
+export function resolveCaseIdFromPickingColor(
+  color: {
+    r: number;
+    g: number;
+    b: number;
+    alpha?: number;
+  },
+  idByValue: string[],
+): string | null {
+  const value = decodeCasePickingColorValue(color);
+
+  if (value <= 0) {
+    return null;
+  }
+
+  return idByValue[value - 1] ?? null;
 }

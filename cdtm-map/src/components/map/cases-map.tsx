@@ -40,6 +40,10 @@ import {
   cdtmProjection,
   loadCdtmMapCaseTileManifest,
 } from "@/map/openlayers/map-core";
+import {
+  createCasePickingReader,
+  type CasePickingReader,
+} from "@/map/case-picking";
 import type { PublicMapCaseTileManifest } from "@/map/case-tiles";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
@@ -53,11 +57,11 @@ import {
 } from "@/map/use-cdtm-map-runtime";
 import {
   type CaseSelectionIntent,
-  type CaseInteractionFeatureCollection,
   type MapDisplayMode,
   type PublicMapStyles,
+  type StableCaseFeatureCollection,
   type StableCaseProperties,
-  isCaseInteractionFeatureCollection,
+  isStableCaseFeatureCollection,
 } from "@/map/types";
 import type { MapSearchTarget } from "@/map/search";
 
@@ -123,8 +127,8 @@ function buildDefaultAppearanceByType(
   );
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", ...init });
 
   if (!response.ok) {
     throw new Error(`Erreur HTTP ${response.status} pour ${url}`);
@@ -164,6 +168,8 @@ export function CasesMap({
   const publicLocalitiesByIdRef = useRef<Record<string, PublicMapLocality>>({});
   const publicLandmarksByIdRef = useRef<Record<string, PublicMapLandmark>>({});
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
+  const casePickingReaderRef = useRef<CasePickingReader | null>(null);
+  const casePickingHoverRequestRef = useRef(0);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
   const [routesVisible, setRoutesVisible] = useState(true);
@@ -172,8 +178,14 @@ export function CasesMap({
   const [caseTileManifest, setCaseTileManifest] =
     useState<PublicMapCaseTileManifest | null>(null);
   const [caseTilesReady, setCaseTilesReady] = useState(false);
+  const casePickingEnabled =
+    caseTileManifest?.mode === "raster" && caseTileManifest.picking !== null;
   const caseRenderingMode =
-    caseTileManifest?.mode === "raster" ? "raster-interaction" : "vector";
+    caseTileManifest?.mode === "raster"
+      ? casePickingEnabled
+        ? "raster-picking"
+        : "raster-interaction"
+      : "vector";
   const handleCasesHidden = useCallback(() => {
     onCaseSelectionChangeRef.current(null, "replace");
   }, []);
@@ -251,6 +263,26 @@ export function CasesMap({
     };
   }, []);
 
+  useEffect(() => {
+    casePickingReaderRef.current?.clear();
+    casePickingReaderRef.current =
+      caseTileManifest?.mode === "raster" && caseTileManifest.picking
+        ? createCasePickingReader({
+            picking: caseTileManifest.picking,
+            extent: caseTileManifest.extent,
+            tileSize: caseTileManifest.tileSize,
+            minZoom: caseTileManifest.minZoom,
+            maxZoom: caseTileManifest.maxZoom,
+            resolutions: caseTileManifest.resolutions,
+          })
+        : null;
+
+    return () => {
+      casePickingReaderRef.current?.clear();
+      casePickingReaderRef.current = null;
+    };
+  }, [caseTileManifest]);
+
   const showSearchTargetTooltip = useCallback(
     (target: MapSearchTarget) => {
       if (target.kind === "case") {
@@ -305,6 +337,58 @@ export function CasesMap({
     [mapRef, showTooltipAtCoordinate],
   );
 
+  const ensureCaseGeometries = useCallback(
+    async (idCases: string[]) => {
+      if (!casePickingEnabled || idCases.length === 0) {
+        return;
+      }
+
+      const source = casesSourceRef.current;
+
+      if (!source) {
+        return;
+      }
+
+      const missingIds = Array.from(
+        new Set(idCases.filter((idCase) => !source.getFeatureById(idCase))),
+      );
+
+      if (missingIds.length === 0) {
+        return;
+      }
+
+      const collection = await fetchJson<StableCaseFeatureCollection>(
+        "/api/map/cases/geometries",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ids: missingIds }),
+        },
+      );
+
+      if (!isStableCaseFeatureCollection(collection)) {
+        throw new Error(
+          "Le GeoJSON des cases selectionnees ne respecte pas le contrat stable attendu.",
+        );
+      }
+
+      const features = readCaseFeatures(collection, cdtmProjection).filter(
+        (feature) => {
+          const idCase = feature.getId();
+
+          return (
+            typeof idCase === "string" && !source.getFeatureById(idCase)
+          );
+        },
+      );
+
+      if (features.length > 0) {
+        source.addFeatures(features);
+      }
+    },
+    [casePickingEnabled, casesSourceRef],
+  );
+
   useEffect(() => {
     onCaseSelectionChangeRef.current = onCaseSelectionChange;
   }, [onCaseSelectionChange]);
@@ -330,16 +414,46 @@ export function CasesMap({
       return;
     }
 
-    focusCaseById(focusCaseId);
-  }, [focusCaseById, focusCaseId, focusRequest]);
+    if (!casePickingEnabled) {
+      focusCaseById(focusCaseId);
+      return;
+    }
+
+    void ensureCaseGeometries([focusCaseId])
+      .then(() => focusCaseById(focusCaseId))
+      .catch((error: unknown) => {
+        console.error("Chargement de la geometrie de case impossible.", error);
+      });
+  }, [
+    casePickingEnabled,
+    ensureCaseGeometries,
+    focusCaseById,
+    focusCaseId,
+    focusRequest,
+  ]);
 
   useEffect(() => {
     if (focusCaseIds.length === 0 || focusCaseIdsRequest === 0) {
       return;
     }
 
-    focusCasesByIds(focusCaseIds);
-  }, [focusCaseIds, focusCaseIdsRequest, focusCasesByIds]);
+    if (!casePickingEnabled) {
+      focusCasesByIds(focusCaseIds);
+      return;
+    }
+
+    void ensureCaseGeometries(focusCaseIds)
+      .then(() => focusCasesByIds(focusCaseIds))
+      .catch((error: unknown) => {
+        console.error("Chargement des geometries de cases impossible.", error);
+      });
+  }, [
+    casePickingEnabled,
+    ensureCaseGeometries,
+    focusCaseIds,
+    focusCaseIdsRequest,
+    focusCasesByIds,
+  ]);
 
   useEffect(() => {
     if (!focusSearchTarget) {
@@ -352,7 +466,16 @@ export function CasesMap({
     };
 
     if (focusSearchTarget.kind === "case") {
-      focusCaseById(focusSearchTarget.id);
+      if (!casePickingEnabled) {
+        focusCaseById(focusSearchTarget.id);
+        return;
+      }
+
+      void ensureCaseGeometries([focusSearchTarget.id])
+        .then(() => focusCaseById(focusSearchTarget.id))
+        .catch((error: unknown) => {
+          console.error("Chargement de la geometrie de case impossible.", error);
+        });
       return;
     }
 
@@ -382,12 +505,38 @@ export function CasesMap({
       }
     };
   }, [
+    casePickingEnabled,
+    ensureCaseGeometries,
     focusCaseById,
     focusPoint,
     focusRoute,
     focusSearchRequest,
     focusSearchTarget,
     showSearchTargetTooltip,
+  ]);
+
+  useEffect(() => {
+    if (!casePickingEnabled) {
+      return;
+    }
+
+    const ids = [
+      activeCaseId,
+      ...selectedCaseIds,
+    ].filter((idCase): idCase is string => typeof idCase === "string");
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    void ensureCaseGeometries(ids).catch((error: unknown) => {
+      console.error("Chargement des contours de selection impossible.", error);
+    });
+  }, [
+    activeCaseId,
+    casePickingEnabled,
+    ensureCaseGeometries,
+    selectedCaseIds,
   ]);
 
   useEffect(() => {
@@ -442,6 +591,34 @@ export function CasesMap({
       }
 
       const isToggleSelection = isToggleSelectionEvent(event.originalEvent);
+      const pickingReader = casePickingReaderRef.current;
+
+      if (pickingReader) {
+        void pickingReader
+          .pickCaseId(event.coordinate as [number, number])
+          .then((idCase) => {
+            const resolvedCase = idCase
+              ? (casePropertiesByIdRef.current[idCase] ?? null)
+              : null;
+
+            if (!resolvedCase) {
+              if (!isToggleSelection) {
+                onCaseSelectionChangeRef.current(null, "replace");
+              }
+              return;
+            }
+
+            onCaseSelectionChangeRef.current(
+              resolvedCase,
+              isToggleSelection ? "toggle" : "replace",
+            );
+          })
+          .catch((error: unknown) => {
+            console.error("Picking de case impossible.", error);
+          });
+        return;
+      }
+
       const feature = getFeatureAtPixel(map, event, standardLayers.casesLayer);
 
       if (!feature) {
@@ -556,6 +733,52 @@ export function CasesMap({
         return;
       }
 
+      const pickingReader = casePickingReaderRef.current;
+
+      if (pickingReader) {
+        const requestId = casePickingHoverRequestRef.current + 1;
+        casePickingHoverRequestRef.current = requestId;
+
+        void pickingReader
+          .pickCaseId(event.coordinate as [number, number])
+          .then((idCase) => {
+            if (casePickingHoverRequestRef.current !== requestId) {
+              return;
+            }
+
+            const resolvedCase = idCase
+              ? (casePropertiesByIdRef.current[idCase] ?? null)
+              : null;
+
+            if (!resolvedCase) {
+              target.style.cursor = "";
+              clearHover();
+              return;
+            }
+
+            const rows = buildCaseHoverRows(
+              displayModeRef.current,
+              resolvedCase,
+            );
+
+            if (rows.length === 0) {
+              target.style.cursor = "";
+              clearHover();
+              return;
+            }
+
+            setTooltip(getCaseHoverTitle(displayModeRef.current), rows);
+          })
+          .catch((error: unknown) => {
+            if (casePickingHoverRequestRef.current === requestId) {
+              target.style.cursor = "";
+              clearHover();
+            }
+            console.error("Survol par picking impossible.", error);
+          });
+        return;
+      }
+
       const caseFeature = getFeatureAtPixel(
         map,
         event,
@@ -644,13 +867,22 @@ export function CasesMap({
         return;
       }
 
+      if (casePickingEnabled) {
+        casesSourceRef.current.clear(true);
+        onFeaturesLoadRef.current?.(
+          Object.keys(casePropertiesByIdRef.current).length,
+        );
+        fitCasesExtent(0);
+        return;
+      }
+
       try {
         const collection =
-          await loadJsonData<CaseInteractionFeatureCollection>(dataUrl);
+          await loadJsonData<StableCaseFeatureCollection>(dataUrl);
 
-        if (!isCaseInteractionFeatureCollection(collection)) {
+        if (!isStableCaseFeatureCollection(collection)) {
           throw new Error(
-            "Le GeoJSON d'interaction des cases ne respecte pas le contrat attendu.",
+            "Le GeoJSON des cases ne respecte pas le contrat stable attendu.",
           );
         }
 
@@ -685,6 +917,8 @@ export function CasesMap({
       cancelled = true;
     };
   }, [
+    casePickingEnabled,
+    casePropertiesByIdRef,
     caseTilesReady,
     casesSourceRef,
     dataUrl,

@@ -1,14 +1,18 @@
 import crypto from "node:crypto";
-import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import sharp from "sharp";
 
 import {
-  CASE_TILE_DISPLAY_MODES,
+  CASE_TILE_OUTPUT_MODES,
+  CASE_TILE_PICKING_MODE,
+  encodeCasePickingColor,
   getExpectedMapCaseTileCount,
   getMapCaseTilePlan,
   type CaseTileDisplayMode,
+  type CaseTileOutputMode,
+  type MapCasePickingManifest,
 } from "@/map/case-tiles";
 import {
   CONTROL_SPLIT_OVERLAY_ALPHA,
@@ -39,9 +43,10 @@ import {
 import { getPublicCaseIndexResponse } from "@/server/public-repository";
 import { getServerEnv } from "@/server/env";
 
-export const MAP_CASE_TILE_GENERATOR_VERSION = "case-raster-v1";
+export const MAP_CASE_TILE_GENERATOR_VERSION = "case-raster-picking-v2";
 
 const MAP_CASE_TILES_UPLOAD_SUBDIR = "map-case-tiles";
+const MAP_CASE_PICKING_INDEX_FILENAME = "picking-index.json";
 const DEFAULT_CASE_FILL = "rgba(0, 0, 0, 0)";
 const DEFAULT_CASE_STROKE = "#000000";
 const DEFAULT_CASE_STROKE_WIDTH = 1.2;
@@ -56,13 +61,14 @@ type StableJson =
 
 type PreparedCaseFeature = {
   idCase: string;
+  pickingValue: number;
   properties: StableCaseProperties;
   extent: MapExtent;
   pathData: string;
 };
 
 type RenderTileOptions = {
-  mode: CaseTileDisplayMode;
+  mode: CaseTileOutputMode;
   z: number;
   resolution: number;
   column: number;
@@ -183,6 +189,18 @@ function dotToSvgElement({
   return `<circle cx="${formatNumber(center[0])}" cy="${formatNumber(
     mapYToSvgY(center[1]),
   )}" r="${formatNumber(radius)}" fill="${escapeXml(color)}"/>`;
+}
+
+function colorChannelToHex(value: number): string {
+  return value.toString(16).padStart(2, "0");
+}
+
+function pickingValueToHexColor(value: number): string {
+  const color = encodeCasePickingColor(value);
+
+  return `#${colorChannelToHex(color.r)}${colorChannelToHex(
+    color.g,
+  )}${colorChannelToHex(color.b)}`;
 }
 
 function extentIntersects(left: MapExtent, right: MapExtent): boolean {
@@ -308,7 +326,7 @@ function prepareCaseFeatures(
   collection: StableCaseFeatureCollection,
   publicCasesById: Record<string, StableCaseProperties>,
 ): PreparedCaseFeature[] {
-  return collection.features.flatMap((feature) => {
+  const features = collection.features.flatMap((feature) => {
     const rings = getGeometryRings(feature.geometry);
     const pathData = geometryToPathData(feature.geometry);
 
@@ -324,12 +342,18 @@ function prepareCaseFeatures(
     return [
       {
         idCase: getFeatureLookupId(properties),
+        pickingValue: 0,
         properties,
         extent: getFeatureExtent(rings),
         pathData,
       },
     ];
   });
+
+  return features.map((feature, index) => ({
+    ...feature,
+    pickingValue: index + 1,
+  }));
 }
 
 function renderPatternPrimitives({
@@ -518,6 +542,12 @@ function renderCaseFeature({
   return fragments.join("");
 }
 
+function renderPickingCaseFeature(feature: PreparedCaseFeature): string {
+  return `<path d="${escapeXml(feature.pathData)}" fill="${pickingValueToHexColor(
+    feature.pickingValue,
+  )}" fill-rule="evenodd" shape-rendering="crispEdges"/>`;
+}
+
 async function loadStableCaseFeatureCollection(): Promise<StableCaseFeatureCollection> {
   const filePath = path.join(process.cwd(), "public/data/cases.geojson");
   const fileContents = await readFile(filePath, "utf8");
@@ -568,7 +598,7 @@ function getStableHashPayload({
       minZoom: MAP_TILE_MIN_ZOOM,
       maxZoom: MAP_TILE_MAX_ZOOM,
       resolutions: MAP_TILE_RESOLUTIONS,
-      modes: CASE_TILE_DISPLAY_MODES,
+      modes: CASE_TILE_OUTPUT_MODES,
     },
     casesGeojson: {
       type: collection.type,
@@ -633,18 +663,21 @@ function buildSvgTile({
     width: tileWorldSize,
     height: tileWorldSize,
   };
-  const body = visibleFeatures
-    .map((feature, index) =>
-      renderCaseFeature({
-        feature,
-        mode,
-        styles,
-        clipId: `c-${z}-${column}-${row}-${index}`,
-        tileSvgExtent,
-        resolution,
-      }),
-    )
-    .join("");
+  const body =
+    mode === CASE_TILE_PICKING_MODE
+      ? visibleFeatures.map(renderPickingCaseFeature).join("")
+      : visibleFeatures
+          .map((feature, index) =>
+            renderCaseFeature({
+              feature,
+              mode,
+              styles,
+              clipId: `c-${z}-${column}-${row}-${index}`,
+              tileSvgExtent,
+              resolution,
+            }),
+          )
+          .join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${MAP_TILE_SIZE}" height="${MAP_TILE_SIZE}" viewBox="${formatNumber(
     svgMinX,
@@ -685,6 +718,62 @@ export function getMapCaseTileUrlTemplate(
   return `${tilesPath}/${mode}/{z}/{x}/{y}.webp`;
 }
 
+export function getMapCasePickingTileUrlTemplate(tilesPath: string): string {
+  return `${tilesPath}/${CASE_TILE_PICKING_MODE}/{z}/{x}/{y}.webp`;
+}
+
+function getMapCasePickingIndexPath(tilesDir: string): string {
+  return path.join(tilesDir, MAP_CASE_PICKING_INDEX_FILENAME);
+}
+
+function buildMapCasePickingManifest(
+  tilesPath: string,
+  features: PreparedCaseFeature[],
+): MapCasePickingManifest {
+  return {
+    tileUrlTemplate: getMapCasePickingTileUrlTemplate(tilesPath),
+    idByValue: features.map((feature) => feature.idCase),
+  };
+}
+
+async function writeMapCasePickingIndex(
+  tilesDir: string,
+  manifest: MapCasePickingManifest,
+): Promise<void> {
+  await writeFile(
+    getMapCasePickingIndexPath(tilesDir),
+    JSON.stringify(manifest, null, 2),
+    "utf8",
+  );
+}
+
+export async function readMapCasePickingIndex(
+  tilesDir: string,
+): Promise<MapCasePickingManifest | null> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(getMapCasePickingIndexPath(tilesDir), "utf8"),
+    ) as Partial<MapCasePickingManifest>;
+
+    if (
+      typeof parsed.tileUrlTemplate !== "string" ||
+      !Array.isArray(parsed.idByValue) ||
+      parsed.idByValue.some(
+        (idCase) => typeof idCase !== "string" || idCase.length === 0,
+      )
+    ) {
+      return null;
+    }
+
+    return {
+      tileUrlTemplate: parsed.tileUrlTemplate,
+      idByValue: parsed.idByValue,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function generateMapCaseTiles({
   state,
   outputDir,
@@ -700,7 +789,15 @@ export async function generateMapCaseTiles({
   await rm(outputDir, { recursive: true, force: true });
   await mkdir(tmpDir, { recursive: true });
 
-  for (const mode of CASE_TILE_DISPLAY_MODES) {
+  await writeMapCasePickingIndex(
+    tmpDir,
+    buildMapCasePickingManifest(
+      getMapCaseTileSetTilesPublicPath(path.basename(path.dirname(outputDir))),
+      features,
+    ),
+  );
+
+  for (const mode of CASE_TILE_OUTPUT_MODES) {
     for (const level of getMapCaseTilePlan()) {
       const tileWorldSize = MAP_TILE_SIZE * level.resolution;
 
@@ -736,7 +833,13 @@ export async function generateMapCaseTiles({
 export async function assertCompleteMapCaseTiles(tilesDir: string): Promise<void> {
   let tileCount = 0;
 
-  for (const mode of CASE_TILE_DISPLAY_MODES) {
+  const pickingManifest = await readMapCasePickingIndex(tilesDir);
+
+  if (!pickingManifest) {
+    throw new Error("Index de picking des tuiles de cases introuvable.");
+  }
+
+  for (const mode of CASE_TILE_OUTPUT_MODES) {
     for (const level of getMapCaseTilePlan()) {
       for (let row = 0; row < level.rows; row += 1) {
         for (let column = 0; column < level.columns; column += 1) {
@@ -780,9 +883,9 @@ function assertTileSegment(value: string): string {
   return value;
 }
 
-function assertTileMode(value: string): CaseTileDisplayMode {
-  if ((CASE_TILE_DISPLAY_MODES as readonly string[]).includes(value)) {
-    return value as CaseTileDisplayMode;
+function assertTileMode(value: string): CaseTileOutputMode {
+  if ((CASE_TILE_OUTPUT_MODES as readonly string[]).includes(value)) {
+    return value as CaseTileOutputMode;
   }
 
   throw new Error("Mode de tuiles introuvable.");

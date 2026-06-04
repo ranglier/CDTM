@@ -24,7 +24,7 @@ import {
   type MapSearchTarget,
 } from "@/map/search";
 import {
-  CASES_INTERACTION_DATA_URL,
+  CASES_DATA_URL,
   type CaseSelectionIntent,
   createEmptyPublicMapStyles,
   normalizeMapDisplayMode,
@@ -445,6 +445,7 @@ export default function HomePage() {
 
         if (!cancelled) {
           setStableCases(publicCases.cases);
+          setTotalCases(publicCases.cases.length);
           setPublicMapStyles(publicCases.styles);
         }
       } catch (error) {
@@ -623,7 +624,7 @@ export default function HomePage() {
         aria-label="Carte publique des cases"
       >
         <CasesMap
-          dataUrl={CASES_INTERACTION_DATA_URL}
+          dataUrl={CASES_DATA_URL}
           activeCaseId={activeCaseId}
           selectedCaseIds={selectedCaseIds}
           casePropertiesById={stableCasesByRegistryId}

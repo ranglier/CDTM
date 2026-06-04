@@ -6,7 +6,7 @@
   "packageManager": "npm@10.9.8",
   "scripts": {
     "dev": "next dev",
-    "build": "npm run generate:map-tiles && npm run generate:case-interaction-data && next build",
+    "build": "npm run generate:map-tiles && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "test": "node --test src/**/*.test.mts",
@@ -15,8 +15,7 @@
     "typecheck": "tsc --noEmit",
     "validate:data": "node scripts/validate-data.mjs",
     "create:admin": "node scripts/create-admin-user.mjs",
-    "generate:map-tiles": "node scripts/generate-map-tiles.mjs",
-    "generate:case-interaction-data": "node scripts/generate-case-interaction-data.mjs"
+    "generate:map-tiles": "node scripts/generate-map-tiles.mjs"
   },
   "dependencies": {
     "@radix-ui/react-separator": "^1.1.8",

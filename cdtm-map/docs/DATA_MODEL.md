@@ -153,6 +153,10 @@ des cases publiques. Elle stocke le hash d'etat, le chemin des tuiles, les
 options de tuilage, le statut de generation et l'utilisateur ayant lance la
 generation.
 
+Chaque jeu contient aussi des tuiles techniques de picking : elles sont
+invisibles pour l'utilisateur, mais encodent chaque case par une couleur unique.
+L'index couleur -> case est stocke avec les fichiers du jeu, pas en base.
+
 Un index unique partiel garantit qu'un seul jeu `ready` peut etre actif. Le hash
 d'etat est calcule depuis le GeoJSON stable, les proprietes publiques des cases,
 les styles publics, les constantes de tuilage et la version du generateur.
