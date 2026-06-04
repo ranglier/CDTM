@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "validate:data": "node scripts/validate-data.mjs",
     "create:admin": "node scripts/create-admin-user.mjs",
-    "generate:map-tiles": "node scripts/generate-map-tiles.mjs"
+    "generate:map-tiles": "node scripts/generate-map-tiles.mjs",
+    "benchmark:case-tiles": "node scripts/benchmark-case-tile-formats.mjs"
   },
   "dependencies": {
     "@radix-ui/react-separator": "^1.1.8",

@@ -16,6 +16,7 @@ import { CaseInfoPanel } from "@/components/map/case-info-panel";
 import { CasesMap } from "@/components/map/cases-map";
 import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 import { getRegistryCaseId } from "@/map/case-data";
+import { measureMapPerformanceAsync } from "@/map/map-performance";
 import type { PublicMapObjectsResponse } from "@/map/public-objects";
 import {
   buildCaseSearchTargets,
@@ -439,8 +440,10 @@ export default function HomePage() {
 
     async function loadPublicCaseIndex() {
       try {
-        const publicCases = await fetchJson<PublicCaseIndexResponse>(
-          "/api/cases/public-index",
+        const publicCases = await measureMapPerformanceAsync(
+          "api.cases.public-index",
+          () =>
+            fetchJson<PublicCaseIndexResponse>("/api/cases/public-index"),
         );
 
         if (!cancelled) {
@@ -467,8 +470,10 @@ export default function HomePage() {
 
     async function loadPublicObjects() {
       try {
-        const data =
-          await fetchJson<PublicMapObjectsResponse>("/api/map/objects");
+        const data = await measureMapPerformanceAsync(
+          "api.map.objects.index",
+          () => fetchJson<PublicMapObjectsResponse>("/api/map/objects"),
+        );
 
         if (!cancelled) {
           setPublicObjects(data);
@@ -639,6 +644,7 @@ export default function HomePage() {
           clearHoverRequest={clearMapHoverRequest}
           casesVisible={casesVisible}
           panelVisible={publicPanelVisible}
+          publicObjects={publicObjects}
           mobileLayout={isMobileViewport}
           hoverTooltipsEnabled={!isMobileViewport}
           onDisplayModeChange={handleDisplayModeChange}

@@ -1,28 +1,28 @@
-import { NextResponse } from "next/server";
-
 import { createDefaultMapBackgroundManifest } from "@/map/background";
 import { getPublicMapBackgroundManifest } from "@/server/map-background-repository";
+import {
+  PUBLIC_MANIFEST_CACHE_CONTROL,
+  createPublicJsonResponse,
+} from "@/server/public-cache";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const manifest = await getPublicMapBackgroundManifest();
 
-    return NextResponse.json(manifest, {
-      status: 200,
-      headers: {
-        "cache-control": "no-store",
-      },
-    });
+    return createPublicJsonResponse(
+      request,
+      manifest,
+      PUBLIC_MANIFEST_CACHE_CONTROL,
+    );
   } catch (error) {
     console.error("Lecture du fond de carte impossible.", error);
 
-    return NextResponse.json(createDefaultMapBackgroundManifest("tiles"), {
-      status: 200,
-      headers: {
-        "cache-control": "no-store",
-      },
-    });
+    return createPublicJsonResponse(
+      request,
+      createDefaultMapBackgroundManifest("tiles"),
+      PUBLIC_MANIFEST_CACHE_CONTROL,
+    );
   }
 }

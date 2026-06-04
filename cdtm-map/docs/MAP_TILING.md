@@ -186,6 +186,23 @@ OpenLayers. Si l'index de picking est absent, si aucun jeu n'est pret, ou si
 `NEXT_PUBLIC_CDTM_CASE_TILES=vector` est defini, la carte revient au rendu
 vectoriel actuel.
 
+Pour eviter que les motifs raster sautent pendant le pan et le zoom, la couche
+de cases raster utilise un cache plus large, des tuiles interimaires, un preload
+des niveaux inferieurs et une courte transition d'apparition. La vue publique
+precharge aussi les tuiles du mode courant autour de la vue, avec une marge
+d'une tuile, au chargement, apres `moveend` et lors des changements de mode.
+
+Le lot performance V2 conserve cette strategie raster et ajoute trois garde-fous
+complementaires pour la vue publique :
+
+- les manifestes publics, l'index public des cases et `/api/map/objects` ont un
+  `ETag` et un cache court ou moyen avec `stale-while-revalidate` ;
+- `NEXT_PUBLIC_CDTM_MAP_PERF=1` active des mesures console agregees pour les
+  chargements, la creation OpenLayers, le premier rendu et les hit tests ;
+- les objets et routes publics passent en LOD au fort dezoom : les icones sont
+  rendues comme points simples, les routes courbes utilisent moins de segments
+  et la hit detection est cadencee plus strictement.
+
 ## Decoupage propose
 
 ### Lot 1 - Pipeline de generation

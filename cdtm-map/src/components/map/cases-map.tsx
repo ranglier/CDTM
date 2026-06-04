@@ -44,17 +44,31 @@ import {
   createCasePickingReader,
   type CasePickingReader,
 } from "@/map/case-picking";
+import { prefetchCaseRasterTiles } from "@/map/case-tile-prefetch";
 import type { PublicMapCaseTileManifest } from "@/map/case-tiles";
+import {
+  getMapPerformanceNow,
+  logMapPerformanceSummary,
+  measureMapPerformanceAsync,
+  measureMapPerformanceSync,
+  recordMapPerformanceDuration,
+} from "@/map/map-performance";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
   attachCdtmPointerMoveLifecycle,
   createCdtmResizeObserver,
+  getCdtmPublicPointerMoveDelay,
   getFeatureAtPixel,
   isToggleSelectionEvent,
   useCdtmMapRuntime,
   type CdtmMapObjectDefaultAppearance,
   type CdtmMapObjectDisplayMode,
 } from "@/map/use-cdtm-map-runtime";
+import {
+  getPublicObjectHitTolerance,
+  getPublicRouteHitTolerance,
+  getPublicRouteSegmentsPerInterval,
+} from "@/map/public-lod";
 import {
   type CaseSelectionIntent,
   type MapDisplayMode,
@@ -81,6 +95,7 @@ type CasesMapProps = {
   clearHoverRequest: number;
   casesVisible: boolean;
   panelVisible: boolean;
+  publicObjects?: PublicMapObjectsResponse | null;
   mobileLayout?: boolean;
   hoverTooltipsEnabled?: boolean;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
@@ -128,7 +143,7 @@ function buildDefaultAppearanceByType(
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", ...init });
+  const response = await fetch(url, init);
 
   if (!response.ok) {
     throw new Error(`Erreur HTTP ${response.status} pour ${url}`);
@@ -153,6 +168,7 @@ export function CasesMap({
   clearHoverRequest,
   casesVisible,
   panelVisible,
+  publicObjects,
   mobileLayout = false,
   hoverTooltipsEnabled = true,
   onDisplayModeChange,
@@ -170,6 +186,10 @@ export function CasesMap({
   const publicRoutesByIdRef = useRef<Record<string, PublicMapRoute>>({});
   const casePickingReaderRef = useRef<CasePickingReader | null>(null);
   const casePickingHoverRequestRef = useRef(0);
+  const caseRasterPrefetchRef = useRef<() => void>(() => {});
+  const mobileLayoutRef = useRef(mobileLayout);
+  const publicObjectsPayloadRef = useRef<PublicMapObjectsResponse | null>(null);
+  const publicRouteSegmentsRef = useRef<number | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
   const [routesVisible, setRoutesVisible] = useState(true);
@@ -200,6 +220,8 @@ export function CasesMap({
     landmarksVisible,
     routesVisible,
     objectDisplayMode,
+    publicLodEnabled: true,
+    mobileLayout,
     caseTileManifest,
     caseRenderingMode,
     clearHoverRequest,
@@ -243,6 +265,11 @@ export function CasesMap({
   } = runtime;
 
   useEffect(() => {
+    mobileLayoutRef.current = mobileLayout;
+    pointsLayerRef.current?.changed();
+  }, [mobileLayout, pointsLayerRef]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadCaseTilesManifest() {
@@ -282,6 +309,136 @@ export function CasesMap({
       casePickingReaderRef.current = null;
     };
   }, [caseTileManifest]);
+
+  const getCurrentPublicRouteSegments = useCallback((): number => {
+    return getPublicRouteSegmentsPerInterval(
+      mapRef.current?.getView().getResolution(),
+      mobileLayoutRef.current,
+    );
+  }, [mapRef]);
+
+  const applyPublicObjectsPayload = useCallback(
+    (payload: PublicMapObjectsResponse) => {
+      if (!pointsSourceRef.current || !routesSourceRef.current) {
+        return;
+      }
+
+      publicObjectsPayloadRef.current = payload;
+      publicLocalitiesByIdRef.current = Object.fromEntries(
+        payload.localities.map((locality) => [locality.id, locality]),
+      );
+      publicLandmarksByIdRef.current = Object.fromEntries(
+        payload.landmarks.map((landmark) => [landmark.id, landmark]),
+      );
+      publicRoutesByIdRef.current = Object.fromEntries(
+        payload.routes.map((route) => [route.id, route]),
+      );
+      localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
+        payload.reference.locality_types.map((typeRef) => [
+          typeRef.value,
+          typeRef.default_icon_key,
+        ]),
+      );
+      landmarkDefaultIconKeyByTypeRef.current = Object.fromEntries(
+        payload.reference.landmark_types.map((typeRef) => [
+          typeRef.value,
+          typeRef.default_icon_key,
+        ]),
+      );
+      localityDefaultAppearanceByTypeRef.current =
+        buildDefaultAppearanceByType(payload.reference.locality_types);
+      landmarkDefaultAppearanceByTypeRef.current =
+        buildDefaultAppearanceByType(payload.reference.landmark_types);
+      landmarkCategoryByTypeRef.current = Object.fromEntries(
+        payload.reference.landmark_types.map((typeRef) => [
+          typeRef.value,
+          typeRef.category,
+        ]),
+      );
+
+      const segmentsPerInterval = getCurrentPublicRouteSegments();
+      publicRouteSegmentsRef.current = segmentsPerInterval;
+
+      replaceEditorPointFeatures(pointsSourceRef.current, {
+        localities: toRenderablePublicLocalities(payload.localities),
+        landmarks: toRenderablePublicLandmarks(payload.landmarks),
+      });
+      replaceEditorRouteFeatures(
+        routesSourceRef.current,
+        toRenderablePublicRoutes(payload.routes),
+        { segmentsPerInterval },
+      );
+      pointsLayerRef.current?.changed();
+      routesLayerRef.current?.changed();
+    },
+    [
+      getCurrentPublicRouteSegments,
+      landmarkCategoryByTypeRef,
+      landmarkDefaultAppearanceByTypeRef,
+      landmarkDefaultIconKeyByTypeRef,
+      localityDefaultAppearanceByTypeRef,
+      localityDefaultIconKeyByTypeRef,
+      pointsLayerRef,
+      pointsSourceRef,
+      routesLayerRef,
+      routesSourceRef,
+    ],
+  );
+
+  const refreshPublicRouteLod = useCallback(() => {
+    const payload = publicObjectsPayloadRef.current;
+    const source = routesSourceRef.current;
+
+    if (!payload || !source) {
+      return;
+    }
+
+    const nextSegments = getCurrentPublicRouteSegments();
+
+    if (publicRouteSegmentsRef.current === nextSegments) {
+      return;
+    }
+
+    publicRouteSegmentsRef.current = nextSegments;
+    replaceEditorRouteFeatures(source, toRenderablePublicRoutes(payload.routes), {
+      segmentsPerInterval: nextSegments,
+    });
+    routesLayerRef.current?.changed();
+  }, [getCurrentPublicRouteSegments, routesLayerRef, routesSourceRef]);
+
+  useEffect(() => {
+    caseRasterPrefetchRef.current = () => {
+      const map = mapRef.current;
+
+      if (
+        !map ||
+        !caseTileManifest ||
+        caseTileManifest.mode !== "raster" ||
+        !casesVisibleRef.current
+      ) {
+        return;
+      }
+
+      const size = map.getSize();
+      const resolution = map.getView().getResolution();
+
+      if (!size || !resolution) {
+        return;
+      }
+
+      prefetchCaseRasterTiles({
+        manifest: caseTileManifest,
+        displayMode: displayModeRef.current,
+        extent: map.getView().calculateExtent(size) as [
+          number,
+          number,
+          number,
+          number,
+        ],
+        resolution,
+      });
+    };
+  }, [caseTileManifest, casesVisibleRef, displayModeRef, mapRef]);
 
   const showSearchTargetTooltip = useCallback(
     (target: MapSearchTarget) => {
@@ -540,6 +697,16 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      caseRasterPrefetchRef.current();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [caseTileManifest, casesVisible, displayMode]);
+
+  useEffect(() => {
     const map = mapRef.current;
 
     if (!map) {
@@ -565,7 +732,11 @@ export function CasesMap({
       return;
     }
 
-    const standardLayers = createStandardLayers();
+    const mapCreationStart = getMapPerformanceNow();
+    const standardLayers = measureMapPerformanceSync(
+      "openlayers.layers.create",
+      createStandardLayers,
+    );
     const mapLayers = standardLayers.caseRasterLayer
       ? [
           standardLayers.backgroundLayer,
@@ -581,7 +752,16 @@ export function CasesMap({
           standardLayers.routesLayer,
           standardLayers.pointsLayer,
         ];
-    const map = createMap(mapElementRef.current, mapLayers);
+    const map = measureMapPerformanceSync("openlayers.map.create", () =>
+      createMap(mapElementRef.current!, mapLayers),
+    );
+    const renderCompleteKey = map.once("rendercomplete", () => {
+      recordMapPerformanceDuration(
+        "openlayers.first-render-ready",
+        getMapPerformanceNow() - mapCreationStart,
+      );
+      logMapPerformanceSummary("CDTM carte publique");
+    });
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -594,9 +774,15 @@ export function CasesMap({
       const pickingReader = casePickingReaderRef.current;
 
       if (pickingReader) {
+        const pickingStart = getMapPerformanceNow();
+
         void pickingReader
           .pickCaseId(event.coordinate as [number, number])
           .then((idCase) => {
+            recordMapPerformanceDuration(
+              "case.picking.click",
+              getMapPerformanceNow() - pickingStart,
+            );
             const resolvedCase = idCase
               ? (casePropertiesByIdRef.current[idCase] ?? null)
               : null;
@@ -614,6 +800,10 @@ export function CasesMap({
             );
           })
           .catch((error: unknown) => {
+            recordMapPerformanceDuration(
+              "case.picking.click",
+              getMapPerformanceNow() - pickingStart,
+            );
             console.error("Picking de case impossible.", error);
           });
         return;
@@ -671,7 +861,10 @@ export function CasesMap({
           map,
           event,
           standardLayers.pointsLayer,
-          10,
+          getPublicObjectHitTolerance(
+            map.getView().getResolution(),
+            mobileLayoutRef.current,
+          ),
         );
 
         if (pointFeature) {
@@ -709,7 +902,10 @@ export function CasesMap({
           map,
           event,
           standardLayers.routesLayer,
-          8,
+          getPublicRouteHitTolerance(
+            map.getView().getResolution(),
+            mobileLayoutRef.current,
+          ),
         );
 
         if (routeFeature) {
@@ -807,10 +1003,17 @@ export function CasesMap({
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
+    const moveEndPrefetchKey = map.on("moveend", () => {
+      caseRasterPrefetchRef.current();
+      refreshPublicRouteLod();
+      standardLayers.pointsLayer.changed();
+    });
     const pointerMoveCleanup = attachCdtmPointerMoveLifecycle({
       map,
       runHitTests: runPointerMoveHitTests,
       clearHover,
+      getHitTestDelayMs: () =>
+        getCdtmPublicPointerMoveDelay(map, mobileLayoutRef.current),
     });
     bindStandardHandles({
       map,
@@ -825,10 +1028,16 @@ export function CasesMap({
     });
     const resizeObserver = createCdtmResizeObserver(map, mapElementRef.current);
     fitCasesExtent(0);
+    const initialPrefetchFrame = window.requestAnimationFrame(() => {
+      caseRasterPrefetchRef.current();
+    });
 
     return () => {
+      window.cancelAnimationFrame(initialPrefetchFrame);
       resizeObserver.disconnect();
       pointerMoveCleanup();
+      unByKey(moveEndPrefetchKey);
+      unByKey(renderCompleteKey);
       unByKey(singleClickKey);
       map.getTargetElement().style.cursor = "";
       map.setTarget(undefined);
@@ -836,6 +1045,7 @@ export function CasesMap({
     };
   }, [
     bindStandardHandles,
+    caseRasterPrefetchRef,
     casePropertiesByIdRef,
     caseTilesReady,
     casesVisibleRef,
@@ -850,6 +1060,7 @@ export function CasesMap({
     mapElementRef,
     mapBackgroundReady,
     mapRef,
+    refreshPublicRouteLod,
     resetStandardHandles,
     routesVisibleRef,
     setHoverInfo,
@@ -877,8 +1088,10 @@ export function CasesMap({
       }
 
       try {
-        const collection =
-          await loadJsonData<StableCaseFeatureCollection>(dataUrl);
+        const collection = await measureMapPerformanceAsync(
+          "data.cases.geojson",
+          () => loadJsonData<StableCaseFeatureCollection>(dataUrl),
+        );
 
         if (!isStableCaseFeatureCollection(collection)) {
           throw new Error(
@@ -940,58 +1153,24 @@ export function CasesMap({
         return;
       }
 
+      if (publicObjects === null) {
+        return;
+      }
+
       try {
         const response =
-          await fetchJson<PublicMapObjectsResponse>("/api/map/objects");
+          publicObjects ??
+          (await measureMapPerformanceAsync("api.map.objects.layer", () =>
+            fetchJson<PublicMapObjectsResponse>("/api/map/objects"),
+          ));
         const payload = response ?? createEmptyPublicMapObjectsResponse();
 
         if (cancelled || !pointsSourceRef.current || !routesSourceRef.current) {
           return;
         }
 
-        publicLocalitiesByIdRef.current = Object.fromEntries(
-          payload.localities.map((locality) => [locality.id, locality]),
-        );
-        publicLandmarksByIdRef.current = Object.fromEntries(
-          payload.landmarks.map((landmark) => [landmark.id, landmark]),
-        );
-        publicRoutesByIdRef.current = Object.fromEntries(
-          payload.routes.map((route) => [route.id, route]),
-        );
-        localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
-          payload.reference.locality_types.map((typeRef) => [
-            typeRef.value,
-            typeRef.default_icon_key,
-          ]),
-        );
-        landmarkDefaultIconKeyByTypeRef.current = Object.fromEntries(
-          payload.reference.landmark_types.map((typeRef) => [
-            typeRef.value,
-            typeRef.default_icon_key,
-          ]),
-        );
-        localityDefaultAppearanceByTypeRef.current =
-          buildDefaultAppearanceByType(payload.reference.locality_types);
-        landmarkDefaultAppearanceByTypeRef.current =
-          buildDefaultAppearanceByType(payload.reference.landmark_types);
-        landmarkCategoryByTypeRef.current = Object.fromEntries(
-          payload.reference.landmark_types.map((typeRef) => [
-            typeRef.value,
-            typeRef.category,
-          ]),
-        );
+        applyPublicObjectsPayload(payload);
         mapIconSourceByKeyRef.current = {};
-
-        replaceEditorPointFeatures(pointsSourceRef.current, {
-          localities: toRenderablePublicLocalities(payload.localities),
-          landmarks: toRenderablePublicLandmarks(payload.landmarks),
-        });
-        replaceEditorRouteFeatures(
-          routesSourceRef.current,
-          toRenderablePublicRoutes(payload.routes),
-        );
-        pointsLayerRef.current?.changed();
-        routesLayerRef.current?.changed();
 
         void Promise.all(
           payload.reference.map_icons.map(async (iconRef) => {
@@ -1048,6 +1227,7 @@ export function CasesMap({
       cancelled = true;
     };
   }, [
+    applyPublicObjectsPayload,
     caseTilesReady,
     landmarkCategoryByTypeRef,
     landmarkDefaultAppearanceByTypeRef,
@@ -1058,6 +1238,7 @@ export function CasesMap({
     mapIconSourceByKeyRef,
     pointsLayerRef,
     pointsSourceRef,
+    publicObjects,
     routesLayerRef,
     routesSourceRef,
   ]);

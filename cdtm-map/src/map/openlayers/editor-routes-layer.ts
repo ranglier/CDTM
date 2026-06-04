@@ -20,6 +20,7 @@ import {
   MAP_VECTOR_UPDATE_WHILE_ANIMATING,
   MAP_VECTOR_UPDATE_WHILE_INTERACTING,
 } from "@/map/config";
+import { buildRouteDisplayCoordinates } from "@/map/route-geometry";
 
 const DEFAULT_ROUTE_RGB = [255, 255, 255] as const;
 const routeStyleCache = new Map<string, Style[]>();
@@ -145,54 +146,19 @@ function getRouteWidthScale(resolution: number | undefined): number {
 export function buildEditorRouteDisplayCoordinates(
   points: EditorMapRoutePoint[],
   geometryMode: EditorMapRoute["geometry_mode"],
+  options: { segmentsPerInterval?: number } = {},
 ): EditorMapRoutePoint[] {
-  if (geometryMode !== "curved") {
-    return points;
-  }
-
-  if (points.length < 3) {
-    return points;
-  }
-
-  const coordinates: EditorMapRoutePoint[] = [];
-  const segmentsPerInterval = 12;
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[Math.max(0, index - 1)];
-    const p1 = points[index];
-    const p2 = points[index + 1];
-    const p3 = points[Math.min(points.length - 1, index + 2)];
-
-    for (let step = 0; step < segmentsPerInterval; step += 1) {
-      const t = step / segmentsPerInterval;
-      const t2 = t * t;
-      const t3 = t2 * t;
-
-      const x =
-        0.5 *
-        (2 * p1[0] +
-          (-p0[0] + p2[0]) * t +
-          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
-      const y =
-        0.5 *
-        (2 * p1[1] +
-          (-p0[1] + p2[1]) * t +
-          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
-
-      coordinates.push([x, y]);
-    }
-  }
-
-  coordinates.push(points[points.length - 1]);
-  return coordinates;
+  return buildRouteDisplayCoordinates(points, geometryMode, options);
 }
 
-function createRouteFeature(route: EditorMapRoute): Feature<LineString> {
+function createRouteFeature(
+  route: EditorMapRoute,
+  options: { segmentsPerInterval?: number } = {},
+): Feature<LineString> {
   const displayPoints = buildEditorRouteDisplayCoordinates(
     route.points,
     route.geometry_mode,
+    options,
   );
   const feature = new Feature<LineString>({
     geometry: new LineString(displayPoints),
@@ -351,18 +317,20 @@ export function createEditorRoutePreviewVectorLayer(
 export function replaceEditorRouteFeatures(
   source: VectorSource,
   routes: EditorMapRoute[],
+  options: { segmentsPerInterval?: number } = {},
 ): void {
   source.clear(true);
-  source.addFeatures(routes.map(createRouteFeature));
+  source.addFeatures(routes.map((route) => createRouteFeature(route, options)));
 }
 
 export function upsertEditorRouteFeature(
   source: VectorSource,
   route: EditorMapRoute,
+  options: { segmentsPerInterval?: number } = {},
 ): void {
   const featureId = `route:${route.id_route}`;
   const existing = source.getFeatureById(featureId);
-  const nextFeature = createRouteFeature(route);
+  const nextFeature = createRouteFeature(route, options);
 
   if (existing) {
     source.removeFeature(existing);

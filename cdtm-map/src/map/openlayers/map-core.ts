@@ -26,11 +26,15 @@ import {
 import {
   CASES_EXTENT,
   MAP_BACKGROUND_PATH,
+  MAP_CASE_TILE_CACHE_SIZE,
+  MAP_CASE_TILE_PRELOAD_LEVELS,
+  MAP_CASE_TILE_TRANSITION_MS,
   MAP_EXTENT,
   MAP_FIT_PADDING,
   MAP_MAX_ZOOM,
   MAP_PROJECTION_CODE,
 } from "@/map/config";
+import { measureMapPerformanceAsync } from "@/map/map-performance";
 import { normalizeMapDisplayMode, type MapDisplayMode } from "@/map/types";
 
 let backgroundImagePreloadPromise: Promise<void> | null = null;
@@ -81,9 +85,10 @@ export async function loadCdtmMapBackgroundManifest(): Promise<PublicMapBackgrou
   }
 
   try {
-    const response = await fetch("/api/map/background", {
-      cache: "no-store",
-    });
+    const response = await measureMapPerformanceAsync(
+      "api.map.background.manifest",
+      () => fetch("/api/map/background"),
+    );
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -106,9 +111,10 @@ export async function loadCdtmMapCaseTileManifest(): Promise<PublicMapCaseTileMa
   }
 
   try {
-    const response = await fetch("/api/map/case-tiles/manifest", {
-      cache: "no-store",
-    });
+    const response = await measureMapPerformanceAsync(
+      "api.map.case-tiles.manifest",
+      () => fetch("/api/map/case-tiles/manifest"),
+    );
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -178,7 +184,10 @@ export function createCdtmCaseRasterLayer({
   }
 
   return new TileLayer({
+    cacheSize: MAP_CASE_TILE_CACHE_SIZE,
     extent: MAP_EXTENT,
+    preload: MAP_CASE_TILE_PRELOAD_LEVELS,
+    useInterimTilesOnError: true,
     visible,
     source: new ImageTileSource({
       projection: cdtmProjection,
@@ -196,7 +205,7 @@ export function createCdtmCaseRasterLayer({
         return formatMapTileUrl(template, z, x, y);
       },
       wrapX: false,
-      transition: 0,
+      transition: MAP_CASE_TILE_TRANSITION_MS,
     }),
   });
 }

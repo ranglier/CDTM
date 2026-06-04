@@ -11,6 +11,11 @@ import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 
 import { MAP_MAX_ZOOM } from "@/map/config";
+import { measureMapPerformanceSync } from "@/map/map-performance";
+import {
+  getPublicPointerMoveThrottleMs,
+  resolvePublicObjectDisplayMode,
+} from "@/map/public-lod";
 import {
   createCasesVectorLayer,
   createCasesVectorSource,
@@ -96,6 +101,8 @@ type UseCdtmMapRuntimeOptions = {
   landmarksVisible: boolean;
   routesVisible: boolean;
   objectDisplayMode: CdtmMapObjectDisplayMode;
+  publicLodEnabled?: boolean;
+  mobileLayout?: boolean;
   caseTileManifest?: PublicMapCaseTileManifest | null;
   caseRenderingMode?: "vector" | "raster-interaction" | "raster-picking";
   clearHoverRequest?: number;
@@ -150,14 +157,17 @@ export function attachCdtmPointerMoveLifecycle({
   map,
   runHitTests,
   clearHover,
+  getHitTestDelayMs,
 }: {
   map: Map;
   runHitTests: (event: MapBrowserEvent<PointerEvent>) => void;
   clearHover: () => void;
+  getHitTestDelayMs?: () => number;
 }): () => void {
   let mapInteracting = false;
   let pointerMoveFrame: number | null = null;
   let latestPointerMoveEvent: MapBrowserEvent<PointerEvent> | null = null;
+  let lastHitTestAt = 0;
 
   const cancelPointerMoveFrame = () => {
     if (pointerMoveFrame !== null) {
@@ -189,7 +199,18 @@ export function attachCdtmPointerMoveLifecycle({
         return;
       }
 
-      runHitTests(event);
+      const delayMs = Math.max(0, getHitTestDelayMs?.() ?? 0);
+      const now =
+        typeof performance === "undefined" ? Date.now() : performance.now();
+
+      if (delayMs > 0 && now - lastHitTestAt < delayMs) {
+        return;
+      }
+
+      lastHitTestAt = now;
+      measureMapPerformanceSync("pointermove.hit-tests", () => {
+        runHitTests(event);
+      });
     });
   };
 
@@ -231,6 +252,8 @@ export function useCdtmMapRuntime({
   landmarksVisible,
   routesVisible,
   objectDisplayMode,
+  publicLodEnabled = false,
+  mobileLayout = false,
   caseTileManifest = null,
   caseRenderingMode = "vector",
   clearHoverRequest,
@@ -280,6 +303,8 @@ export function useCdtmMapRuntime({
   );
   const objectDisplayModeRef =
     useRef<CdtmMapObjectDisplayMode>(objectDisplayMode);
+  const publicLodEnabledRef = useRef(publicLodEnabled);
+  const mobileLayoutRef = useRef(mobileLayout);
   const mapIconSourceByKeyRef = useRef<Record<string, string>>({});
   const localityDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>(
     {},
@@ -426,7 +451,14 @@ export function useCdtmMapRuntime({
           landmarkDefaultAppearanceByTypeRef.current[typeKey] ?? null,
         getLandmarkTypeCategory: (typeKey) =>
           landmarkCategoryByTypeRef.current[typeKey] ?? null,
-        getDisplayMode: () => objectDisplayModeRef.current,
+        getDisplayMode: () =>
+          publicLodEnabledRef.current
+            ? resolvePublicObjectDisplayMode(
+                objectDisplayModeRef.current,
+                mapRef.current?.getView().getResolution(),
+                mobileLayoutRef.current,
+              )
+            : objectDisplayModeRef.current,
         isFamilyVisible: (family) =>
           family === "locality"
             ? localitiesVisibleRef.current
@@ -669,6 +701,12 @@ export function useCdtmMapRuntime({
   }, [objectDisplayMode]);
 
   useEffect(() => {
+    publicLodEnabledRef.current = publicLodEnabled;
+    mobileLayoutRef.current = mobileLayout;
+    pointsLayerRef.current?.changed();
+  }, [mobileLayout, publicLodEnabled]);
+
+  useEffect(() => {
     const previousActiveCaseId = activeCaseIdRef.current;
     const previousSelectedIds = selectedCaseIdsRef.current;
     const nextSelectedIds = new Set(selectedCaseIds);
@@ -797,6 +835,8 @@ export function useCdtmMapRuntime({
     publicMapStylesRef,
     displayModeRef,
     objectDisplayModeRef,
+    publicLodEnabledRef,
+    mobileLayoutRef,
     mapIconSourceByKeyRef,
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
@@ -819,4 +859,14 @@ export function useCdtmMapRuntime({
     focusPoint,
     focusRoute,
   };
+}
+
+export function getCdtmPublicPointerMoveDelay(
+  map: Map,
+  mobileLayout: boolean,
+): number {
+  return getPublicPointerMoveThrottleMs(
+    map.getView().getResolution(),
+    mobileLayout,
+  );
 }
