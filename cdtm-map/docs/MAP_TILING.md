@@ -125,9 +125,18 @@ Routes principales :
   activation si la generation reussit.
 - `PATCH /api/admin/tech/map-backgrounds/[id]` : reactivation d'un fond deja
   genere.
+- `DELETE /api/admin/tech/map-backgrounds/[id]` : suppression d'un fond inactif.
 
 En cas d'echec de generation, le nouveau fond est marque `failed`, l'erreur est
 affichee dans l'admin, et l'ancien fond actif reste conserve.
+
+## Garde-fous de rendu
+
+Les motifs de cases sont couteux lorsque beaucoup de polygones sont visibles.
+Pour stabiliser le pan et le zoom, ils ne sont pas dessines pendant les
+interactions carte et sont masques aux niveaux de dezoom ou de densite de cases
+ou ils deviennent peu lisibles. Les couleurs de fond, contours, objets et routes
+restent visibles.
 
 ## Decoupage propose
 

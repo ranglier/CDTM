@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import crypto from "node:crypto";
 
 import type {
@@ -290,6 +290,69 @@ export async function activateMapBackground(
   }
 
   return activated;
+}
+
+export async function deleteMapBackground(
+  idBackground: string,
+): Promise<MapBackgroundAdminRecord> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    throw new Error("La base de donnees n'est pas configuree.");
+  }
+
+  const safeIdBackground = assertMapBackgroundId(idBackground);
+  const client = await getPool().connect();
+  let deletedRow: MapBackgroundRow | null = null;
+
+  try {
+    await client.query("BEGIN");
+
+    const currentResult = await client.query<MapBackgroundRow>(
+      `
+        SELECT *
+        FROM map_backgrounds
+        WHERE id_background = $1
+        FOR UPDATE
+      `,
+      [safeIdBackground],
+    );
+    const current = currentResult.rows[0];
+
+    if (!current) {
+      throw new Error("Fond de carte introuvable.");
+    }
+
+    if (current.is_active) {
+      throw new Error("Impossible de supprimer le fond actif.");
+    }
+
+    const deleteResult = await client.query<MapBackgroundRow>(
+      `
+        DELETE FROM map_backgrounds
+        WHERE id_background = $1
+        RETURNING *
+      `,
+      [safeIdBackground],
+    );
+    deletedRow = deleteResult.rows[0] ?? current;
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await rm(getMapBackgroundDirectory(safeIdBackground), {
+    recursive: true,
+    force: true,
+  }).catch((error: unknown) => {
+    console.error("Suppression du dossier de fond de carte impossible.", error);
+  });
+
+  return toMapBackgroundAdminRecord(deletedRow);
 }
 
 export async function createMapBackgroundFromUpload({

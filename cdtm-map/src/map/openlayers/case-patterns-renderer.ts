@@ -9,6 +9,10 @@ import type VectorLayer from "ol/layer/Vector";
 import type VectorSource from "ol/source/Vector";
 
 import {
+  MAP_CASE_PATTERNS_MAX_RESOLUTION,
+  MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES,
+} from "@/map/config";
+import {
   CONTROL_SPLIT_OVERLAY_ALPHA,
   TRANSPARENT_CONTROL_COLOR,
   generateControlSplitPrimitives,
@@ -279,14 +283,23 @@ export function attachCasePatternsRenderer({
   visible = true,
 }: AttachCasePatternsRendererOptions): CasePatternsRendererHandle {
   let currentVisible = visible;
+  let mapMoving = false;
 
   const render = () => {
     layer.changed();
     map.render();
   };
 
+  const moveStartKey = map.on("movestart", () => {
+    mapMoving = true;
+  });
+  const moveEndKey = map.on("moveend", () => {
+    mapMoving = false;
+    render();
+  });
+
   const postRenderKey: EventsKey = layer.on("postrender", (rawEvent) => {
-    if (!currentVisible) {
+    if (!currentVisible || mapMoving) {
       return;
     }
 
@@ -298,11 +311,26 @@ export function attachCasePatternsRenderer({
 
     const extent =
       event.frameState?.extent ?? map.getView().calculateExtent(map.getSize());
+    const resolution =
+      event.frameState?.viewState.resolution ??
+      map.getView().getResolution() ??
+      Number.POSITIVE_INFINITY;
+
+    if (resolution > MAP_CASE_PATTERNS_MAX_RESOLUTION) {
+      return;
+    }
+
+    const visibleFeatures = source.getFeaturesInExtent(extent);
+
+    if (visibleFeatures.length > MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES) {
+      return;
+    }
+
     const casePropertiesById = context.getCasePropertiesById();
     const styles = context.getPublicMapStyles() ?? createEmptyPublicMapStyles();
     const displayMode = context.getDisplayMode();
 
-    for (const candidateFeature of source.getFeaturesInExtent(extent)) {
+    for (const candidateFeature of visibleFeatures) {
       if (!(candidateFeature instanceof Feature)) {
         continue;
       }
@@ -337,6 +365,8 @@ export function attachCasePatternsRenderer({
     },
     dispose: () => {
       unByKey(postRenderKey);
+      unByKey(moveStartKey);
+      unByKey(moveEndKey);
     },
   };
 }

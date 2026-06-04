@@ -31,6 +31,11 @@ puis active le fond uniquement si la generation est complete.
 Reactive un fond existant uniquement si son statut est `ready` et si toutes ses
 tuiles sont presentes.
 
+### `DELETE /api/admin/tech/map-backgrounds/[id]`
+
+Supprime un fond inactif et son dossier d'upload. La suppression du fond actif
+est refusee.
+
 ## Referentiels
 
 ### `GET /api/admin/editor/reference-data`

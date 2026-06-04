@@ -95,6 +95,9 @@ Apres validation, le serveur genere les tuiles WebP dans le volume persistant
 generation complete. Les anciens fonds restent listes dans l'historique et
 peuvent etre reactives si leur statut est `ready`.
 
+Un fond inactif peut etre supprime depuis l'historique. Le fond actif ne peut
+pas etre supprime : il faut d'abord reactiver un autre fond pret.
+
 ## Uploads d'icones
 
 Les formats acceptes sont :

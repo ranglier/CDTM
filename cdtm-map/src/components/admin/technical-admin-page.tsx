@@ -285,6 +285,9 @@ export function TechnicalAdminPage() {
   const [activatingMapBackgroundId, setActivatingMapBackgroundId] = useState<
     string | null
   >(null);
+  const [deletingMapBackgroundId, setDeletingMapBackgroundId] = useState<
+    string | null
+  >(null);
 
   const nomenclatureStatus = useMemo(
     () =>
@@ -1291,6 +1294,34 @@ export function TechnicalAdminPage() {
     [loadMapBackgrounds],
   );
 
+  const handleDeleteMapBackground = useCallback(
+    async (idBackground: string) => {
+      if (!window.confirm("Supprimer ce fond de carte ?")) {
+        return;
+      }
+
+      setDeletingMapBackgroundId(idBackground);
+      setMapBackgroundError(null);
+
+      try {
+        await fetchJson<MapBackgroundAdminRecord>(
+          `/api/admin/tech/map-backgrounds/${idBackground}`,
+          {
+            method: "DELETE",
+          },
+        );
+        await loadMapBackgrounds();
+      } catch (error) {
+        setMapBackgroundError(
+          error instanceof Error ? error.message : "Suppression impossible.",
+        );
+      } finally {
+        setDeletingMapBackgroundId(null);
+      }
+    },
+    [loadMapBackgrounds],
+  );
+
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
       return;
@@ -2006,8 +2037,10 @@ export function TechnicalAdminPage() {
               uploading={mapBackgroundUploading}
               uploadError={mapBackgroundUploadError}
               activatingId={activatingMapBackgroundId}
+              deletingId={deletingMapBackgroundId}
               onUpload={handleMapBackgroundUpload}
               onActivate={handleActivateMapBackground}
+              onDelete={handleDeleteMapBackground}
               onRefresh={loadMapBackgrounds}
             />
           ) : activeTab === "schema" ? (

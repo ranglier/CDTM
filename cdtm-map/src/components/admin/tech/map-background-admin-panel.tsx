@@ -12,8 +12,10 @@ type MapBackgroundAdminPanelProps = {
   uploading: boolean;
   uploadError: string | null;
   activatingId: string | null;
+  deletingId: string | null;
   onUpload: (file: File | null) => Promise<void>;
   onActivate: (idBackground: string) => Promise<void>;
+  onDelete: (idBackground: string) => Promise<void>;
   onRefresh: () => Promise<void>;
 };
 
@@ -120,8 +122,10 @@ export function MapBackgroundAdminPanel({
   uploading,
   uploadError,
   activatingId,
+  deletingId,
   onUpload,
   onActivate,
+  onDelete,
   onRefresh,
 }: MapBackgroundAdminPanelProps) {
   const activeBackground = backgrounds.find((item) => item.is_active) ?? null;
@@ -247,24 +251,43 @@ export function MapBackgroundAdminPanel({
                       {item.id_background}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={item.is_active ? "secondary" : "outline"}
-                    disabled={
-                      item.is_active ||
-                      item.generation_status !== "ready" ||
-                      uploading ||
-                      activatingId !== null
-                    }
-                    onClick={() => void onActivate(item.id_background)}
-                  >
-                    {activatingId === item.id_background
-                      ? "Activation..."
-                      : item.is_active
-                        ? "Actif"
-                        : "Activer"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={item.is_active ? "secondary" : "outline"}
+                      disabled={
+                        item.is_active ||
+                        item.generation_status !== "ready" ||
+                        uploading ||
+                        activatingId !== null ||
+                        deletingId !== null
+                      }
+                      onClick={() => void onActivate(item.id_background)}
+                    >
+                      {activatingId === item.id_background
+                        ? "Activation..."
+                        : item.is_active
+                          ? "Actif"
+                          : "Activer"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        item.is_active ||
+                        uploading ||
+                        activatingId !== null ||
+                        deletingId !== null
+                      }
+                      onClick={() => void onDelete(item.id_background)}
+                    >
+                      {deletingId === item.id_background
+                        ? "Suppression..."
+                        : "Supprimer"}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mt-4">
