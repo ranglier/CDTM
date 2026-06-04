@@ -86,6 +86,18 @@ function createStyles() {
     pattern_dot_radius: null,
     secondary_ratio: null,
   };
+  styles.controleur.F = {
+    target_type: "controleur",
+    target_id: "F",
+    fill: "#ffaa33",
+    stroke: "#111111",
+    pattern_type: null,
+    pattern_color: null,
+    pattern_spacing: null,
+    pattern_line_width: null,
+    pattern_dot_radius: null,
+    secondary_ratio: null,
+  };
 
   return styles;
 }
@@ -271,7 +283,7 @@ test("les types de controle respectent secondary_ratio du referentiel", () => {
   );
 });
 
-test("en mode faction, une case vassale prend la couleur du suzerain sans hachurage relationnel", () => {
+test("en mode faction, une case vassale conserve sa couleur de faction sans hachurage relationnel", () => {
   const styles = createStyles();
   const properties = {
     id_case: "case_vassale",
@@ -286,10 +298,26 @@ test("en mode faction, une case vassale prend la couleur du suzerain sans hachur
 
   assert.equal(
     resolveCaseBaseStyle("faction", properties, styles)?.fill,
-    "#2255aa",
+    "#44aa55",
   );
   assert.equal(resolveCaseControlSplitOverlay("faction", properties, styles), null);
   assert.ok(resolveCaseControlSplitOverlay("influence", properties, styles));
+});
+
+test("les styles de controleurs respectent la casse exacte des identifiants", () => {
+  const styles = createStyles();
+
+  assert.equal(
+    resolveCaseBaseStyle(
+      "influence",
+      {
+        id_case: "case_controleur_casse",
+        controleur: "F",
+      },
+      styles,
+    )?.fill,
+    "#ffaa33",
+  );
 });
 
 test("le controle partiel produit des bandes de couleur sur fond vide", () => {

@@ -47,23 +47,62 @@ export const PATTERN_TYPE_OPTIONS: Array<{
 }> = [
   { value: "none", label: "Aucun" },
   { value: "diagonal", label: "Hachures diagonales" },
-  { value: "diagonal_spaced", label: "Hachures diagonales espacees" },
   { value: "diagonal_reverse", label: "Hachures diagonales inversees" },
-  {
-    value: "diagonal_reverse_spaced",
-    label: "Hachures diagonales inversees espacees",
-  },
   { value: "crosshatch", label: "Hachures croisees" },
-  { value: "crosshatch_spaced", label: "Hachures croisees espacees" },
   { value: "horizontal", label: "Lignes horizontales" },
-  { value: "horizontal_spaced", label: "Lignes horizontales espacees" },
   { value: "vertical", label: "Lignes verticales" },
-  { value: "vertical_spaced", label: "Lignes verticales espacees" },
   { value: "dots", label: "Points" },
-  { value: "dots_spaced", label: "Points espaces" },
   { value: "grid", label: "Grille" },
-  { value: "grid_spaced", label: "Grille espacee" },
 ];
+
+const LEGACY_SPACED_PATTERN_STEP = 18;
+
+function normalizePatternTypeForAdminInput(value: MapPatternType | null): {
+  patternType: MapPatternType | "none";
+  impliedSpacing: number | null;
+} {
+  switch (value) {
+    case "diagonal_spaced":
+      return {
+        patternType: "diagonal",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "diagonal_reverse_spaced":
+      return {
+        patternType: "diagonal_reverse",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "crosshatch_spaced":
+      return {
+        patternType: "crosshatch",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "horizontal_spaced":
+      return {
+        patternType: "horizontal",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "vertical_spaced":
+      return {
+        patternType: "vertical",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "dots_spaced":
+      return {
+        patternType: "dots",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case "grid_spaced":
+      return {
+        patternType: "grid",
+        impliedSpacing: LEGACY_SPACED_PATTERN_STEP,
+      };
+    case null:
+      return { patternType: "none", impliedSpacing: null };
+    default:
+      return { patternType: value, impliedSpacing: null };
+  }
+}
 
 export const REFERENCE_TECHNICAL_FIELDS = new Set([
   "group_key",
@@ -542,6 +581,11 @@ export function withStyleValues(
 ): EditableRow {
   const targetId = getStyleTargetIdForRow(view, row.values);
   const style = targetId && styles ? styles[targetId] : null;
+  const adminPattern = normalizePatternTypeForAdminInput(
+    style?.pattern_type ?? null,
+  );
+  const patternSpacing =
+    style?.pattern_spacing ?? adminPattern.impliedSpacing ?? null;
 
   return {
     ...row,
@@ -549,11 +593,11 @@ export function withStyleValues(
       ...row.values,
       fill: style?.fill ?? "",
       stroke: style?.stroke ?? DEFAULT_STYLE_STROKE,
-      pattern_type: style?.pattern_type ?? "none",
+      pattern_type: adminPattern.patternType,
       pattern_color: style?.pattern_color ?? "",
       pattern_spacing:
-        style?.pattern_spacing !== null && style?.pattern_spacing !== undefined
-          ? String(style.pattern_spacing)
+        patternSpacing !== null && patternSpacing !== undefined
+          ? String(patternSpacing)
           : "",
       pattern_line_width:
         style?.pattern_line_width !== null &&

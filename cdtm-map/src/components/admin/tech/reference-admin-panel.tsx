@@ -285,7 +285,13 @@ export function ReferenceAdminPanel({
                               <ReferenceFieldEditor
                                 field={field}
                                 value={row.values[field.name] ?? ""}
-                                disabled={row.saving || row.uploading}
+                                disabled={
+                                  row.saving ||
+                                  row.uploading ||
+                                  (!row.isNew &&
+                                    field.name ===
+                                      activeReference.definition.primary_key)
+                                }
                                 options={referenceFieldOptions[field.name]}
                                 onChange={(value) =>
                                   onReferenceRowValueChange(
@@ -693,7 +699,10 @@ export function ReferenceAdminPanel({
                                     disabled={
                                       row.saving ||
                                       row.uploading ||
-                                      LOCKED_REFERENCE_FIELDS.has(field.name)
+                                      LOCKED_REFERENCE_FIELDS.has(field.name) ||
+                                      (!row.isNew &&
+                                        field.name ===
+                                          activeReference.definition.primary_key)
                                     }
                                     options={referenceFieldOptions[field.name]}
                                     onChange={(value) =>

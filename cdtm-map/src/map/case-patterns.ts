@@ -199,7 +199,7 @@ function normalizeControlType(value: string | null | undefined): string | null {
 function normalizeControlActor(
   value: string | null | undefined,
 ): string | null {
-  const normalized = value?.trim().toLowerCase();
+  const normalized = value?.trim();
 
   return normalized && normalized.length > 0 ? normalized : null;
 }
@@ -207,7 +207,7 @@ function normalizeControlActor(
 function normalizeControlActorType(
   value: string | null | undefined,
 ): ControlActorType | null {
-  const normalized = normalizeControlActor(value);
+  const normalized = normalizeControlActor(value)?.toLowerCase();
 
   return normalized === "faction" || normalized === "controleur"
     ? normalized
@@ -350,36 +350,6 @@ function isVassalControlType(controlType: string | null): boolean {
   );
 }
 
-function getVassalSuzerainActor(
-  properties: StableCaseProperties,
-): ControlActorTarget | null {
-  const explicitSecondaryActor = getExplicitControlActor(
-    properties,
-    "secondaire",
-  );
-
-  if (explicitSecondaryActor) {
-    return explicitSecondaryActor;
-  }
-
-  const explicitPrimaryActor = getExplicitControlActor(properties, "principal");
-  const primaryActor =
-    explicitPrimaryActor ??
-    createControlActorTarget("controleur", properties.controleur) ??
-    createControlActorTarget("faction", properties.faction);
-
-  if (!primaryActor) {
-    return null;
-  }
-
-  return (
-    getOtherCurrentControlActor(properties, primaryActor) ??
-    (!explicitPrimaryActor
-      ? createControlActorTarget("controleur", properties.controleur)
-      : null)
-  );
-}
-
 function getControlSplitRule(
   controlType: string | null,
 ): ControlSplitRule | null {
@@ -493,26 +463,8 @@ export function resolveCaseBaseStyle(
   }
 
   switch (displayMode) {
-    case "faction": {
-      const controlType = normalizeControlType(properties.controle_type);
-
-      if (isVassalControlType(controlType)) {
-        const suzerainActor = getVassalSuzerainActor(properties);
-        const suzerainStyle = suzerainActor
-          ? getControlActorStyle(
-              styles,
-              suzerainActor.targetType,
-              suzerainActor.id,
-            )
-          : null;
-
-        if (suzerainStyle) {
-          return suzerainStyle;
-        }
-      }
-
+    case "faction":
       return getStyleForTarget(styles, "faction", properties.faction);
-    }
     case "influence":
       return (
         getStyleForTarget(styles, "controleur", properties.controleur) ??

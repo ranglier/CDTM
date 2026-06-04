@@ -52,6 +52,8 @@ type BulkFieldState = {
   mixed: boolean;
 };
 
+type SelectFieldOption = string | { value: string; label: string };
+
 const fieldClassName =
   "w-full rounded-[16px] border border-border/80 bg-background/55 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -90,14 +92,12 @@ function summarizeMeta(metas: AdminBlockMeta[]): string {
 function getTerrainTypeOptions(
   record: AdminCaseRecord | null,
   category: string | null | undefined,
-): string[] {
+): SelectFieldOption[] {
   if (!record || !category) {
     return [];
   }
 
-  return (record.reference_data.terrain_types_by_category[category] ?? []).map(
-    (option) => option.value,
-  );
+  return record.reference_data.terrain_types_by_category[category] ?? [];
 }
 
 function renderBulkHelper(field: BulkFieldState): string | undefined {
@@ -135,9 +135,9 @@ function formatBonusOption(option: AdminBonusContextuel): string {
 
 function getControlActorIdOptions(
   actorType: string,
-  factionOptions: string[],
-  controllerOptions: string[],
-): string[] {
+  factionOptions: SelectFieldOption[],
+  controllerOptions: SelectFieldOption[],
+): SelectFieldOption[] {
   if (actorType === "faction") {
     return factionOptions;
   }
@@ -147,6 +147,14 @@ function getControlActorIdOptions(
   }
 
   return [];
+}
+
+function getSelectOptionValue(option: SelectFieldOption): string {
+  return typeof option === "string" ? option : option.value;
+}
+
+function getSelectOptionLabel(option: SelectFieldOption): string {
+  return typeof option === "string" ? option : option.label;
 }
 
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
@@ -246,7 +254,7 @@ function SelectField({
   disabled = false,
 }: {
   value: string;
-  options: readonly string[];
+  options: readonly SelectFieldOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
@@ -259,8 +267,11 @@ function SelectField({
     >
       <option value="">Non renseigne</option>
       {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
+        <option
+          key={getSelectOptionValue(option)}
+          value={getSelectOptionValue(option)}
+        >
+          {getSelectOptionLabel(option)}
         </option>
       ))}
     </select>
@@ -469,9 +480,7 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
 
   const isMultiSelection = selectedCaseIds.length > 1;
   const terrainCategoryOptions =
-    activeAdminRecord?.reference_data.terrain_categories.map(
-      (option) => option.value,
-    ) ?? [];
+    activeAdminRecord?.reference_data.terrain_categories ?? [];
   const bulkTerrainCategory =
     bulkDraft.terrain.terrain_cat.mixed &&
     !bulkDraft.terrain.terrain_cat.touched
@@ -491,21 +500,13 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
     ? bulkDraft.bonus_contextuels.value
     : (singleDraft.bonus_contextuels ?? []);
   const peupleOptions =
-    activeAdminRecord?.reference_data.peuple_options.map(
-      (option) => option.value,
-    ) ?? [];
+    activeAdminRecord?.reference_data.peuple_options ?? [];
   const factionOptions =
-    activeAdminRecord?.reference_data.faction_options.map(
-      (option) => option.value,
-    ) ?? [];
+    activeAdminRecord?.reference_data.faction_options ?? [];
   const controllerOptions =
-    activeAdminRecord?.reference_data.controller_options.map(
-      (option) => option.value,
-    ) ?? [];
+    activeAdminRecord?.reference_data.controller_options ?? [];
   const controlTypeOptions =
-    activeAdminRecord?.reference_data.control_type_options.map(
-      (option) => option.value,
-    ) ?? [];
+    activeAdminRecord?.reference_data.control_type_options ?? [];
   const selectedSecondaryActorType = isMultiSelection
     ? bulkDraft.control.controle_secondaire_type.value
     : singleDraft.control.controle_secondaire_type;
@@ -536,8 +537,7 @@ export function CaseAdminEditor(props: CaseAdminEditorProps) {
   const terrainSecondaireOptions = Object.values(
     activeAdminRecord?.reference_data.terrain_types_by_category ?? {},
   )
-    .flat()
-    .map((option) => option.value);
+    .flat();
 
   function resolvePeupleForControlSelection(
     faction: string,

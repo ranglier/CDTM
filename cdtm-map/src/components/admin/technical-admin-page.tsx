@@ -999,7 +999,7 @@ export function TechnicalAdminPage() {
                   ...row.values,
                   [fieldName]: value,
                 };
-                const nextValues = activeReference
+                const nextValues = activeReference && row.isNew
                   ? applyReferenceAutoFill(
                       activeReference.definition.key,
                       row.values,
