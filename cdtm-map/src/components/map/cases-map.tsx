@@ -517,6 +517,7 @@ export function CasesMap({
       pointsLayer: standardLayers.pointsLayer,
     });
     const resizeObserver = createCdtmResizeObserver(map, mapElementRef.current);
+    fitCasesExtent(0);
 
     return () => {
       resizeObserver.disconnect();
@@ -534,6 +535,7 @@ export function CasesMap({
     createMap,
     createStandardLayers,
     displayModeRef,
+    fitCasesExtent,
     getTooltipPosition,
     localitiesVisibleRef,
     landmarksVisibleRef,
@@ -546,6 +548,10 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
+    if (!mapBackgroundReady) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadCases() {
@@ -593,9 +599,20 @@ export function CasesMap({
     return () => {
       cancelled = true;
     };
-  }, [casesSourceRef, dataUrl, fitCasesExtent, focusCaseById, mapRef]);
+  }, [
+    casesSourceRef,
+    dataUrl,
+    fitCasesExtent,
+    focusCaseById,
+    mapBackgroundReady,
+    mapRef,
+  ]);
 
   useEffect(() => {
+    if (!mapBackgroundReady) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadPublishedObjects() {
@@ -708,6 +725,7 @@ export function CasesMap({
     landmarkCategoryByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
     localityDefaultIconKeyByTypeRef,
+    mapBackgroundReady,
     mapIconSourceByKeyRef,
     pointsLayerRef,
     pointsSourceRef,
