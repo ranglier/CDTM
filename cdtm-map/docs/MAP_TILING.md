@@ -191,6 +191,9 @@ de cases raster utilise un cache plus large, des tuiles interimaires, un preload
 des niveaux inferieurs et une courte transition d'apparition. La vue publique
 precharge aussi les tuiles du mode courant autour de la vue, avec une marge
 d'une tuile, au chargement, apres `moveend` et lors des changements de mode.
+Une couche raster de secours limitee aux zooms bas reste cachee au repos et
+s'affiche pendant les mouvements, puis disparait peu apres `moveend`, afin de
+garder des motifs visibles si une tuile fine arrive en retard.
 
 Le lot performance V2 conserve cette strategie raster et ajoute trois garde-fous
 complementaires pour la vue publique :

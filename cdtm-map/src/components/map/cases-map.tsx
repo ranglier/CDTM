@@ -77,6 +77,7 @@ import {
   type StableCaseProperties,
   isStableCaseFeatureCollection,
 } from "@/map/types";
+import { MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS } from "@/map/config";
 import type { MapSearchTarget } from "@/map/search";
 
 type CasesMapProps = {
@@ -740,6 +741,9 @@ export function CasesMap({
     const mapLayers = standardLayers.caseRasterLayer
       ? [
           standardLayers.backgroundLayer,
+          ...(standardLayers.caseRasterBackupLayer
+            ? [standardLayers.caseRasterBackupLayer]
+            : []),
           standardLayers.caseRasterLayer,
           standardLayers.casesLayer,
           standardLayers.routesLayer,
@@ -1003,10 +1007,35 @@ export function CasesMap({
     };
 
     const singleClickKey = map.on("singleclick", singleClickHandler);
+    let caseRasterBackupHideTimeout: number | null = null;
+    const clearCaseRasterBackupHideTimeout = () => {
+      if (caseRasterBackupHideTimeout !== null) {
+        window.clearTimeout(caseRasterBackupHideTimeout);
+        caseRasterBackupHideTimeout = null;
+      }
+    };
+    const setCaseRasterBackupVisible = (visible: boolean) => {
+      const layer = standardLayers.caseRasterBackupLayer;
+
+      if (!layer) {
+        return;
+      }
+
+      layer.setVisible(visible && casesVisibleRef.current);
+      layer.changed();
+    };
+    const moveStartBackupKey = map.on("movestart", () => {
+      clearCaseRasterBackupHideTimeout();
+      setCaseRasterBackupVisible(true);
+    });
     const moveEndPrefetchKey = map.on("moveend", () => {
       caseRasterPrefetchRef.current();
       refreshPublicRouteLod();
       standardLayers.pointsLayer.changed();
+      clearCaseRasterBackupHideTimeout();
+      caseRasterBackupHideTimeout = window.setTimeout(() => {
+        setCaseRasterBackupVisible(false);
+      }, MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS);
     });
     const pointerMoveCleanup = attachCdtmPointerMoveLifecycle({
       map,
@@ -1017,6 +1046,7 @@ export function CasesMap({
     });
     bindStandardHandles({
       map,
+      caseRasterBackupLayer: standardLayers.caseRasterBackupLayer,
       caseRasterLayer: standardLayers.caseRasterLayer,
       casesSource: standardLayers.casesSource,
       caseFillLayer: standardLayers.caseFillLayer,
@@ -1034,9 +1064,11 @@ export function CasesMap({
 
     return () => {
       window.cancelAnimationFrame(initialPrefetchFrame);
+      clearCaseRasterBackupHideTimeout();
       resizeObserver.disconnect();
       pointerMoveCleanup();
       unByKey(moveEndPrefetchKey);
+      unByKey(moveStartBackupKey);
       unByKey(renderCompleteKey);
       unByKey(singleClickKey);
       map.getTargetElement().style.cursor = "";

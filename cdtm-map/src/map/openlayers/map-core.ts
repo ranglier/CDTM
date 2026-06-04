@@ -26,6 +26,7 @@ import {
 import {
   CASES_EXTENT,
   MAP_BACKGROUND_PATH,
+  MAP_CASE_TILE_BACKUP_MAX_ZOOM,
   MAP_CASE_TILE_CACHE_SIZE,
   MAP_CASE_TILE_PRELOAD_LEVELS,
   MAP_CASE_TILE_TRANSITION_MS,
@@ -166,14 +167,20 @@ export function createCdtmBackgroundLayer(
   });
 }
 
-export function createCdtmCaseRasterLayer({
+function createCdtmCaseRasterTileLayer({
   manifest,
   getDisplayMode,
   visible,
+  maxZoom,
+  preload = MAP_CASE_TILE_PRELOAD_LEVELS,
+  transition = MAP_CASE_TILE_TRANSITION_MS,
 }: {
   manifest: PublicMapCaseTileManifest | null;
   getDisplayMode: () => MapDisplayMode;
   visible: boolean;
+  maxZoom?: number;
+  preload?: number;
+  transition?: number;
 }) {
   if (
     !manifest ||
@@ -183,10 +190,17 @@ export function createCdtmCaseRasterLayer({
     return null;
   }
 
+  const safeMaxZoom =
+    typeof maxZoom === "number" && Number.isFinite(maxZoom)
+      ? Math.min(Math.max(maxZoom, manifest.minZoom), manifest.maxZoom)
+      : manifest.maxZoom;
+  const resolutionCount = safeMaxZoom - manifest.minZoom + 1;
+  const resolutions = manifest.resolutions.slice(0, resolutionCount);
+
   return new TileLayer({
     cacheSize: MAP_CASE_TILE_CACHE_SIZE,
     extent: MAP_EXTENT,
-    preload: MAP_CASE_TILE_PRELOAD_LEVELS,
+    preload,
     useInterimTilesOnError: true,
     visible,
     source: new ImageTileSource({
@@ -195,7 +209,7 @@ export function createCdtmCaseRasterLayer({
         extent: MAP_EXTENT,
         minZoom: manifest.minZoom,
         origin: [MAP_EXTENT[0], MAP_EXTENT[3]],
-        resolutions: manifest.resolutions,
+        resolutions,
         tileSize: manifest.tileSize,
       }),
       url: (z, x, y) => {
@@ -205,8 +219,43 @@ export function createCdtmCaseRasterLayer({
         return formatMapTileUrl(template, z, x, y);
       },
       wrapX: false,
-      transition: MAP_CASE_TILE_TRANSITION_MS,
+      transition,
     }),
+  });
+}
+
+export function createCdtmCaseRasterLayer({
+  manifest,
+  getDisplayMode,
+  visible,
+}: {
+  manifest: PublicMapCaseTileManifest | null;
+  getDisplayMode: () => MapDisplayMode;
+  visible: boolean;
+}) {
+  return createCdtmCaseRasterTileLayer({
+    manifest,
+    getDisplayMode,
+    visible,
+  });
+}
+
+export function createCdtmCaseRasterBackupLayer({
+  manifest,
+  getDisplayMode,
+  visible,
+}: {
+  manifest: PublicMapCaseTileManifest | null;
+  getDisplayMode: () => MapDisplayMode;
+  visible: boolean;
+}) {
+  return createCdtmCaseRasterTileLayer({
+    manifest,
+    getDisplayMode,
+    visible,
+    maxZoom: MAP_CASE_TILE_BACKUP_MAX_ZOOM,
+    preload: MAP_CASE_TILE_PRELOAD_LEVELS,
+    transition: 0,
   });
 }
 

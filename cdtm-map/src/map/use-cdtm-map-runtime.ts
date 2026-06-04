@@ -37,6 +37,7 @@ import {
   syncEditorRoutesLayerVisibility,
 } from "@/map/openlayers/editor-routes-layer";
 import {
+  createCdtmCaseRasterBackupLayer,
   createCdtmCaseRasterLayer,
   createCdtmBackgroundLayer,
   createCdtmMap,
@@ -76,6 +77,7 @@ export type CdtmMapObjectDefaultAppearance = {
 
 type StandardLayers = {
   backgroundLayer: ReturnType<typeof createCdtmBackgroundLayer>;
+  caseRasterBackupLayer: ReturnType<typeof createCdtmCaseRasterBackupLayer>;
   caseRasterLayer: ReturnType<typeof createCdtmCaseRasterLayer>;
   casesSource: ReturnType<typeof createCasesVectorSource>;
   caseFillLayer: ReturnType<typeof createCasesVectorLayer>;
@@ -273,6 +275,9 @@ export function useCdtmMapRuntime({
   const caseRasterLayerRef = useRef<ReturnType<
     typeof createCdtmCaseRasterLayer
   > | null>(null);
+  const caseRasterBackupLayerRef = useRef<ReturnType<
+    typeof createCdtmCaseRasterBackupLayer
+  > | null>(null);
   const casePatternsRendererRef = useRef<CasePatternsRendererHandle | null>(
     null,
   );
@@ -433,6 +438,11 @@ export function useCdtmMapRuntime({
       getDisplayMode: () => displayModeRef.current,
       visible: useRasterCases && casesVisibleRef.current,
     });
+    const caseRasterBackupLayer = createCdtmCaseRasterBackupLayer({
+      manifest: caseTileManifestRef.current,
+      getDisplayMode: () => displayModeRef.current,
+      visible: false,
+    });
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
     });
@@ -468,6 +478,7 @@ export function useCdtmMapRuntime({
 
     return {
       backgroundLayer,
+      caseRasterBackupLayer,
       caseRasterLayer,
       casesSource,
       caseFillLayer,
@@ -495,6 +506,7 @@ export function useCdtmMapRuntime({
     casesSourceRef.current = handles.casesSource;
     caseFillLayerRef.current = handles.caseFillLayer;
     casesLayerRef.current = handles.casesLayer;
+    caseRasterBackupLayerRef.current = handles.caseRasterBackupLayer;
     caseRasterLayerRef.current = handles.caseRasterLayer;
     casePatternsRendererRef.current?.dispose();
     casePatternsRendererRef.current =
@@ -524,6 +536,7 @@ export function useCdtmMapRuntime({
     casesSourceRef.current = null;
     caseFillLayerRef.current = null;
     casesLayerRef.current = null;
+    caseRasterBackupLayerRef.current = null;
     caseRasterLayerRef.current = null;
     routesSourceRef.current = null;
     routesLayerRef.current = null;
@@ -686,6 +699,7 @@ export function useCdtmMapRuntime({
     casesLayerRef.current?.changed();
     casePatternsRendererRef.current?.render();
     refreshCdtmCaseRasterLayer(caseRasterLayerRef.current);
+    refreshCdtmCaseRasterLayer(caseRasterBackupLayerRef.current);
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
@@ -764,6 +778,8 @@ export function useCdtmMapRuntime({
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
     caseRasterLayerRef.current?.setVisible(casesVisible);
     caseRasterLayerRef.current?.changed();
+    caseRasterBackupLayerRef.current?.setVisible(false);
+    caseRasterBackupLayerRef.current?.changed();
     casePatternsRendererRef.current?.setVisible(casesVisible);
 
     if (!casesVisible) {
@@ -819,6 +835,7 @@ export function useCdtmMapRuntime({
     casesSourceRef,
     caseFillLayerRef,
     casesLayerRef,
+    caseRasterBackupLayerRef,
     caseRasterLayerRef,
     casePatternsRendererRef,
     pointsSourceRef,
