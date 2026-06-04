@@ -299,6 +299,21 @@ function getFallbackPrimaryControlActor(
   );
 }
 
+function getPrimaryControlSplitActor(
+  displayMode: MapDisplayMode,
+  properties: StableCaseProperties,
+  controlType: string,
+): ControlActorTarget | null {
+  if (displayMode === "faction" && controlType === "partiel") {
+    return getCurrentControlActor(displayMode, properties);
+  }
+
+  return (
+    getExplicitControlActor(properties, "principal") ??
+    getFallbackPrimaryControlActor(displayMode, properties, controlType)
+  );
+}
+
 function getFallbackSecondaryControlActor(
   properties: StableCaseProperties,
   primaryActor: ControlActorTarget,
@@ -405,9 +420,11 @@ export function resolveCaseControlSplitOverlay(
     return null;
   }
 
-  const primaryActor =
-    getExplicitControlActor(properties, "principal") ??
-    getFallbackPrimaryControlActor(displayMode, properties, controlType);
+  const primaryActor = getPrimaryControlSplitActor(
+    displayMode,
+    properties,
+    controlType,
+  );
 
   if (!primaryActor) {
     return null;

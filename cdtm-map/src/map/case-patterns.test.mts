@@ -74,10 +74,34 @@ function createStyles() {
     pattern_dot_radius: null,
     secondary_ratio: null,
   };
+  styles.faction.royaume_du_harad = {
+    target_type: "faction",
+    target_id: "royaume_du_harad",
+    fill: "#cc4c4c",
+    stroke: "#111111",
+    pattern_type: null,
+    pattern_color: null,
+    pattern_spacing: null,
+    pattern_line_width: null,
+    pattern_dot_radius: null,
+    secondary_ratio: null,
+  };
   styles.controleur.deorl = {
     target_type: "controleur",
     target_id: "deorl",
     fill: "#66cc88",
+    stroke: "#111111",
+    pattern_type: null,
+    pattern_color: null,
+    pattern_spacing: null,
+    pattern_line_width: null,
+    pattern_dot_radius: null,
+    secondary_ratio: null,
+  };
+  styles.controleur.khaldir = {
+    target_type: "controleur",
+    target_id: "khaldir",
+    fill: "#d61f1f",
     stroke: "#111111",
     pattern_type: null,
     pattern_color: null,
@@ -318,6 +342,27 @@ test("en mode faction, le controleur sert de repli visuel quand la faction est a
     )?.fill,
     "#66cc88",
   );
+});
+
+test("en mode faction, le controle partiel utilise la couleur de faction malgre un controleur primaire", () => {
+  const styles = createStyles();
+
+  const overlay = resolveCaseControlSplitOverlay(
+    "faction",
+    {
+      id_case: "case_harad_partielle",
+      faction: "royaume_du_harad",
+      controleur: "khaldir",
+      controle_type: "partiel",
+      controle_principal_type: "controleur",
+      controle_principal_id: "khaldir",
+    },
+    styles,
+  );
+
+  assert.ok(overlay);
+  assert.equal(overlay.primaryColor, "#cc4c4c");
+  assert.equal(overlay.secondaryColor, TRANSPARENT_CONTROL_COLOR);
 });
 
 test("les styles de controleurs respectent la casse exacte des identifiants", () => {
