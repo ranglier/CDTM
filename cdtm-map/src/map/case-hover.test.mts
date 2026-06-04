@@ -98,6 +98,16 @@ test("le mode faction masque la relation de vassalite au survol", () => {
   );
 });
 
+test("le mode faction affiche le controleur quand aucune faction n'est renseignee", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("faction", {
+      id_case: "case_controleur_seul",
+      controleur: "deorl",
+    }),
+    [{ label: "Controleur", value: "deorl" }],
+  );
+});
+
 test("le survol evite les relations explicites reflexives", () => {
   assert.deepEqual(
     buildCaseHoverRows("influence", {

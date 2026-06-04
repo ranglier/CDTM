@@ -194,9 +194,13 @@ export function buildCaseHoverRows(
   }
 
   if (displayMode === "faction") {
-    const rows = properties.faction
-      ? [{ label: "Faction", value: properties.faction }]
-      : [];
+    const rows: CaseHoverRow[] = [];
+
+    if (properties.faction) {
+      rows.push({ label: "Faction", value: properties.faction });
+    } else if (properties.controleur) {
+      rows.push({ label: "Controleur", value: properties.controleur });
+    }
 
     const hoverRows = appendControlTypeRow(rows, properties, displayMode);
 

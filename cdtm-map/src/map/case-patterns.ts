@@ -464,7 +464,10 @@ export function resolveCaseBaseStyle(
 
   switch (displayMode) {
     case "faction":
-      return getStyleForTarget(styles, "faction", properties.faction);
+      return (
+        getStyleForTarget(styles, "faction", properties.faction) ??
+        getStyleForTarget(styles, "controleur", properties.controleur)
+      );
     case "influence":
       return (
         getStyleForTarget(styles, "controleur", properties.controleur) ??

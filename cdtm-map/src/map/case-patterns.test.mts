@@ -304,6 +304,22 @@ test("en mode faction, une case vassale conserve sa couleur de faction sans hach
   assert.ok(resolveCaseControlSplitOverlay("influence", properties, styles));
 });
 
+test("en mode faction, le controleur sert de repli visuel quand la faction est absente", () => {
+  const styles = createStyles();
+
+  assert.equal(
+    resolveCaseBaseStyle(
+      "faction",
+      {
+        id_case: "case_controleur_seul",
+        controleur: "deorl",
+      },
+      styles,
+    )?.fill,
+    "#66cc88",
+  );
+});
+
 test("les styles de controleurs respectent la casse exacte des identifiants", () => {
   const styles = createStyles();
 
