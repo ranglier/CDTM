@@ -113,6 +113,7 @@ import {
   getFeatureAtPixel,
   isToggleSelectionEvent,
   useCdtmMapRuntime,
+  type CdtmMapObjectDefaultAppearance,
   type CdtmMapObjectDisplayMode,
 } from "@/map/use-cdtm-map-runtime";
 import {
@@ -419,6 +420,33 @@ function getFirstLandmarkTypeKey(
   return (
     referenceData?.landmark_types.find((option) => option.category !== "unique")
       ?.value ?? ""
+  );
+}
+
+function buildDefaultAppearanceByType(
+  options: EditorReferenceOption[] | undefined,
+): Record<string, CdtmMapObjectDefaultAppearance> {
+  return Object.fromEntries(
+    (options ?? [])
+      .map((option) => {
+        const appearance = {
+          marker_shape: option.default_marker_shape ?? null,
+          marker_fill_color: option.default_marker_fill_color ?? null,
+          marker_stroke_color: option.default_marker_stroke_color ?? null,
+        };
+
+        return [
+          option.value,
+          appearance,
+          Boolean(
+            appearance.marker_shape ||
+              appearance.marker_fill_color ||
+              appearance.marker_stroke_color,
+          ),
+        ] as const;
+      })
+      .filter((entry) => entry[2])
+      .map(([typeKey, appearance]) => [typeKey, appearance]),
   );
 }
 
@@ -928,6 +956,8 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     mapIconSourceByKeyRef,
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
+    localityDefaultAppearanceByTypeRef,
+    landmarkDefaultAppearanceByTypeRef,
     landmarkCategoryByTypeRef,
     mapBackgroundReady,
     hoverInfo,
@@ -1085,6 +1115,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         )
         .map((type) => [type.value, type.default_icon_key!.trim()]),
     );
+    localityDefaultAppearanceByTypeRef.current = buildDefaultAppearanceByType(
+      referenceData?.locality_types,
+    );
+    landmarkDefaultAppearanceByTypeRef.current = buildDefaultAppearanceByType(
+      referenceData?.landmark_types,
+    );
     landmarkCategoryByTypeRef.current = Object.fromEntries(
       (referenceData?.landmark_types ?? [])
         .filter(
@@ -1143,7 +1179,9 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     };
   }, [
     landmarkCategoryByTypeRef,
+    landmarkDefaultAppearanceByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
+    localityDefaultAppearanceByTypeRef,
     localityDefaultIconKeyByTypeRef,
     mapIconSourceByKeyRef,
     pointsLayerRef,
@@ -3219,9 +3257,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
           name: trimmedName,
           type_key: pointDraft.type_key,
           icon_key: pointDraft.icon_key,
-          marker_shape: pointDraft.marker_shape,
-          marker_fill_color: pointDraft.marker_fill_color,
-          marker_stroke_color: pointDraft.marker_stroke_color,
           x: pointDraft.x,
           y: pointDraft.y,
           id_case_detected: pointDraft.id_case_detected,
@@ -3260,9 +3295,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               ? "lieu_unique"
               : pointDraft.type_key,
           icon_key: pointDraft.icon_key,
-          marker_shape: pointDraft.marker_shape,
-          marker_fill_color: pointDraft.marker_fill_color,
-          marker_stroke_color: pointDraft.marker_stroke_color,
           x: pointDraft.x,
           y: pointDraft.y,
           id_case_detected: pointDraft.id_case_detected,
@@ -5038,30 +5070,6 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
                 </select>
               </label>
             ) : null}
-            <MarkerAppearanceFields
-              markerShape={pointDraft.marker_shape}
-              markerFillColor={pointDraft.marker_fill_color}
-              markerStrokeColor={pointDraft.marker_stroke_color}
-              onShapeChange={(markerShape) =>
-                setPointDraft((draft) =>
-                  draft ? { ...draft, marker_shape: markerShape } : draft,
-                )
-              }
-              onFillColorChange={(markerFillColor) =>
-                setPointDraft((draft) =>
-                  draft
-                    ? { ...draft, marker_fill_color: markerFillColor }
-                    : draft,
-                )
-              }
-              onStrokeColorChange={(markerStrokeColor) =>
-                setPointDraft((draft) =>
-                  draft
-                    ? { ...draft, marker_stroke_color: markerStrokeColor }
-                    : draft,
-                )
-              }
-            />
             <label className="block text-xs text-muted-foreground">
               <span className="mb-1 block">Description</span>
               <textarea

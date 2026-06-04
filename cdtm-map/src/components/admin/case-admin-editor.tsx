@@ -1,4 +1,12 @@
-import type { ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { ChevronDown } from "lucide-react";
 
 import type {
@@ -52,7 +60,9 @@ type BulkFieldState = {
   mixed: boolean;
 };
 
-type SelectFieldOption = string | { value: string; label: string };
+type SelectFieldOption =
+  | string
+  | { value: string; label: string; peuple_key?: string | null };
 
 const fieldClassName =
   "w-full rounded-[16px] border border-border/80 bg-background/55 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60";
@@ -157,6 +167,14 @@ function getSelectOptionLabel(option: SelectFieldOption): string {
   return typeof option === "string" ? option : option.label;
 }
 
+function normalizeOptionSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function CompactInfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border/50 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
@@ -258,23 +276,198 @@ function SelectField({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
+  const listboxId = useId();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const selectedOption = options.find(
+    (option) => getSelectOptionValue(option) === value,
+  );
+  const selectedLabel = value
+    ? selectedOption
+      ? getSelectOptionLabel(selectedOption)
+      : value
+    : "";
+  const normalizedQuery = normalizeOptionSearch(query);
+  const filteredOptions = useMemo(
+    () =>
+      normalizedQuery
+        ? options.filter((option) => {
+            const optionValue = getSelectOptionValue(option);
+            const optionLabel = getSelectOptionLabel(option);
+            const haystack = normalizeOptionSearch(
+              `${optionLabel} ${optionValue}`,
+            );
+
+            return haystack.includes(normalizedQuery);
+          })
+        : [...options],
+    [normalizedQuery, options],
+  );
+  const visibleOptions = useMemo(
+    () => [{ value: "", label: "Non renseigne" }, ...filteredOptions],
+    [filteredOptions],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [open]);
+
+  function commitValue(nextValue: string) {
+    const nextOption = options.find(
+      (option) => getSelectOptionValue(option) === nextValue,
+    );
+
+    onChange(nextValue);
+    setQuery(nextOption ? getSelectOptionLabel(nextOption) : "");
+    setHighlightedIndex(0);
+    setOpen(false);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (disabled) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlightedIndex((index) =>
+        Math.min(index + 1, visibleOptions.length - 1),
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlightedIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && open) {
+      event.preventDefault();
+      const option = visibleOptions[highlightedIndex];
+
+      if (option) {
+        commitValue(getSelectOptionValue(option));
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      setQuery(selectedLabel);
+    }
+  }
+
   return (
-    <select
-      className={fieldClassName}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      disabled={disabled}
-    >
-      <option value="">Non renseigne</option>
-      {options.map((option) => (
-        <option
-          key={getSelectOptionValue(option)}
-          value={getSelectOptionValue(option)}
+    <div ref={wrapperRef} className="relative">
+      <input
+        className={`${fieldClassName} pr-10`}
+        value={open ? query : selectedLabel}
+        placeholder="Non renseigne"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        disabled={disabled}
+        onFocus={() => {
+          setQuery("");
+          setHighlightedIndex(0);
+          setOpen(true);
+        }}
+        onClick={() => {
+          setQuery("");
+          setHighlightedIndex(0);
+          setOpen(true);
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setHighlightedIndex(0);
+          setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      <button
+        type="button"
+        className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-background/70 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+        aria-label={value ? "Vider la selection" : "Ouvrir la liste"}
+        disabled={disabled}
+        onClick={() => {
+          if (value) {
+            commitValue("");
+            return;
+          }
+
+          setQuery("");
+          setHighlightedIndex(0);
+          setOpen((current) => !current);
+        }}
+      >
+        {value ? "x" : <ChevronDown className="size-4" />}
+      </button>
+      {open ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-50 max-h-[min(18rem,45dvh)] overflow-y-auto rounded-[16px] border border-border/80 bg-background/98 p-1 shadow-[0_18px_50px_hsl(var(--shadow)/0.45)]"
         >
-          {getSelectOptionLabel(option)}
-        </option>
-      ))}
-    </select>
+          {visibleOptions.length === 1 && filteredOptions.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              Aucun resultat.
+            </p>
+          ) : null}
+          {visibleOptions.map((option, index) => {
+            const optionValue = getSelectOptionValue(option);
+            const optionLabel = getSelectOptionLabel(option);
+            const selected = optionValue === value;
+
+            return (
+              <button
+                key={optionValue || "__empty__"}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`flex w-full min-w-0 items-center justify-between gap-3 rounded-[12px] px-3 py-2 text-left text-sm transition ${
+                  highlightedIndex === index
+                    ? "bg-primary/18 text-foreground"
+                    : "text-foreground hover:bg-background/70"
+                }`}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  commitValue(optionValue);
+                }}
+              >
+                <span className="min-w-0 truncate">{optionLabel}</span>
+                {selected ? (
+                  <span className="shrink-0 text-xs uppercase tracking-[0.16em] text-primary">
+                    Actif
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

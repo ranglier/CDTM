@@ -1846,6 +1846,32 @@ const databaseMigrations: DatabaseMigration[] = [
       `);
     },
   },
+  {
+    version: "018",
+    name: "reference_map_object_type_marker_defaults",
+    up: async (client) => {
+      for (const tableName of [
+        "reference_locality_types",
+        "reference_landmark_types",
+        "reference_force_types",
+      ]) {
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS default_marker_shape TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS default_marker_fill_color TEXT
+        `);
+
+        await client.query(`
+          ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS default_marker_stroke_color TEXT
+        `);
+      }
+    },
+  },
 ];
 
 export async function runDatabaseMigrations(pool: Pool): Promise<void> {

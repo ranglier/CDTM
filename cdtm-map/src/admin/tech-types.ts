@@ -539,6 +539,21 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         type: "reference",
         reference_table_key: "map_icons",
       },
+      {
+        name: "default_marker_shape",
+        label: "default_marker_shape",
+        type: "text",
+      },
+      {
+        name: "default_marker_fill_color",
+        label: "default_marker_fill_color",
+        type: "text",
+      },
+      {
+        name: "default_marker_stroke_color",
+        label: "default_marker_stroke_color",
+        type: "text",
+      },
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
       { name: "emp_requis", label: "emp_requis", type: "integer" },
       {
@@ -602,6 +617,21 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         type: "reference",
         reference_table_key: "map_icons",
       },
+      {
+        name: "default_marker_shape",
+        label: "default_marker_shape",
+        type: "text",
+      },
+      {
+        name: "default_marker_fill_color",
+        label: "default_marker_fill_color",
+        type: "text",
+      },
+      {
+        name: "default_marker_stroke_color",
+        label: "default_marker_stroke_color",
+        type: "text",
+      },
       { name: "consumes_slot", label: "consumes_slot", type: "boolean" },
       { name: "emp_requis", label: "emp_requis", type: "integer" },
       { name: "is_active", label: "is_active", type: "boolean" },
@@ -657,6 +687,21 @@ export const referenceTableDefinitions: ReferenceTableDefinition[] = [
         label: "default_icon_key",
         type: "reference",
         reference_table_key: "map_icons",
+      },
+      {
+        name: "default_marker_shape",
+        label: "default_marker_shape",
+        type: "text",
+      },
+      {
+        name: "default_marker_fill_color",
+        label: "default_marker_fill_color",
+        type: "text",
+      },
+      {
+        name: "default_marker_stroke_color",
+        label: "default_marker_stroke_color",
+        type: "text",
       },
       { name: "is_active", label: "is_active", type: "boolean" },
       {

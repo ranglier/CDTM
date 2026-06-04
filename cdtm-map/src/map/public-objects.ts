@@ -18,6 +18,9 @@ export type PublicMapReferenceLocalityType = {
   value: string;
   label: string;
   default_icon_key: string | null;
+  default_marker_shape?: MapObjectPointShape | null;
+  default_marker_fill_color?: string | null;
+  default_marker_stroke_color?: string | null;
   consumes_slot?: boolean | null;
   emp_requis?: number | null;
   upgrades_from_type_id?: string | null;
@@ -28,6 +31,9 @@ export type PublicMapReferenceLandmarkType = {
   label: string;
   category: "landmark" | "unique" | null;
   default_icon_key: string | null;
+  default_marker_shape?: MapObjectPointShape | null;
+  default_marker_fill_color?: string | null;
+  default_marker_stroke_color?: string | null;
   consumes_slot?: boolean | null;
   emp_requis?: number | null;
 };

@@ -28,10 +28,22 @@ type EditorPointRecord =
   | { family: "locality"; locality: EditorMapLocality }
   | { family: "landmark"; landmark: EditorMapLandmark };
 
+type PointDefaultAppearance = {
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
+};
+
 type EditorPointsLayerContext = {
   getIconImagePath: (iconKey: string | null) => string | null;
   getLocalityDefaultIconKeyForType: (typeKey: string) => string | null;
   getLandmarkDefaultIconKeyForType: (typeKey: string) => string | null;
+  getLocalityDefaultAppearanceForType?: (
+    typeKey: string,
+  ) => PointDefaultAppearance | null;
+  getLandmarkDefaultAppearanceForType?: (
+    typeKey: string,
+  ) => PointDefaultAppearance | null;
   getLandmarkTypeCategory: (typeKey: string) => "landmark" | "unique" | null;
   getDisplayMode?: () => "icons" | "points";
   isFamilyVisible?: (family: EditorPointFamily) => boolean;
@@ -318,10 +330,12 @@ function getCustomPointShapeStyle(
 }
 
 function hasMarkerAppearanceOverride(
-  value: Pick<
-    EditorMapLocality | EditorMapLandmark,
-    "marker_shape" | "marker_fill_color" | "marker_stroke_color"
-  > | null,
+  value:
+    | Pick<
+        EditorMapLocality | EditorMapLandmark | PointDefaultAppearance,
+        "marker_shape" | "marker_fill_color" | "marker_stroke_color"
+      >
+    | null,
 ): boolean {
   return Boolean(
     value?.marker_shape ||
@@ -330,17 +344,37 @@ function hasMarkerAppearanceOverride(
   );
 }
 
-function getLocalityFallbackStyle(locality: EditorMapLocality | null): Style {
+function getLocalityFallbackStyle(
+  locality: EditorMapLocality | null,
+  typeDefaultAppearance: PointDefaultAppearance | null = null,
+): Style {
   if (!locality) {
     return publishedLocalityStyle;
   }
-  if (hasMarkerAppearanceOverride(locality)) {
+
+  const markerShape =
+    locality.marker_shape ?? typeDefaultAppearance?.marker_shape ?? null;
+  const markerFillColor =
+    locality.marker_fill_color ??
+    typeDefaultAppearance?.marker_fill_color ??
+    null;
+  const markerStrokeColor =
+    locality.marker_stroke_color ??
+    typeDefaultAppearance?.marker_stroke_color ??
+    null;
+
+  if (
+    hasMarkerAppearanceOverride({
+      marker_shape: markerShape,
+      marker_fill_color: markerFillColor,
+      marker_stroke_color: markerStrokeColor,
+    })
+  ) {
     return getCustomPointShapeStyle(
-      locality.marker_shape ??
-        resolveDefaultLocalityRenderShape(locality.type_key),
+      markerShape ?? resolveDefaultLocalityRenderShape(locality.type_key),
       getLocalityPalette(locality.status),
-      locality.marker_fill_color,
-      locality.marker_stroke_color,
+      markerFillColor,
+      markerStrokeColor,
     );
   }
 
@@ -412,14 +446,32 @@ function getLocalityShapeStyle(
 function getLandmarkFallbackStyle(
   landmark: EditorMapLandmark | null,
   category: "landmark" | "unique" | null,
+  typeDefaultAppearance: PointDefaultAppearance | null = null,
 ): Style {
   const effectiveCategory = category ?? "landmark";
-  if (hasMarkerAppearanceOverride(landmark)) {
+  const markerShape =
+    landmark?.marker_shape ?? typeDefaultAppearance?.marker_shape ?? null;
+  const markerFillColor =
+    landmark?.marker_fill_color ??
+    typeDefaultAppearance?.marker_fill_color ??
+    null;
+  const markerStrokeColor =
+    landmark?.marker_stroke_color ??
+    typeDefaultAppearance?.marker_stroke_color ??
+    null;
+
+  if (
+    hasMarkerAppearanceOverride({
+      marker_shape: markerShape,
+      marker_fill_color: markerFillColor,
+      marker_stroke_color: markerStrokeColor,
+    })
+  ) {
     return getCustomPointShapeStyle(
-      landmark?.marker_shape ?? "diamond",
+      markerShape ?? "diamond",
       getLandmarkPalette(landmark?.status ?? "published", effectiveCategory),
-      landmark?.marker_fill_color ?? null,
-      landmark?.marker_stroke_color ?? null,
+      markerFillColor,
+      markerStrokeColor,
     );
   }
 
@@ -497,7 +549,13 @@ function getPointStyleWithContext(
 
   if (family === "locality") {
     const locality = getEditorLocalityFromPointFeature(feature);
-    const fallbackStyle = getLocalityFallbackStyle(locality);
+    const fallbackStyle = getLocalityFallbackStyle(
+      locality,
+      locality
+        ? (context?.getLocalityDefaultAppearanceForType?.(locality.type_key) ??
+            null)
+        : null,
+    );
     if (!locality) {
       return fallbackStyle;
     }
@@ -518,7 +576,14 @@ function getPointStyleWithContext(
   const category = landmark
     ? (context?.getLandmarkTypeCategory(landmark.type_key) ?? "landmark")
     : "landmark";
-  const fallbackStyle = getLandmarkFallbackStyle(landmark, category);
+  const fallbackStyle = getLandmarkFallbackStyle(
+    landmark,
+    category,
+    landmark
+      ? (context?.getLandmarkDefaultAppearanceForType?.(landmark.type_key) ??
+          null)
+      : null,
+  );
   if (!landmark) {
     return fallbackStyle;
   }

@@ -14,6 +14,9 @@ export type EditorReferenceOption = {
   image_path?: string | null;
   image_alt?: string | null;
   default_icon_key?: string | null;
+  default_marker_shape?: MapObjectPointShape | null;
+  default_marker_fill_color?: string | null;
+  default_marker_stroke_color?: string | null;
   category?: string | null;
   consumes_slot?: boolean | null;
   emp_requis?: number | null;

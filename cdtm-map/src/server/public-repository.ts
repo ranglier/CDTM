@@ -421,6 +421,9 @@ async function listPublicLocalityTypeReferences(): Promise<
         type_key AS value,
         COALESCE(label, type_key) AS label,
         default_icon_key,
+        default_marker_shape,
+        default_marker_fill_color,
+        default_marker_stroke_color,
         consumes_slot,
         emp_requis,
         upgrades_from_type_id
@@ -449,6 +452,9 @@ async function listPublicLandmarkTypeReferences(): Promise<
         COALESCE(label, type_key) AS label,
         category,
         default_icon_key,
+        default_marker_shape,
+        default_marker_fill_color,
+        default_marker_stroke_color,
         consumes_slot,
         emp_requis
       FROM reference_landmark_types

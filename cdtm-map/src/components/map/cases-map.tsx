@@ -44,6 +44,7 @@ import {
   getFeatureAtPixel,
   isToggleSelectionEvent,
   useCdtmMapRuntime,
+  type CdtmMapObjectDefaultAppearance,
   type CdtmMapObjectDisplayMode,
 } from "@/map/use-cdtm-map-runtime";
 import {
@@ -83,6 +84,40 @@ type CasesMapProps = {
   onPanelVisibilityChange: (visible: boolean) => void;
   onFeaturesLoad?: (count: number) => void;
 };
+
+function buildDefaultAppearanceByType(
+  options:
+    | Array<{
+        value: string;
+        default_marker_shape?: CdtmMapObjectDefaultAppearance["marker_shape"];
+        default_marker_fill_color?: string | null;
+        default_marker_stroke_color?: string | null;
+      }>
+    | undefined,
+): Record<string, CdtmMapObjectDefaultAppearance> {
+  return Object.fromEntries(
+    (options ?? [])
+      .map((option) => {
+        const appearance = {
+          marker_shape: option.default_marker_shape ?? null,
+          marker_fill_color: option.default_marker_fill_color ?? null,
+          marker_stroke_color: option.default_marker_stroke_color ?? null,
+        };
+
+        return [
+          option.value,
+          appearance,
+          Boolean(
+            appearance.marker_shape ||
+              appearance.marker_fill_color ||
+              appearance.marker_stroke_color,
+          ),
+        ] as const;
+      })
+      .filter((entry) => entry[2])
+      .map(([typeKey, appearance]) => [typeKey, appearance]),
+  );
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
@@ -164,6 +199,8 @@ export function CasesMap({
     mapIconSourceByKeyRef,
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
+    localityDefaultAppearanceByTypeRef,
+    landmarkDefaultAppearanceByTypeRef,
     landmarkCategoryByTypeRef,
     mapBackgroundReady,
     hoverInfo,
@@ -650,6 +687,10 @@ export function CasesMap({
             typeRef.default_icon_key,
           ]),
         );
+        localityDefaultAppearanceByTypeRef.current =
+          buildDefaultAppearanceByType(payload.reference.locality_types);
+        landmarkDefaultAppearanceByTypeRef.current =
+          buildDefaultAppearanceByType(payload.reference.landmark_types);
         landmarkCategoryByTypeRef.current = Object.fromEntries(
           payload.reference.landmark_types.map((typeRef) => [
             typeRef.value,
@@ -710,6 +751,8 @@ export function CasesMap({
         mapIconSourceByKeyRef.current = {};
         localityDefaultIconKeyByTypeRef.current = {};
         landmarkDefaultIconKeyByTypeRef.current = {};
+        localityDefaultAppearanceByTypeRef.current = {};
+        landmarkDefaultAppearanceByTypeRef.current = {};
         landmarkCategoryByTypeRef.current = {};
         pointsSourceRef.current?.clear(true);
         routesSourceRef.current?.clear(true);
@@ -723,7 +766,9 @@ export function CasesMap({
     };
   }, [
     landmarkCategoryByTypeRef,
+    landmarkDefaultAppearanceByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
+    localityDefaultAppearanceByTypeRef,
     localityDefaultIconKeyByTypeRef,
     mapBackgroundReady,
     mapIconSourceByKeyRef,

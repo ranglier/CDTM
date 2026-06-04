@@ -668,6 +668,12 @@ export function getFriendlyFieldLabel(fieldName: string): string {
       return "Identifiant type";
     case "default_icon_key":
       return "Icone par defaut";
+    case "default_marker_shape":
+      return "Forme par defaut";
+    case "default_marker_fill_color":
+      return "Couleur de fond par defaut";
+    case "default_marker_stroke_color":
+      return "Couleur de contour par defaut";
     case "consumes_slot":
       return "Consomme un emplacement";
     case "emp_requis":

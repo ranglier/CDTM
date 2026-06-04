@@ -28,6 +28,8 @@ export type ReferenceView = {
   rowCount: number | null;
   styleTargetType?: MapStyleTargetType | null;
   supportsTerrainParentSelect?: boolean;
+  visibleFieldNames?: string[];
+  disableCreate?: boolean;
 };
 
 export type ReferenceViewSection = {

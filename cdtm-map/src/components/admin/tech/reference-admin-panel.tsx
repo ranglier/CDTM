@@ -34,6 +34,74 @@ import {
   MAP_PATTERN_SPACING_MIN,
   normalizeHexColor,
 } from "@/map/types";
+import {
+  MAP_OBJECT_POINT_SHAPE_LABELS,
+  MAP_OBJECT_POINT_SHAPES,
+} from "@/map/point-shapes";
+
+const referenceInputClassName =
+  "w-full rounded-[14px] border border-border/70 bg-background/55 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/80 focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60";
+
+function MarkerDefaultShapeEditor({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      className={referenceInputClassName}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">Automatique</option>
+      {MAP_OBJECT_POINT_SHAPES.map((shape) => (
+        <option key={shape} value={shape}>
+          {MAP_OBJECT_POINT_SHAPE_LABELS[shape]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function MarkerDefaultColorEditor({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const normalizedValue = normalizeHexColor(value) ?? "#ffffff";
+
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <input
+        type="color"
+        className="h-11 w-14 shrink-0 rounded-[14px] border border-border/70 bg-background/55 p-1"
+        value={normalizedValue}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <input
+        className={`${referenceInputClassName} min-w-0 ${
+          value.trim().length === 0 || normalizeHexColor(value)
+            ? "border-border/70"
+            : "border-destructive/70"
+        }`}
+        value={value}
+        placeholder="Automatique"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+}
 
 export function ReferenceAdminPanel({
   activeReference,
@@ -66,13 +134,15 @@ export function ReferenceAdminPanel({
               <h2 className="text-2xl font-semibold text-foreground">
                 {activeReferenceView?.title ?? activeReference.definition.title}
               </h2>
-              <Button
-                type="button"
-                onClick={onAddReferenceRow}
-                disabled={!activeReferenceView}
-              >
-                Ajouter une valeur
-              </Button>
+              {!activeReferenceView?.disableCreate ? (
+                <Button
+                  type="button"
+                  onClick={onAddReferenceRow}
+                  disabled={!activeReferenceView}
+                >
+                  Ajouter une valeur
+                </Button>
+              ) : null}
             </div>
 
             <form
@@ -120,22 +190,29 @@ export function ReferenceAdminPanel({
               </div>
               <div className="mt-4 space-y-3">
                 {referenceRows.map((row) => {
+                  const visibleFieldNames = activeReferenceView
+                    ?.visibleFieldNames
+                    ? new Set(activeReferenceView.visibleFieldNames)
+                    : null;
                   const displayFields =
                     activeReference.definition.fields.filter(
                       (field) =>
+                        (!visibleFieldNames ||
+                          visibleFieldNames.has(field.name)) &&
                         !isReferenceTechnicalField(
                           activeReference.definition,
                           field,
                         ) &&
                         !STYLE_FIELDS.includes(field.name as StyleFieldName),
                     );
-                  const technicalFields =
-                    activeReference.definition.fields.filter((field) =>
-                      isReferenceTechnicalField(
-                        activeReference.definition,
-                        field,
-                      ),
-                    );
+                  const technicalFields = visibleFieldNames
+                    ? []
+                    : activeReference.definition.fields.filter((field) =>
+                        isReferenceTechnicalField(
+                          activeReference.definition,
+                          field,
+                        ),
+                      );
                   const showStyles = Boolean(
                     activeReferenceView?.styleTargetType,
                   );
@@ -281,6 +358,31 @@ export function ReferenceAdminPanel({
                                   </option>
                                 ))}
                               </select>
+                            ) : field.name === "default_marker_shape" ? (
+                              <MarkerDefaultShapeEditor
+                                value={row.values[field.name] ?? ""}
+                                disabled={row.saving || row.uploading}
+                                onChange={(value) =>
+                                  onReferenceRowValueChange(
+                                    row.localId,
+                                    field.name,
+                                    value,
+                                  )
+                                }
+                              />
+                            ) : field.name === "default_marker_fill_color" ||
+                              field.name === "default_marker_stroke_color" ? (
+                              <MarkerDefaultColorEditor
+                                value={row.values[field.name] ?? ""}
+                                disabled={row.saving || row.uploading}
+                                onChange={(value) =>
+                                  onReferenceRowValueChange(
+                                    row.localId,
+                                    field.name,
+                                    value,
+                                  )
+                                }
+                              />
                             ) : (
                               <ReferenceFieldEditor
                                 field={field}

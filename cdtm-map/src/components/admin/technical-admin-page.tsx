@@ -476,6 +476,60 @@ export function TechnicalAdminPage() {
               (table) => table.definition.key === "force_types",
             )?.row_count ?? 0,
         },
+        {
+          id: "locality_type_appearance",
+          tableKey: "locality_types",
+          title: "Apparence localites",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find(
+              (table) => table.definition.key === "locality_types",
+            )?.row_count ?? 0,
+          visibleFieldNames: [
+            "label",
+            "default_icon_key",
+            "default_marker_shape",
+            "default_marker_fill_color",
+            "default_marker_stroke_color",
+          ],
+          disableCreate: true,
+        },
+        {
+          id: "landmark_type_appearance",
+          tableKey: "landmark_types",
+          title: "Apparence landmarks",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find(
+              (table) => table.definition.key === "landmark_types",
+            )?.row_count ?? 0,
+          visibleFieldNames: [
+            "label",
+            "default_icon_key",
+            "default_marker_shape",
+            "default_marker_fill_color",
+            "default_marker_stroke_color",
+          ],
+          disableCreate: true,
+        },
+        {
+          id: "force_type_appearance",
+          tableKey: "force_types",
+          title: "Apparence forces",
+          groupKey: null,
+          rowCount:
+            referenceStatuses.find(
+              (table) => table.definition.key === "force_types",
+            )?.row_count ?? 0,
+          visibleFieldNames: [
+            "label",
+            "default_icon_key",
+            "default_marker_shape",
+            "default_marker_fill_color",
+            "default_marker_stroke_color",
+          ],
+          disableCreate: true,
+        },
       ],
     });
 

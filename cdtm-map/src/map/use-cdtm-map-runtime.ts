@@ -46,6 +46,7 @@ import {
   type PublicMapStyles,
   type StableCaseProperties,
 } from "@/map/types";
+import type { MapObjectPointShape } from "@/map/point-shapes";
 
 export type CdtmMapHoverInfo = {
   x: number;
@@ -58,6 +59,12 @@ export type CdtmMapHoverInfo = {
 };
 
 export type CdtmMapObjectDisplayMode = "icons" | "points";
+
+export type CdtmMapObjectDefaultAppearance = {
+  marker_shape: MapObjectPointShape | null;
+  marker_fill_color: string | null;
+  marker_stroke_color: string | null;
+};
 
 type StandardLayers = {
   backgroundLayer: ReturnType<typeof createCdtmBackgroundLayer>;
@@ -269,6 +276,12 @@ export function useCdtmMapRuntime({
   const landmarkDefaultIconKeyByTypeRef = useRef<Record<string, string | null>>(
     {},
   );
+  const localityDefaultAppearanceByTypeRef = useRef<
+    Record<string, CdtmMapObjectDefaultAppearance>
+  >({});
+  const landmarkDefaultAppearanceByTypeRef = useRef<
+    Record<string, CdtmMapObjectDefaultAppearance>
+  >({});
   const landmarkCategoryByTypeRef = useRef<
     Record<string, "landmark" | "unique" | null>
   >({});
@@ -382,6 +395,10 @@ export function useCdtmMapRuntime({
           localityDefaultIconKeyByTypeRef.current[typeKey] ?? null,
         getLandmarkDefaultIconKeyForType: (typeKey) =>
           landmarkDefaultIconKeyByTypeRef.current[typeKey] ?? null,
+        getLocalityDefaultAppearanceForType: (typeKey) =>
+          localityDefaultAppearanceByTypeRef.current[typeKey] ?? null,
+        getLandmarkDefaultAppearanceForType: (typeKey) =>
+          landmarkDefaultAppearanceByTypeRef.current[typeKey] ?? null,
         getLandmarkTypeCategory: (typeKey) =>
           landmarkCategoryByTypeRef.current[typeKey] ?? null,
         getDisplayMode: () => objectDisplayModeRef.current,
@@ -735,6 +752,8 @@ export function useCdtmMapRuntime({
     mapIconSourceByKeyRef,
     localityDefaultIconKeyByTypeRef,
     landmarkDefaultIconKeyByTypeRef,
+    localityDefaultAppearanceByTypeRef,
+    landmarkDefaultAppearanceByTypeRef,
     landmarkCategoryByTypeRef,
     mapBackgroundReady,
     hoverInfo,

@@ -47,6 +47,7 @@ import {
   type MapStyleTargetType,
   type PublicMapStyles,
 } from "@/map/types";
+import { normalizeMapObjectPointShape } from "@/map/point-shapes";
 import { ensureDatabaseReady, getPool } from "@/server/db";
 
 const DEFAULT_TABLE_LIMIT = 100;
@@ -533,12 +534,55 @@ function normalizeImagePath(value: unknown): string | null {
   throw new Error("Chemin d'image invalide.");
 }
 
+function normalizeMarkerDefaultShape(value: unknown): string | null {
+  const normalized = normalizeNullableText(value);
+
+  if (!normalized || normalized === "auto") {
+    return null;
+  }
+
+  const shape = normalizeMapObjectPointShape(normalized);
+
+  if (!shape) {
+    throw new Error("Forme de point invalide.");
+  }
+
+  return shape;
+}
+
+function normalizeMarkerDefaultColor(value: unknown): string | null {
+  const normalized = normalizeNullableText(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const color = normalizeHexColor(normalized);
+
+  if (!color) {
+    throw new Error("Couleur de point invalide.");
+  }
+
+  return color;
+}
+
 function normalizeFieldValue(
   field: TechFieldDefinition,
   value: unknown,
 ): ReferenceTableRowValue {
   if (field.name === "image_path") {
     return normalizeImagePath(value);
+  }
+
+  if (field.name === "default_marker_shape") {
+    return normalizeMarkerDefaultShape(value);
+  }
+
+  if (
+    field.name === "default_marker_fill_color" ||
+    field.name === "default_marker_stroke_color"
+  ) {
+    return normalizeMarkerDefaultColor(value);
   }
 
   switch (field.type) {

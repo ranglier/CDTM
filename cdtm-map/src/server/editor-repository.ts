@@ -1470,6 +1470,9 @@ async function listEditorLocalityTypeOptions(
         type_key AS value,
         COALESCE(label, type_key) AS label,
         default_icon_key,
+        default_marker_shape,
+        default_marker_fill_color,
+        default_marker_stroke_color,
         consumes_slot,
         emp_requis,
         upgrades_from_type_id
@@ -1492,6 +1495,9 @@ async function listEditorLandmarkTypeOptions(
         COALESCE(label, type_key) AS label,
         category,
         default_icon_key,
+        default_marker_shape,
+        default_marker_fill_color,
+        default_marker_stroke_color,
         consumes_slot,
         emp_requis
       FROM reference_landmark_types
@@ -1500,6 +1506,27 @@ async function listEditorLandmarkTypeOptions(
         LOWER(COALESCE(category, 'landmark')) ASC,
         LOWER(COALESCE(label, type_key)) ASC,
         type_key ASC
+    `,
+  );
+
+  return result.rows;
+}
+
+async function listEditorForceTypeOptions(
+  client: PoolClient,
+): Promise<EditorReferenceOption[]> {
+  const result = await client.query<EditorReferenceOption>(
+    `
+      SELECT
+        type_key AS value,
+        COALESCE(label, type_key) AS label,
+        default_icon_key,
+        default_marker_shape,
+        default_marker_fill_color,
+        default_marker_stroke_color
+      FROM reference_force_types
+      WHERE is_active = TRUE
+      ORDER BY LOWER(COALESCE(label, type_key)) ASC, type_key ASC
     `,
   );
 
@@ -1538,13 +1565,7 @@ async function getEditorReferenceDataInternal(
   ] = await Promise.all([
     listEditorLocalityTypeOptions(client),
     listEditorLandmarkTypeOptions(client),
-    listReferenceOptions(
-      client,
-      "reference_force_types",
-      "type_key",
-      "COALESCE(label, type_key)",
-      "WHERE is_active = TRUE",
-    ),
+    listEditorForceTypeOptions(client),
     listEditorMapIconOptions(client),
     listReferenceOptions(
       client,
