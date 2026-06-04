@@ -36,7 +36,11 @@ import {
   getEditorRouteFromFeature,
   replaceEditorRouteFeatures,
 } from "@/map/openlayers/editor-routes-layer";
-import { cdtmProjection } from "@/map/openlayers/map-core";
+import {
+  cdtmProjection,
+  loadCdtmMapCaseTileManifest,
+} from "@/map/openlayers/map-core";
+import type { PublicMapCaseTileManifest } from "@/map/case-tiles";
 import { getNormalizedSvgIconSource } from "@/map/openlayers/svg-icon-source";
 import {
   attachCdtmPointerMoveLifecycle,
@@ -165,6 +169,11 @@ export function CasesMap({
   const [routesVisible, setRoutesVisible] = useState(true);
   const [objectDisplayMode, setObjectDisplayMode] =
     useState<CdtmMapObjectDisplayMode>("points");
+  const [caseTileManifest, setCaseTileManifest] =
+    useState<PublicMapCaseTileManifest | null>(null);
+  const [caseTilesReady, setCaseTilesReady] = useState(false);
+  const caseRenderingMode =
+    caseTileManifest?.mode === "raster" ? "raster-interaction" : "vector";
   const handleCasesHidden = useCallback(() => {
     onCaseSelectionChangeRef.current(null, "replace");
   }, []);
@@ -179,6 +188,8 @@ export function CasesMap({
     landmarksVisible,
     routesVisible,
     objectDisplayMode,
+    caseTileManifest,
+    caseRenderingMode,
     clearHoverRequest,
     onCasesHidden: handleCasesHidden,
   });
@@ -218,6 +229,27 @@ export function CasesMap({
     focusPoint,
     focusRoute,
   } = runtime;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCaseTilesManifest() {
+      const manifest = await loadCdtmMapCaseTileManifest();
+
+      if (cancelled) {
+        return;
+      }
+
+      setCaseTileManifest(manifest);
+      setCaseTilesReady(true);
+    }
+
+    void loadCaseTilesManifest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const showSearchTargetTooltip = useCallback(
     (target: MapSearchTarget) => {
@@ -375,18 +407,32 @@ export function CasesMap({
   }, [mapRef, panelVisible]);
 
   useEffect(() => {
-    if (!mapBackgroundReady || !mapElementRef.current || mapRef.current) {
+    if (
+      !mapBackgroundReady ||
+      !caseTilesReady ||
+      !mapElementRef.current ||
+      mapRef.current
+    ) {
       return;
     }
 
     const standardLayers = createStandardLayers();
-    const map = createMap(mapElementRef.current, [
-      standardLayers.backgroundLayer,
-      standardLayers.caseFillLayer,
-      standardLayers.casesLayer,
-      standardLayers.routesLayer,
-      standardLayers.pointsLayer,
-    ]);
+    const mapLayers = standardLayers.caseRasterLayer
+      ? [
+          standardLayers.backgroundLayer,
+          standardLayers.caseRasterLayer,
+          standardLayers.casesLayer,
+          standardLayers.routesLayer,
+          standardLayers.pointsLayer,
+        ]
+      : [
+          standardLayers.backgroundLayer,
+          standardLayers.caseFillLayer,
+          standardLayers.casesLayer,
+          standardLayers.routesLayer,
+          standardLayers.pointsLayer,
+        ];
+    const map = createMap(mapElementRef.current, mapLayers);
 
     const singleClickHandler = (rawEvent: unknown) => {
       const event = rawEvent as MapBrowserEvent<PointerEvent>;
@@ -545,6 +591,7 @@ export function CasesMap({
     });
     bindStandardHandles({
       map,
+      caseRasterLayer: standardLayers.caseRasterLayer,
       casesSource: standardLayers.casesSource,
       caseFillLayer: standardLayers.caseFillLayer,
       casesLayer: standardLayers.casesLayer,
@@ -567,6 +614,7 @@ export function CasesMap({
   }, [
     bindStandardHandles,
     casePropertiesByIdRef,
+    caseTilesReady,
     casesVisibleRef,
     clearHover,
     createMap,
@@ -585,7 +633,7 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
-    if (!mapBackgroundReady) {
+    if (!mapBackgroundReady || !caseTilesReady) {
       return;
     }
 
@@ -637,6 +685,7 @@ export function CasesMap({
       cancelled = true;
     };
   }, [
+    caseTilesReady,
     casesSourceRef,
     dataUrl,
     fitCasesExtent,
@@ -646,7 +695,7 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
-    if (!mapBackgroundReady) {
+    if (!mapBackgroundReady || !caseTilesReady) {
       return;
     }
 
@@ -765,6 +814,7 @@ export function CasesMap({
       cancelled = true;
     };
   }, [
+    caseTilesReady,
     landmarkCategoryByTypeRef,
     landmarkDefaultAppearanceByTypeRef,
     landmarkDefaultIconKeyByTypeRef,

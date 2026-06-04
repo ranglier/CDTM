@@ -32,13 +32,16 @@ import {
   syncEditorRoutesLayerVisibility,
 } from "@/map/openlayers/editor-routes-layer";
 import {
+  createCdtmCaseRasterLayer,
   createCdtmBackgroundLayer,
   createCdtmMap,
   fitCdtmCasesExtent,
   loadCdtmMapBackgroundManifest,
   preloadCdtmBackgroundImage,
+  refreshCdtmCaseRasterLayer,
   shouldUseStaticMapBackground,
 } from "@/map/openlayers/map-core";
+import type { PublicMapCaseTileManifest } from "@/map/case-tiles";
 import {
   createEmptyPublicMapStyles,
   normalizeMapDisplayMode,
@@ -68,6 +71,7 @@ export type CdtmMapObjectDefaultAppearance = {
 
 type StandardLayers = {
   backgroundLayer: ReturnType<typeof createCdtmBackgroundLayer>;
+  caseRasterLayer: ReturnType<typeof createCdtmCaseRasterLayer>;
   casesSource: ReturnType<typeof createCasesVectorSource>;
   caseFillLayer: ReturnType<typeof createCasesVectorLayer>;
   casesLayer: ReturnType<typeof createCasesVectorLayer>;
@@ -92,6 +96,8 @@ type UseCdtmMapRuntimeOptions = {
   landmarksVisible: boolean;
   routesVisible: boolean;
   objectDisplayMode: CdtmMapObjectDisplayMode;
+  caseTileManifest?: PublicMapCaseTileManifest | null;
+  caseRenderingMode?: "vector" | "raster-interaction";
   clearHoverRequest?: number;
   onCasesHidden?: () => void;
 };
@@ -225,6 +231,8 @@ export function useCdtmMapRuntime({
   landmarksVisible,
   routesVisible,
   objectDisplayMode,
+  caseTileManifest = null,
+  caseRenderingMode = "vector",
   clearHoverRequest,
   onCasesHidden,
 }: UseCdtmMapRuntimeOptions) {
@@ -238,6 +246,9 @@ export function useCdtmMapRuntime({
   > | null>(null);
   const casesLayerRef = useRef<ReturnType<
     typeof createCasesVectorLayer
+  > | null>(null);
+  const caseRasterLayerRef = useRef<ReturnType<
+    typeof createCdtmCaseRasterLayer
   > | null>(null);
   const casePatternsRendererRef = useRef<CasePatternsRendererHandle | null>(
     null,
@@ -287,6 +298,12 @@ export function useCdtmMapRuntime({
   >({});
   const mapBackgroundManifestRef =
     useRef<PublicMapBackgroundManifest | null>(null);
+  const caseTileManifestRef = useRef<PublicMapCaseTileManifest | null>(
+    caseTileManifest,
+  );
+  const caseRenderingModeRef = useRef<"vector" | "raster-interaction">(
+    caseRenderingMode,
+  );
   const [mapBackgroundReady, setMapBackgroundReady] = useState(false);
   const [hoverInfo, setHoverInfo] = useState<CdtmMapHoverInfo | null>(null);
 
@@ -371,17 +388,25 @@ export function useCdtmMapRuntime({
             ? "selected"
             : "default",
     };
+    const useRasterCases =
+      caseRenderingModeRef.current === "raster-interaction" &&
+      caseTileManifestRef.current?.mode === "raster";
     const caseFillLayer = createCasesVectorLayer(
       casesSource,
       caseLayerContext,
       {
-        visible: casesVisibleRef.current,
-        stylePart: "fill",
+        visible: useRasterCases ? false : casesVisibleRef.current,
+        stylePart: useRasterCases ? "interaction" : "fill",
       },
     );
     const casesLayer = createCasesVectorLayer(casesSource, caseLayerContext, {
       visible: casesVisibleRef.current,
-      stylePart: "stroke",
+      stylePart: useRasterCases ? "interaction" : "stroke",
+    });
+    const caseRasterLayer = createCdtmCaseRasterLayer({
+      manifest: caseTileManifestRef.current,
+      getDisplayMode: () => displayModeRef.current,
+      visible: useRasterCases && casesVisibleRef.current,
     });
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
@@ -411,6 +436,7 @@ export function useCdtmMapRuntime({
 
     return {
       backgroundLayer,
+      caseRasterLayer,
       casesSource,
       caseFillLayer,
       casesLayer,
@@ -437,18 +463,22 @@ export function useCdtmMapRuntime({
     casesSourceRef.current = handles.casesSource;
     caseFillLayerRef.current = handles.caseFillLayer;
     casesLayerRef.current = handles.casesLayer;
+    caseRasterLayerRef.current = handles.caseRasterLayer;
     casePatternsRendererRef.current?.dispose();
-    casePatternsRendererRef.current = attachCasePatternsRenderer({
-      map: handles.map,
-      layer: handles.caseFillLayer,
-      source: handles.casesSource,
-      context: {
-        getDisplayMode: () => displayModeRef.current,
-        getCasePropertiesById: () => casePropertiesByIdRef.current,
-        getPublicMapStyles: () => publicMapStylesRef.current,
-      },
-      visible: casesVisibleRef.current,
-    });
+    casePatternsRendererRef.current =
+      caseRenderingModeRef.current === "raster-interaction"
+        ? null
+        : attachCasePatternsRenderer({
+            map: handles.map,
+            layer: handles.caseFillLayer,
+            source: handles.casesSource,
+            context: {
+              getDisplayMode: () => displayModeRef.current,
+              getCasePropertiesById: () => casePropertiesByIdRef.current,
+              getPublicMapStyles: () => publicMapStylesRef.current,
+            },
+            visible: casesVisibleRef.current,
+          });
     routesSourceRef.current = handles.routesSource;
     routesLayerRef.current = handles.routesLayer;
     pointsSourceRef.current = handles.pointsSource;
@@ -462,6 +492,7 @@ export function useCdtmMapRuntime({
     casesSourceRef.current = null;
     caseFillLayerRef.current = null;
     casesLayerRef.current = null;
+    caseRasterLayerRef.current = null;
     routesSourceRef.current = null;
     routesLayerRef.current = null;
     pointsSourceRef.current = null;
@@ -603,6 +634,14 @@ export function useCdtmMapRuntime({
   }, [casePropertiesById]);
 
   useEffect(() => {
+    caseTileManifestRef.current = caseTileManifest;
+  }, [caseTileManifest]);
+
+  useEffect(() => {
+    caseRenderingModeRef.current = caseRenderingMode;
+  }, [caseRenderingMode]);
+
+  useEffect(() => {
     publicMapStylesRef.current = publicMapStyles;
     caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
@@ -614,6 +653,7 @@ export function useCdtmMapRuntime({
     caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
     casePatternsRendererRef.current?.render();
+    refreshCdtmCaseRasterLayer(caseRasterLayerRef.current);
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
@@ -676,9 +716,16 @@ export function useCdtmMapRuntime({
   }, [activeCaseId, selectedCaseIds]);
 
   useEffect(() => {
+    const useRasterCases = caseRenderingModeRef.current === "raster-interaction";
+
     casesVisibleRef.current = casesVisible;
-    syncCaseLayerVisibility(caseFillLayerRef.current, casesVisible);
+    syncCaseLayerVisibility(
+      caseFillLayerRef.current,
+      useRasterCases ? false : casesVisible,
+    );
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
+    caseRasterLayerRef.current?.setVisible(casesVisible);
+    caseRasterLayerRef.current?.changed();
     casePatternsRendererRef.current?.setVisible(casesVisible);
 
     if (!casesVisible) {
@@ -734,6 +781,7 @@ export function useCdtmMapRuntime({
     casesSourceRef,
     caseFillLayerRef,
     casesLayerRef,
+    caseRasterLayerRef,
     casePatternsRendererRef,
     pointsSourceRef,
     pointsLayerRef,

@@ -14,7 +14,7 @@ import {
 } from "@/map/types";
 
 type SelectionState = "default" | "selected" | "active";
-export type CaseStylePart = "full" | "fill" | "stroke";
+export type CaseStylePart = "full" | "fill" | "stroke" | "interaction";
 
 type CaseStyleOptions = {
   selectionState: SelectionState;
@@ -111,10 +111,17 @@ export function getCaseStyle({
         ? isUnstyled
           ? 2.2
           : 1.9
-        : DEFAULT_STROKE_WIDTH;
+      : DEFAULT_STROKE_WIDTH;
 
-  const visualFillColor =
-    selectionState === "active" && isUnstyled && !hasControlSplitOverlay
+  const interactionFillColor =
+    selectionState === "active"
+      ? "rgba(220, 193, 130, 0.18)"
+      : selectionState === "selected"
+        ? "rgba(220, 193, 130, 0.12)"
+        : TRANSPARENT_HIT_FILL;
+  const visualFillColor = part === "interaction"
+    ? interactionFillColor
+    : selectionState === "active" && isUnstyled && !hasControlSplitOverlay
       ? "rgba(220, 193, 130, 0.24)"
       : selectionState === "selected" && isUnstyled && !hasControlSplitOverlay
         ? "rgba(220, 193, 130, 0.16)"
@@ -146,7 +153,8 @@ export function getCaseStyle({
       color: fillColor,
     }),
     stroke:
-      part === "fill"
+      part === "fill" ||
+      (part === "interaction" && selectionState === "default")
         ? undefined
         : new Stroke({
             color: strokeColor,

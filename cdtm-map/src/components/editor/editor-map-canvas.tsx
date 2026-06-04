@@ -2035,6 +2035,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
     bindStandardHandles({
       map,
+      caseRasterLayer: standardLayers.caseRasterLayer,
       casesSource: standardLayers.casesSource,
       caseFillLayer: standardLayers.caseFillLayer,
       casesLayer: standardLayers.casesLayer,

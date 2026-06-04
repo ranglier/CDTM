@@ -146,6 +146,20 @@ Un index unique partiel garantit qu'un seul fond uploade peut etre actif. Si
 aucun fond uploade `ready` n'est actif, le manifeste public retombe sur le fond
 par defaut `public/maps/CTM.png` et ses tuiles generees au build.
 
+## Tuiles de cases
+
+La table `map_case_tile_sets` conserve les jeux de tuiles raster transparentes
+des cases publiques. Elle stocke le hash d'etat, le chemin des tuiles, les
+options de tuilage, le statut de generation et l'utilisateur ayant lance la
+generation.
+
+Un index unique partiel garantit qu'un seul jeu `ready` peut etre actif. Le hash
+d'etat est calcule depuis le GeoJSON stable, les proprietes publiques des cases,
+les styles publics, les constantes de tuilage et la version du generateur.
+
+Si le hash actif differe du hash courant, le jeu est considere obsolescent dans
+l'admin, mais il reste servi par la vue publique jusqu'a regeneration explicite.
+
 ## Supprime
 
 Les concepts suivants ne font plus partie du modele actif :

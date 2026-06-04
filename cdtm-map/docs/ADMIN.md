@@ -98,6 +98,20 @@ peuvent etre reactives si leur statut est `ready`.
 Un fond inactif peut etre supprime depuis l'historique. Le fond actif ne peut
 pas etre supprime : il faut d'abord reactiver un autre fond pret.
 
+### Tuiles de cases
+
+L'admin technique expose aussi une entree `Tuiles de cases` dans la section
+`Objets cartographiques`.
+
+Un `tech_admin` peut regenerer les tuiles raster transparentes utilisees par la
+vue publique. La generation couvre les modes `faction`, `influence` et
+`topographic`. Le nouveau jeu n'est active qu'apres verification complete des
+tuiles attendues.
+
+Si les donnees publiques, les styles ou les constantes de tuilage changent, le
+panneau affiche `A regenerer`. La vue publique continue toutefois d'utiliser le
+dernier jeu pret jusqu'a regeneration explicite.
+
 ## Uploads d'icones
 
 Les formats acceptes sont :

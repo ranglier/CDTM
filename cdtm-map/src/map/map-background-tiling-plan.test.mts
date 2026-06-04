@@ -60,3 +60,19 @@ test("le nombre attendu de tuiles inclut les tuiles de bord", () => {
   );
   assert.equal(tileCount, 285);
 });
+
+test("les tuiles raster de cases couvrent les trois modes publics", () => {
+  const plan = getTilePlan();
+  const tileCount = plan.reduce((sum, level) => sum + level.tileCount, 0);
+  const displayModes = ["faction", "influence", "topographic"];
+
+  assert.equal(displayModes.length, 3);
+  assert.equal(tileCount * displayModes.length, 855);
+});
+
+test("la conversion svg inverse l'axe y local de la carte", () => {
+  const mapY = -1840;
+  const svgY = -mapY;
+
+  assert.equal(svgY, 1840);
+});

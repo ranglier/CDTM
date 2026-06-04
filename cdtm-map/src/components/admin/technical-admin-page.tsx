@@ -22,6 +22,7 @@ import type {
 } from "@/admin/tech-types";
 import type { AdminSession } from "@/admin/types";
 import { MapBackgroundAdminPanel } from "@/components/admin/tech/map-background-admin-panel";
+import { MapCaseTilesAdminPanel } from "@/components/admin/tech/map-case-tiles-admin-panel";
 import { ReferenceAdminPanel } from "@/components/admin/tech/reference-admin-panel";
 import { TechAdminSidebar } from "@/components/admin/tech/tech-admin-sidebar";
 import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
@@ -59,6 +60,7 @@ import { SectionPanel } from "@/components/layout/section-panel";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 import type { MapBackgroundAdminRecord } from "@/map/background";
+import type { MapCaseTileAdminStatus } from "@/map/case-tiles";
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
@@ -288,6 +290,16 @@ export function TechnicalAdminPage() {
   const [deletingMapBackgroundId, setDeletingMapBackgroundId] = useState<
     string | null
   >(null);
+  const [mapCaseTileStatus, setMapCaseTileStatus] =
+    useState<MapCaseTileAdminStatus | null>(null);
+  const [mapCaseTilesLoading, setMapCaseTilesLoading] = useState(false);
+  const [mapCaseTilesError, setMapCaseTilesError] = useState<string | null>(
+    null,
+  );
+  const [mapCaseTilesRegenerating, setMapCaseTilesRegenerating] =
+    useState(false);
+  const [mapCaseTilesRegenerateError, setMapCaseTilesRegenerateError] =
+    useState<string | null>(null);
 
   const nomenclatureStatus = useMemo(
     () =>
@@ -479,60 +491,6 @@ export function TechnicalAdminPage() {
               (table) => table.definition.key === "force_types",
             )?.row_count ?? 0,
         },
-        {
-          id: "locality_type_appearance",
-          tableKey: "locality_types",
-          title: "Apparence localites",
-          groupKey: null,
-          rowCount:
-            referenceStatuses.find(
-              (table) => table.definition.key === "locality_types",
-            )?.row_count ?? 0,
-          visibleFieldNames: [
-            "label",
-            "default_icon_key",
-            "default_marker_shape",
-            "default_marker_fill_color",
-            "default_marker_stroke_color",
-          ],
-          disableCreate: true,
-        },
-        {
-          id: "landmark_type_appearance",
-          tableKey: "landmark_types",
-          title: "Apparence landmarks",
-          groupKey: null,
-          rowCount:
-            referenceStatuses.find(
-              (table) => table.definition.key === "landmark_types",
-            )?.row_count ?? 0,
-          visibleFieldNames: [
-            "label",
-            "default_icon_key",
-            "default_marker_shape",
-            "default_marker_fill_color",
-            "default_marker_stroke_color",
-          ],
-          disableCreate: true,
-        },
-        {
-          id: "force_type_appearance",
-          tableKey: "force_types",
-          title: "Apparence forces",
-          groupKey: null,
-          rowCount:
-            referenceStatuses.find(
-              (table) => table.definition.key === "force_types",
-            )?.row_count ?? 0,
-          visibleFieldNames: [
-            "label",
-            "default_icon_key",
-            "default_marker_shape",
-            "default_marker_fill_color",
-            "default_marker_stroke_color",
-          ],
-          disableCreate: true,
-        },
       ],
     });
 
@@ -614,6 +572,15 @@ export function TechnicalAdminPage() {
             label: "Fond de carte",
             count: mapBackgrounds.length > 0 ? mapBackgrounds.length : null,
           },
+          {
+            kind: "map-case-tiles" as const,
+            id: "__map_case_tiles__",
+            label: "Tuiles de cases",
+            count:
+              mapCaseTileStatus && mapCaseTileStatus.latest.length > 0
+                ? mapCaseTileStatus.latest.length
+                : null,
+          },
           ...(referenceViewSections
             .find((section) => section.id === "objets-cartographiques")
             ?.views.map((view) => ({
@@ -680,6 +647,7 @@ export function TechnicalAdminPage() {
     ],
     [
       mapBackgrounds.length,
+      mapCaseTileStatus,
       referenceViewSections,
       schemaSummaries,
       staffAccounts,
@@ -706,7 +674,7 @@ export function TechnicalAdminPage() {
       activeIds.push("accounts");
     }
 
-    if (activeTab === "map-backgrounds") {
+    if (activeTab === "map-backgrounds" || activeTab === "map-case-tiles") {
       activeIds.push("objets-cartographiques");
     }
 
@@ -939,6 +907,27 @@ export function TechnicalAdminPage() {
     }
   }, []);
 
+  const loadMapCaseTileStatus = useCallback(async () => {
+    setMapCaseTilesLoading(true);
+    setMapCaseTilesError(null);
+
+    try {
+      const nextStatus = await fetchJson<MapCaseTileAdminStatus>(
+        "/api/admin/tech/map-case-tiles",
+      );
+      setMapCaseTileStatus(nextStatus);
+    } catch (error) {
+      setMapCaseTilesError(
+        error instanceof Error
+          ? error.message
+          : "Chargement des tuiles de cases impossible.",
+      );
+      setMapCaseTileStatus(null);
+    } finally {
+      setMapCaseTilesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -952,6 +941,7 @@ export function TechnicalAdminPage() {
         setSchemaLoading(false);
         setAccountsLoading(false);
         setMapBackgroundsLoading(false);
+        setMapCaseTilesLoading(false);
       }
     });
 
@@ -970,8 +960,10 @@ export function TechnicalAdminPage() {
     void loadSchemaSummaries();
     void loadStaffAccounts();
     void loadMapBackgrounds();
+    void loadMapCaseTileStatus();
   }, [
     loadMapBackgrounds,
+    loadMapCaseTileStatus,
     loadReferenceStatuses,
     loadSchemaSummaries,
     loadStaffAccounts,
@@ -1321,6 +1313,32 @@ export function TechnicalAdminPage() {
     },
     [loadMapBackgrounds],
   );
+
+  const handleRegenerateMapCaseTiles = useCallback(async () => {
+    setMapCaseTilesRegenerating(true);
+    setMapCaseTilesRegenerateError(null);
+    setMapCaseTilesError(null);
+
+    try {
+      const nextStatus = await fetchJson<MapCaseTileAdminStatus>(
+        "/api/admin/tech/map-case-tiles/regenerate",
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      );
+      setMapCaseTileStatus(nextStatus);
+    } catch (error) {
+      setMapCaseTilesRegenerateError(
+        error instanceof Error
+          ? error.message
+          : "Generation des tuiles de cases impossible.",
+      );
+      await loadMapCaseTileStatus();
+    } finally {
+      setMapCaseTilesRegenerating(false);
+    }
+  }, [loadMapCaseTileStatus]);
 
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
@@ -2000,6 +2018,11 @@ export function TechnicalAdminPage() {
               setActiveSidebarRootId("objets-cartographiques");
               setActiveReferenceViewId(null);
             }}
+            onSelectMapCaseTiles={() => {
+              setActiveTab("map-case-tiles");
+              setActiveSidebarRootId("objets-cartographiques");
+              setActiveReferenceViewId(null);
+            }}
           />
         </SectionPanel>
 
@@ -2042,6 +2065,16 @@ export function TechnicalAdminPage() {
               onActivate={handleActivateMapBackground}
               onDelete={handleDeleteMapBackground}
               onRefresh={loadMapBackgrounds}
+            />
+          ) : activeTab === "map-case-tiles" ? (
+            <MapCaseTilesAdminPanel
+              status={mapCaseTileStatus}
+              loading={mapCaseTilesLoading}
+              error={mapCaseTilesError}
+              regenerating={mapCaseTilesRegenerating}
+              regenerateError={mapCaseTilesRegenerateError}
+              onRefresh={loadMapCaseTileStatus}
+              onRegenerate={handleRegenerateMapCaseTiles}
             />
           ) : activeTab === "schema" ? (
             <>

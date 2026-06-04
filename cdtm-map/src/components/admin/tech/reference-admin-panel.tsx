@@ -134,15 +134,13 @@ export function ReferenceAdminPanel({
               <h2 className="text-2xl font-semibold text-foreground">
                 {activeReferenceView?.title ?? activeReference.definition.title}
               </h2>
-              {!activeReferenceView?.disableCreate ? (
-                <Button
-                  type="button"
-                  onClick={onAddReferenceRow}
-                  disabled={!activeReferenceView}
-                >
-                  Ajouter une valeur
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                onClick={onAddReferenceRow}
+                disabled={!activeReferenceView}
+              >
+                Ajouter une valeur
+              </Button>
             </div>
 
             <form
@@ -190,29 +188,22 @@ export function ReferenceAdminPanel({
               </div>
               <div className="mt-4 space-y-3">
                 {referenceRows.map((row) => {
-                  const visibleFieldNames = activeReferenceView
-                    ?.visibleFieldNames
-                    ? new Set(activeReferenceView.visibleFieldNames)
-                    : null;
                   const displayFields =
                     activeReference.definition.fields.filter(
                       (field) =>
-                        (!visibleFieldNames ||
-                          visibleFieldNames.has(field.name)) &&
                         !isReferenceTechnicalField(
                           activeReference.definition,
                           field,
                         ) &&
                         !STYLE_FIELDS.includes(field.name as StyleFieldName),
                     );
-                  const technicalFields = visibleFieldNames
-                    ? []
-                    : activeReference.definition.fields.filter((field) =>
-                        isReferenceTechnicalField(
-                          activeReference.definition,
-                          field,
-                        ),
-                      );
+                  const technicalFields =
+                    activeReference.definition.fields.filter((field) =>
+                      isReferenceTechnicalField(
+                        activeReference.definition,
+                        field,
+                      ),
+                    );
                   const showStyles = Boolean(
                     activeReferenceView?.styleTargetType,
                   );

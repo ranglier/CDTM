@@ -9,6 +9,8 @@ import type VectorLayer from "ol/layer/Vector";
 import type VectorSource from "ol/source/Vector";
 
 import {
+  MAP_CASE_PATTERNS_INTERACTION_MAX_RESOLUTION,
+  MAP_CASE_PATTERNS_INTERACTION_MAX_VISIBLE_FEATURES,
   MAP_CASE_PATTERNS_MAX_RESOLUTION,
   MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES,
 } from "@/map/config";
@@ -299,7 +301,7 @@ export function attachCasePatternsRenderer({
   });
 
   const postRenderKey: EventsKey = layer.on("postrender", (rawEvent) => {
-    if (!currentVisible || mapMoving) {
+    if (!currentVisible) {
       return;
     }
 
@@ -316,13 +318,20 @@ export function attachCasePatternsRenderer({
       map.getView().getResolution() ??
       Number.POSITIVE_INFINITY;
 
-    if (resolution > MAP_CASE_PATTERNS_MAX_RESOLUTION) {
+    const maxResolution = mapMoving
+      ? MAP_CASE_PATTERNS_INTERACTION_MAX_RESOLUTION
+      : MAP_CASE_PATTERNS_MAX_RESOLUTION;
+    const maxVisibleFeatures = mapMoving
+      ? MAP_CASE_PATTERNS_INTERACTION_MAX_VISIBLE_FEATURES
+      : MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES;
+
+    if (resolution > maxResolution) {
       return;
     }
 
     const visibleFeatures = source.getFeaturesInExtent(extent);
 
-    if (visibleFeatures.length > MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES) {
+    if (visibleFeatures.length > maxVisibleFeatures) {
       return;
     }
 

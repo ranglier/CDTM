@@ -23,6 +23,7 @@ type TechAdminSidebarProps = {
   onSelectSchemaItem: (itemId: string) => void;
   onSelectAccountItem: (itemId: string) => void;
   onSelectMapBackgrounds: () => void;
+  onSelectMapCaseTiles: () => void;
 };
 
 export function TechAdminSidebar({
@@ -43,6 +44,7 @@ export function TechAdminSidebar({
   onSelectSchemaItem,
   onSelectAccountItem,
   onSelectMapBackgrounds,
+  onSelectMapCaseTiles,
 }: TechAdminSidebarProps) {
   return (
     <div className="mt-6 space-y-4">
@@ -55,7 +57,8 @@ export function TechAdminSidebar({
               activeSidebarRootId === section.id) ||
             (activeTab === "schema" && section.id === "schema") ||
             (activeTab === "accounts" && section.id === "accounts") ||
-            (activeTab === "map-backgrounds" &&
+            ((activeTab === "map-backgrounds" ||
+              activeTab === "map-case-tiles") &&
               section.id === "objets-cartographiques")
           }
           onSelect={() => {
@@ -98,7 +101,9 @@ export function TechAdminSidebar({
                     : item.kind === "account"
                       ? activeTab === "accounts" &&
                         item.id === String(activeAccountId)
-                      : activeTab === "map-backgrounds";
+                      : item.kind === "map-backgrounds"
+                        ? activeTab === "map-backgrounds"
+                        : activeTab === "map-case-tiles";
 
               return (
                 <button
@@ -125,7 +130,12 @@ export function TechAdminSidebar({
                       return;
                     }
 
-                    onSelectMapBackgrounds();
+                    if (item.kind === "map-backgrounds") {
+                      onSelectMapBackgrounds();
+                      return;
+                    }
+
+                    onSelectMapCaseTiles();
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">

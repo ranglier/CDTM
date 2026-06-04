@@ -19,6 +19,11 @@ import {
   type PublicMapBackgroundManifest,
 } from "@/map/background";
 import {
+  createVectorFallbackMapCaseTileManifest,
+  normalizePublicMapCaseTileManifest,
+  type PublicMapCaseTileManifest,
+} from "@/map/case-tiles";
+import {
   CASES_EXTENT,
   MAP_BACKGROUND_PATH,
   MAP_EXTENT,
@@ -26,11 +31,16 @@ import {
   MAP_MAX_ZOOM,
   MAP_PROJECTION_CODE,
 } from "@/map/config";
+import { normalizeMapDisplayMode, type MapDisplayMode } from "@/map/types";
 
 let backgroundImagePreloadPromise: Promise<void> | null = null;
 
 export function shouldUseStaticMapBackground(): boolean {
   return process.env.NEXT_PUBLIC_CDTM_MAP_BACKGROUND === "static";
+}
+
+export function shouldUseVectorCaseTiles(): boolean {
+  return process.env.NEXT_PUBLIC_CDTM_CASE_TILES === "vector";
 }
 
 function formatMapTileUrl(
@@ -90,6 +100,29 @@ export async function loadCdtmMapBackgroundManifest(): Promise<PublicMapBackgrou
   }
 }
 
+export async function loadCdtmMapCaseTileManifest(): Promise<PublicMapCaseTileManifest> {
+  if (shouldUseVectorCaseTiles() || typeof window === "undefined") {
+    return createVectorFallbackMapCaseTileManifest();
+  }
+
+  try {
+    const response = await fetch("/api/map/case-tiles/manifest", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const manifest = normalizePublicMapCaseTileManifest(await response.json());
+
+    return manifest ?? createVectorFallbackMapCaseTileManifest();
+  } catch (error) {
+    console.error("Impossible de charger le manifeste des tuiles de cases.", error);
+    return createVectorFallbackMapCaseTileManifest();
+  }
+}
+
 export function createCdtmBackgroundLayer(
   manifest: PublicMapBackgroundManifest = createDefaultMapBackgroundManifest(
     shouldUseStaticMapBackground() ? "static" : "tiles",
@@ -125,6 +158,53 @@ export function createCdtmBackgroundLayer(
       projection: cdtmProjection,
     }),
   });
+}
+
+export function createCdtmCaseRasterLayer({
+  manifest,
+  getDisplayMode,
+  visible,
+}: {
+  manifest: PublicMapCaseTileManifest | null;
+  getDisplayMode: () => MapDisplayMode;
+  visible: boolean;
+}) {
+  if (
+    !manifest ||
+    manifest.mode !== "raster" ||
+    shouldUseVectorCaseTiles()
+  ) {
+    return null;
+  }
+
+  return new TileLayer({
+    extent: MAP_EXTENT,
+    visible,
+    source: new ImageTileSource({
+      projection: cdtmProjection,
+      tileGrid: new TileGrid({
+        extent: MAP_EXTENT,
+        minZoom: manifest.minZoom,
+        origin: [MAP_EXTENT[0], MAP_EXTENT[3]],
+        resolutions: manifest.resolutions,
+        tileSize: manifest.tileSize,
+      }),
+      url: (z, x, y) => {
+        const mode = normalizeMapDisplayMode(getDisplayMode());
+        const template = manifest.tileUrlTemplates[mode];
+
+        return formatMapTileUrl(template, z, x, y);
+      },
+      wrapX: false,
+      transition: 0,
+    }),
+  });
+}
+
+export function refreshCdtmCaseRasterLayer(
+  layer: ReturnType<typeof createCdtmCaseRasterLayer>,
+): void {
+  layer?.getSource()?.refresh();
 }
 
 export function preloadCdtmBackgroundImage(): Promise<void> {

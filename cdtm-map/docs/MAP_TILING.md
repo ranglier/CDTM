@@ -133,10 +133,48 @@ affichee dans l'admin, et l'ancien fond actif reste conserve.
 ## Garde-fous de rendu
 
 Les motifs de cases sont couteux lorsque beaucoup de polygones sont visibles.
-Pour stabiliser le pan et le zoom, ils ne sont pas dessines pendant les
-interactions carte et sont masques aux niveaux de dezoom ou de densite de cases
-ou ils deviennent peu lisibles. Les couleurs de fond, contours, objets et routes
-restent visibles.
+Pour stabiliser le pan et le zoom, ils restent dessines pendant les interactions
+tant que la vue reste sous un budget de resolution et de nombre de cases
+visibles. Aux niveaux de dezoom ou de densite ou ils deviennent peu lisibles,
+ils sont masques. Les couleurs de fond, contours, objets et routes restent
+visibles.
+
+## Tuiles raster de cases publiques
+
+La vue publique peut maintenant remplacer le rendu vectoriel lourd des cases par
+des tuiles raster transparentes. L'editeur reste en rendu vectoriel complet.
+
+La table `map_case_tile_sets` conserve les jeux generes. Une contrainte unique
+partielle garantit qu'un seul jeu est actif. Le manifeste public continue de
+servir le dernier jeu `ready`, meme si son `state_hash` ne correspond plus au
+hash courant : l'admin affiche alors l'etat `A regenerer`.
+
+Le pipeline serveur `src/server/map-case-tiling.ts` :
+
+- utilise `sharp` avec un SVG intermediaire ;
+- genere les modes `faction`, `influence` et `topographic` ;
+- utilise la meme grille que le fond, soit 256 px, `z0` a `z4`, resolutions
+  `[16, 8, 4, 2, 1]` ;
+- ecrit les tuiles dans
+  `/app/uploads/map-case-tiles/{id}/tiles/{mode}/{z}/{x}/{y}.webp` ;
+- produit 855 tuiles par jeu, soit 285 tuiles pour chacun des 3 modes.
+
+Routes principales :
+
+- `GET /api/map/case-tiles/manifest` : manifeste public du jeu actif, avec
+  fallback vectoriel.
+- `GET /uploads/map-case-tiles/[id]/tiles/[mode]/[z]/[x]/[y].webp` : tuile de
+  cases, cachee longuement car l'id du jeu est immuable.
+- `GET /api/admin/tech/map-case-tiles` : statut admin, hash actif, hash courant,
+  historique recent.
+- `POST /api/admin/tech/map-case-tiles/regenerate` : generation synchrone et
+  activation uniquement si toutes les tuiles sont presentes.
+
+La carte publique charge ce manifeste avant de construire OpenLayers. Si un jeu
+`ready` existe, elle ajoute un `TileLayer` raster au-dessus du fond et garde une
+couche vectorielle legere pour clic, survol, recherche et selection. Si aucun
+jeu n'est pret, ou si `NEXT_PUBLIC_CDTM_CASE_TILES=vector` est defini, elle
+revient au rendu vectoriel actuel.
 
 ## Decoupage propose
 

@@ -8,7 +8,12 @@ import type {
 } from "@/admin/tech-types";
 import type { MapStyleTargetType } from "@/map/types";
 
-export type TabKey = "references" | "schema" | "accounts" | "map-backgrounds";
+export type TabKey =
+  | "references"
+  | "schema"
+  | "accounts"
+  | "map-backgrounds"
+  | "map-case-tiles";
 
 export type EditableRow = {
   localId: string;
@@ -28,8 +33,6 @@ export type ReferenceView = {
   rowCount: number | null;
   styleTargetType?: MapStyleTargetType | null;
   supportsTerrainParentSelect?: boolean;
-  visibleFieldNames?: string[];
-  disableCreate?: boolean;
 };
 
 export type ReferenceViewSection = {
@@ -47,6 +50,12 @@ export type SidebarSection = {
     | { kind: "account"; id: string; label: string; count: number | null }
     | {
         kind: "map-backgrounds";
+        id: string;
+        label: string;
+        count: number | null;
+      }
+    | {
+        kind: "map-case-tiles";
         id: string;
         label: string;
         count: number | null;

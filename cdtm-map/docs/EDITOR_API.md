@@ -36,6 +36,31 @@ tuiles sont presentes.
 Supprime un fond inactif et son dossier d'upload. La suppression du fond actif
 est refusee.
 
+## Tuiles raster de cases
+
+### `GET /api/map/case-tiles/manifest`
+
+Retourne le manifeste public du jeu de tuiles de cases actif. Si aucun jeu
+`ready` n'est actif, la route retourne un manifeste `vector` pour conserver le
+rendu public historique.
+
+### `GET /uploads/map-case-tiles/[id]/tiles/[mode]/[z]/[x]/[y].webp`
+
+Retourne une tuile WebP transparente pour les cases publiques. `mode` vaut
+`faction`, `influence` ou `topographic`. Les reponses sont cachees longuement
+car l'identifiant du jeu est immuable.
+
+### `GET /api/admin/tech/map-case-tiles`
+
+Retourne le statut admin des tuiles de cases : jeu actif, historique recent,
+hash actif, hash courant, et etat `stale` quand une regeneration est necessaire.
+
+### `POST /api/admin/tech/map-case-tiles/regenerate`
+
+Route reservee a `tech_admin`. Genere synchronement un nouveau jeu complet et
+l'active uniquement si toutes les tuiles attendues sont presentes. En cas
+d'echec, l'ancien jeu actif reste conserve.
+
 ## Referentiels
 
 ### `GET /api/admin/editor/reference-data`
