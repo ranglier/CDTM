@@ -13,6 +13,7 @@ import {
 import { getCaseStyle, type CaseStylePart } from "@/map/styles";
 import {
   createEmptyPublicMapStyles,
+  type CaseInteractionFeatureCollection,
   type MapDisplayMode,
   type PublicMapStyles,
   type StableCaseFeatureCollection,
@@ -133,7 +134,7 @@ export function createCasesVectorLayer(
 }
 
 export function readCaseFeatures(
-  collection: StableCaseFeatureCollection,
+  collection: StableCaseFeatureCollection | CaseInteractionFeatureCollection,
   projection: Projection,
 ): Feature<Geometry>[] {
   const features = geoJsonFormat.readFeatures(collection as object, {

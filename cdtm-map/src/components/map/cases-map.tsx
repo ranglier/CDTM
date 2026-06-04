@@ -53,11 +53,11 @@ import {
 } from "@/map/use-cdtm-map-runtime";
 import {
   type CaseSelectionIntent,
+  type CaseInteractionFeatureCollection,
   type MapDisplayMode,
   type PublicMapStyles,
-  type StableCaseFeatureCollection,
   type StableCaseProperties,
-  isStableCaseFeatureCollection,
+  isCaseInteractionFeatureCollection,
 } from "@/map/types";
 import type { MapSearchTarget } from "@/map/search";
 
@@ -646,11 +646,11 @@ export function CasesMap({
 
       try {
         const collection =
-          await loadJsonData<StableCaseFeatureCollection>(dataUrl);
+          await loadJsonData<CaseInteractionFeatureCollection>(dataUrl);
 
-        if (!isStableCaseFeatureCollection(collection)) {
+        if (!isCaseInteractionFeatureCollection(collection)) {
           throw new Error(
-            "Le GeoJSON des cases ne respecte pas le contrat stable attendu.",
+            "Le GeoJSON d'interaction des cases ne respecte pas le contrat attendu.",
           );
         }
 

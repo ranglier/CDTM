@@ -176,6 +176,18 @@ couche vectorielle legere pour clic, survol, recherche et selection. Si aucun
 jeu n'est pret, ou si `NEXT_PUBLIC_CDTM_CASE_TILES=vector` est defini, elle
 revient au rendu vectoriel actuel.
 
+## Geometrie d'interaction publique
+
+La carte publique ne charge plus le GeoJSON canonique complet pour l'interaction.
+Le script `scripts/generate-case-interaction-data.mjs` produit
+`public/data/cases.interaction.geojson` a partir de `public/data/cases.geojson`.
+
+- simplification Douglas-Peucker avec tolerance `1` unite carte ;
+- proprietes limitees a `id_case` et `registry_id_case` ;
+- usage public limite a clic, survol, focus et selection ;
+- recherche et panneau hydrates par `/api/cases/public-index` ;
+- editeur et generation des tuiles raster conservent le GeoJSON exact.
+
 ## Decoupage propose
 
 ### Lot 1 - Pipeline de generation

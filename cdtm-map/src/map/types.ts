@@ -174,7 +174,7 @@ export function parseNullableMapStyleNumber(
   return numericValue;
 }
 
-type StableCaseGeometry =
+export type StableCaseGeometry =
   | {
       type: "Polygon";
       coordinates: number[][][];
@@ -190,14 +190,31 @@ type StableCaseFeature = {
   geometry: StableCaseGeometry;
 };
 
+export type CaseInteractionFeatureProperties = {
+  registry_id_case?: string | null;
+  id_case: string;
+};
+
+type CaseInteractionFeature = {
+  type: "Feature";
+  properties: CaseInteractionFeatureProperties;
+  geometry: StableCaseGeometry;
+};
+
 export type StableCaseFeatureCollection = {
   type: "FeatureCollection";
   features: StableCaseFeature[];
 };
 
+export type CaseInteractionFeatureCollection = {
+  type: "FeatureCollection";
+  features: CaseInteractionFeature[];
+};
+
 export type CaseSelectionIntent = "replace" | "toggle";
 
 export const CASES_DATA_URL = "/data/cases.geojson";
+export const CASES_INTERACTION_DATA_URL = "/data/cases.interaction.geojson";
 
 function isNullableString(value: unknown): value is string | null | undefined {
   return value === undefined || value === null || typeof value === "string";
@@ -275,6 +292,52 @@ export function isStableCaseFeatureCollection(
     }
 
     if (!isStableCaseProperties(feature.properties)) {
+      return false;
+    }
+
+    if (!isPlainObject(feature.geometry)) {
+      return false;
+    }
+
+    return (
+      (feature.geometry.type === "Polygon" ||
+        feature.geometry.type === "MultiPolygon") &&
+      Array.isArray(feature.geometry.coordinates)
+    );
+  });
+}
+
+function isCaseInteractionFeatureProperties(
+  value: unknown,
+): value is CaseInteractionFeatureProperties {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  return (
+    isNullableString(value.registry_id_case) &&
+    typeof value.id_case === "string" &&
+    value.id_case.trim().length > 0
+  );
+}
+
+export function isCaseInteractionFeatureCollection(
+  value: unknown,
+): value is CaseInteractionFeatureCollection {
+  if (
+    !isPlainObject(value) ||
+    value.type !== "FeatureCollection" ||
+    !Array.isArray(value.features)
+  ) {
+    return false;
+  }
+
+  return value.features.every((feature) => {
+    if (!isPlainObject(feature) || feature.type !== "Feature") {
+      return false;
+    }
+
+    if (!isCaseInteractionFeatureProperties(feature.properties)) {
       return false;
     }
 

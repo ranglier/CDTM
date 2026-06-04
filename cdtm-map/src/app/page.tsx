@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  createLoggedOutSession,
-  mergePublicCasesIntoStableCases,
-} from "@/admin/case-editing";
+import { createLoggedOutSession } from "@/admin/case-editing";
 import type {
   AdminCaseRecord,
   AdminSession,
   PublicCaseIndexResponse,
-  PublicCaseProperties,
 } from "@/admin/types";
 import { AdminLoginDialog } from "@/components/admin/admin-login-dialog";
 import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
@@ -18,7 +14,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SiteHeader } from "@/components/layout/site-header";
 import { CaseInfoPanel } from "@/components/map/case-info-panel";
 import { CasesMap } from "@/components/map/cases-map";
-import { loadJsonData } from "@/data/loaders";
 import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 import { getRegistryCaseId } from "@/map/case-data";
 import type { PublicMapObjectsResponse } from "@/map/public-objects";
@@ -29,15 +24,12 @@ import {
   type MapSearchTarget,
 } from "@/map/search";
 import {
-  CASES_DATA_URL,
+  CASES_INTERACTION_DATA_URL,
   type CaseSelectionIntent,
   createEmptyPublicMapStyles,
-  isStableCaseFeatureCollection,
   normalizeMapDisplayMode,
-  toStableCaseProperties,
   type MapDisplayMode,
   type PublicMapStyles,
-  type StableCaseFeatureCollection,
   type StableCaseProperties,
 } from "@/map/types";
 
@@ -445,40 +437,14 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadStableCases() {
+    async function loadPublicCaseIndex() {
       try {
-        const [collection, publicCases] = await Promise.all([
-          loadJsonData<StableCaseFeatureCollection>(CASES_DATA_URL),
-          fetchJson<PublicCaseIndexResponse>("/api/cases/public-index").catch(
-            () => ({
-              cases: [] as PublicCaseProperties[],
-              styles: createEmptyPublicMapStyles(),
-            }),
-          ),
-        ]);
-
-        if (!isStableCaseFeatureCollection(collection)) {
-          throw new Error(
-            "Le GeoJSON des cases ne respecte pas le contrat attendu.",
-          );
-        }
+        const publicCases = await fetchJson<PublicCaseIndexResponse>(
+          "/api/cases/public-index",
+        );
 
         if (!cancelled) {
-          const baseCases = collection.features
-            .map((feature) =>
-              toStableCaseProperties({
-                ...feature.properties,
-                registry_id_case: feature.properties.id_case,
-              }),
-            )
-            .filter(
-              (stableCase): stableCase is StableCaseProperties =>
-                stableCase !== null,
-            );
-
-          setStableCases(
-            mergePublicCasesIntoStableCases(baseCases, publicCases.cases),
-          );
+          setStableCases(publicCases.cases);
           setPublicMapStyles(publicCases.styles);
         }
       } catch (error) {
@@ -488,7 +454,7 @@ export default function HomePage() {
       }
     }
 
-    void loadStableCases();
+    void loadPublicCaseIndex();
 
     return () => {
       cancelled = true;
@@ -657,7 +623,7 @@ export default function HomePage() {
         aria-label="Carte publique des cases"
       >
         <CasesMap
-          dataUrl={CASES_DATA_URL}
+          dataUrl={CASES_INTERACTION_DATA_URL}
           activeCaseId={activeCaseId}
           selectedCaseIds={selectedCaseIds}
           casePropertiesById={stableCasesByRegistryId}
