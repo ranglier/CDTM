@@ -10,7 +10,7 @@ import type Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 
-import { MAP_MAX_ZOOM } from "@/map/config";
+import { MAP_CASE_TILE_BACKUP_IDLE_OPACITY, MAP_MAX_ZOOM } from "@/map/config";
 import { measureMapPerformanceSync } from "@/map/map-performance";
 import {
   getPublicPointerMoveThrottleMs,
@@ -441,7 +441,7 @@ export function useCdtmMapRuntime({
     const caseRasterBackupLayer = createCdtmCaseRasterBackupLayer({
       manifest: caseTileManifestRef.current,
       getDisplayMode: () => displayModeRef.current,
-      visible: false,
+      visible: useRasterCases && casesVisibleRef.current,
     });
     const routesLayer = createEditorRoutesVectorLayer(routesSource, {
       visible: routesVisibleRef.current,
@@ -778,7 +778,8 @@ export function useCdtmMapRuntime({
     syncCaseLayerVisibility(casesLayerRef.current, casesVisible);
     caseRasterLayerRef.current?.setVisible(casesVisible);
     caseRasterLayerRef.current?.changed();
-    caseRasterBackupLayerRef.current?.setVisible(false);
+    caseRasterBackupLayerRef.current?.setVisible(useRasterCases && casesVisible);
+    caseRasterBackupLayerRef.current?.setOpacity(MAP_CASE_TILE_BACKUP_IDLE_OPACITY);
     caseRasterBackupLayerRef.current?.changed();
     casePatternsRendererRef.current?.setVisible(casesVisible);
 

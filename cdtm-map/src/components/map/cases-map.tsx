@@ -77,7 +77,11 @@ import {
   type StableCaseProperties,
   isStableCaseFeatureCollection,
 } from "@/map/types";
-import { MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS } from "@/map/config";
+import {
+  MAP_CASE_TILE_BACKUP_ACTIVE_OPACITY,
+  MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS,
+  MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
+} from "@/map/config";
 import type { MapSearchTarget } from "@/map/search";
 
 type CasesMapProps = {
@@ -1014,19 +1018,24 @@ export function CasesMap({
         caseRasterBackupHideTimeout = null;
       }
     };
-    const setCaseRasterBackupVisible = (visible: boolean) => {
+    const setCaseRasterBackupActive = (active: boolean) => {
       const layer = standardLayers.caseRasterBackupLayer;
 
       if (!layer) {
         return;
       }
 
-      layer.setVisible(visible && casesVisibleRef.current);
+      layer.setVisible(casesVisibleRef.current);
+      layer.setOpacity(
+        active
+          ? MAP_CASE_TILE_BACKUP_ACTIVE_OPACITY
+          : MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
+      );
       layer.changed();
     };
     const moveStartBackupKey = map.on("movestart", () => {
       clearCaseRasterBackupHideTimeout();
-      setCaseRasterBackupVisible(true);
+      setCaseRasterBackupActive(true);
     });
     const moveEndPrefetchKey = map.on("moveend", () => {
       caseRasterPrefetchRef.current();
@@ -1034,7 +1043,7 @@ export function CasesMap({
       standardLayers.pointsLayer.changed();
       clearCaseRasterBackupHideTimeout();
       caseRasterBackupHideTimeout = window.setTimeout(() => {
-        setCaseRasterBackupVisible(false);
+        setCaseRasterBackupActive(false);
       }, MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS);
     });
     const pointerMoveCleanup = attachCdtmPointerMoveLifecycle({
