@@ -57,6 +57,10 @@ Ajouter une nouvelle entree a la liste `databaseMigrations` dans `src/server/db-
 - une fonction `up(client)`
 - une version strictement superieure aux migrations existantes
 
+La version `020` est reservee apres le rollback du chantier des tuiles composees.
+La prochaine vraie migration doit donc utiliser `021`, meme si `020` semble vide
+dans le code courant.
+
 Exemple de structure :
 
 ```ts

@@ -11,8 +11,13 @@ Définir une interface de consultation simple, lisible et limitée aux informati
 - Affichage principal de la carte interactive.
 - Navigation de base : zoom, deplacement, recentrage, selection de case.
 - Aucun fond OSM ni couche externe dynamique dans la V0.
-- Couche publique stable chargee depuis `public/data/cases.geojson`.
-- Fond de carte statique charge depuis `public/maps/CTM.png`.
+- Fond de carte charge depuis le manifeste public `/api/map/background`, avec
+  fallback vers `public/maps/CTM.png`.
+- Cases publiques chargees en priorite depuis les tuiles raster
+  `/api/map/case-tiles/manifest`, avec fallback vectoriel vers
+  `public/data/cases.geojson` si aucun jeu de tuiles n'est pret.
+- Les geometries exactes de cases sont rechargees a la demande pour la selection,
+  le focus et la recherche.
 - Fond et cases alignes dans une projection locale applicative, sans reprojection geographique.
 - Rendu V0 : interieur des cases transparent et contours noirs visibles.
 - L'utilisateur peut afficher ou masquer la couche `cases`.

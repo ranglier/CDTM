@@ -1930,89 +1930,10 @@ const databaseMigrations: DatabaseMigration[] = [
   },
   {
     version: "020",
-    name: "map_composite_tile_sets",
-    up: async (client) => {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS map_composite_tile_sets (
-          id_tile_set TEXT PRIMARY KEY,
-          profile TEXT NOT NULL
-            CHECK (profile IN ('mobile', 'desktop')),
-          state_hash TEXT NOT NULL,
-          background_id TEXT NOT NULL,
-          case_tile_set_id TEXT NOT NULL,
-          background_hash TEXT NOT NULL,
-          case_tile_hash TEXT NOT NULL,
-          tiles_path TEXT NOT NULL,
-          tile_size INTEGER NOT NULL,
-          min_zoom INTEGER NOT NULL,
-          max_zoom INTEGER NOT NULL,
-          resolutions_json JSONB NOT NULL,
-          generation_status TEXT NOT NULL DEFAULT 'generating'
-            CHECK (generation_status IN ('generating', 'ready', 'failed')),
-          generation_error TEXT,
-          is_active BOOLEAN NOT NULL DEFAULT FALSE,
-          generated_at TIMESTAMPTZ,
-          updated_by_user_id BIGINT REFERENCES staff_users(id) ON DELETE SET NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS profile TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS background_id TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS case_tile_set_id TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS background_hash TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS case_tile_hash TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS generation_status TEXT DEFAULT 'generating'
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS generation_error TEXT
-      `);
-
-      await client.query(`
-        ALTER TABLE map_composite_tile_sets
-        ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ
-      `);
-
-      await client.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS map_composite_tile_sets_active_profile_idx
-        ON map_composite_tile_sets(profile)
-        WHERE is_active = TRUE
-      `);
-
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS map_composite_tile_sets_profile_created_at_idx
-        ON map_composite_tile_sets(profile, created_at DESC)
-      `);
-
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS map_composite_tile_sets_state_hash_idx
-        ON map_composite_tile_sets(state_hash)
-      `);
+    name: "reserved_after_composite_tiles_rollback",
+    up: async () => {
+      // Version intentionally burned: a rolled-back composite tile migration may
+      // already be recorded as 020 in production.
     },
   },
 ];

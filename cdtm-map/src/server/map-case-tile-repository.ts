@@ -46,6 +46,16 @@ type MapCaseTileSetRow = {
   updated_by_username?: string | null;
 };
 
+const PUBLIC_STATE_HASH_CACHE_TTL_MS = 30_000;
+
+let cachedPublicStateHash:
+  | {
+      value: string | null;
+      expiresAt: number;
+    }
+  | null = null;
+let pendingPublicStateHashPromise: Promise<string | null> | null = null;
+
 function toIsoStringOrNull(value: Date | string | null): string | null {
   if (!value) {
     return null;
@@ -136,6 +146,30 @@ async function computeCurrentStateHashSafe(): Promise<string | null> {
   }
 }
 
+async function getCachedPublicStateHash(): Promise<string | null> {
+  const now = Date.now();
+
+  if (cachedPublicStateHash && cachedPublicStateHash.expiresAt > now) {
+    return cachedPublicStateHash.value;
+  }
+
+  if (!pendingPublicStateHashPromise) {
+    pendingPublicStateHashPromise = computeCurrentStateHashSafe()
+      .then((value) => {
+        cachedPublicStateHash = {
+          value,
+          expiresAt: Date.now() + PUBLIC_STATE_HASH_CACHE_TTL_MS,
+        };
+        return value;
+      })
+      .finally(() => {
+        pendingPublicStateHashPromise = null;
+      });
+  }
+
+  return pendingPublicStateHashPromise;
+}
+
 async function selectActiveReadyMapCaseTileSet(): Promise<MapCaseTileSetRow | null> {
   const result = await getPool().query<MapCaseTileSetRow>(
     `
@@ -172,7 +206,7 @@ async function listMapCaseTileSetRows(
 
 export async function getPublicMapCaseTileManifest(): Promise<PublicMapCaseTileManifest> {
   const hasDatabase = await ensureDatabaseReady();
-  const currentStateHashPromise = computeCurrentStateHashSafe();
+  const currentStateHashPromise = getCachedPublicStateHash();
 
   if (!hasDatabase) {
     return createVectorFallbackMapCaseTileManifest(

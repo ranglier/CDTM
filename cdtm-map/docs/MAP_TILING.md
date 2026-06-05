@@ -210,60 +210,6 @@ complementaires pour la vue publique :
   rendues comme points simples, les routes courbes utilisent moins de segments
   et la hit detection est cadencee plus strictement.
 
-## Tuiles composees publiques
-
-Le chantier performance structurel introduit des tuiles composees pour la vue
-publique. Elles precomposent `fond + cases + motifs + contours` afin de reduire
-les couches raster a composer au runtime, surtout sur mobile.
-
-Les profils publics sont separes :
-
-- `mobile` : priorite a une couche raster principale stable et fluide ;
-- `desktop` : rendu visuel proche du public actuel, mais avec le fond et les
-  cases fusionnes dans une seule couche raster ;
-- `legacy` : fallback historique conserve par variables d'environnement.
-
-La table `map_composite_tile_sets` est append-only. Une contrainte unique
-partielle garantit un seul jeu actif par profil. Les jeux anciens ne sont pas
-purges automatiquement, et une generation echouee marque uniquement le nouveau
-jeu en `failed` sans desactiver l'ancien actif.
-
-Le pipeline serveur `src/server/map-composite-tiling.ts` :
-
-- relit le manifeste du fond actif et le manifeste des tuiles de cases actives ;
-- exige un fond tuile et un jeu de cases raster `ready` ;
-- compose les modes `faction`, `influence` et `topographic` ;
-- utilise la meme grille 256 px, `z0` a `z4`, resolutions `[16, 8, 4, 2, 1]` ;
-- ecrit les tuiles dans
-  `/app/uploads/map-composite-tiles/{id}/tiles/{profile}/{mode}/{z}/{x}/{y}.webp` ;
-- produit 855 tuiles par profil, soit 285 tuiles pour chacun des 3 modes
-  publics ;
-- conserve le picking via le jeu de tuiles de cases utilise pendant la
-  generation, pour que clic, recherche, focus et selection restent coherents
-  meme si le composite devient stale.
-
-Routes principales :
-
-- `GET /api/map/composite-tiles/manifest?profile=mobile|desktop` : manifeste
-  public du profil, avec fallback legacy.
-- `GET /uploads/map-composite-tiles/[id]/tiles/[profile]/[mode]/[z]/[x]/[y].webp` :
-  tuile composee, cachee longuement car l'id est immuable.
-- `GET /api/admin/tech/map-composite-tiles` : statut admin par profil, stale,
-  erreur et historique.
-- `POST /api/admin/tech/map-composite-tiles/regenerate` : generation synchrone
-  pour un profil donne, puis activation uniquement si toutes les tuiles sont
-  presentes.
-
-Flags de rollout :
-
-- `NEXT_PUBLIC_CDTM_MOBILE_MAP_RUNTIME=legacy|composite|auto`
-- `NEXT_PUBLIC_CDTM_DESKTOP_MAP_RUNTIME=legacy|composite|auto`
-
-Par defaut, les deux profils restent en `legacy`. Le deploiement recommande est
-de generer les profils depuis l'admin, valider visuellement, activer
-`mobile=auto`, puis activer `desktop=auto` apres validation PC. Revenir a
-`legacy` force immediatement l'ancien runtime public.
-
 ## Decoupage propose
 
 ### Lot 1 - Pipeline de generation

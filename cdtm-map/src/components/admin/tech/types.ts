@@ -13,8 +13,7 @@ export type TabKey =
   | "schema"
   | "accounts"
   | "map-backgrounds"
-  | "map-case-tiles"
-  | "map-composite-tiles";
+  | "map-case-tiles";
 
 export type EditableRow = {
   localId: string;
@@ -57,12 +56,6 @@ export type SidebarSection = {
       }
     | {
         kind: "map-case-tiles";
-        id: string;
-        label: string;
-        count: number | null;
-      }
-    | {
-        kind: "map-composite-tiles";
         id: string;
         label: string;
         count: number | null;
