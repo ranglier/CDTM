@@ -39,6 +39,7 @@ import {
 import {
   cdtmProjection,
   loadCdtmMapCaseTileManifest,
+  loadCdtmMapCompositeTileManifest,
 } from "@/map/openlayers/map-core";
 import {
   createCasePickingReader,
@@ -46,6 +47,10 @@ import {
 } from "@/map/case-picking";
 import { prefetchCaseRasterTiles } from "@/map/case-tile-prefetch";
 import type { PublicMapCaseTileManifest } from "@/map/case-tiles";
+import type {
+  MapCompositeTileProfile,
+  PublicMapCompositeTileManifest,
+} from "@/map/composite-tiles";
 import {
   getMapPerformanceNow,
   logMapPerformanceSummary,
@@ -79,6 +84,7 @@ import {
 } from "@/map/types";
 import {
   MAP_CASE_TILE_BACKUP_ACTIVE_OPACITY,
+  MAP_CASE_TILE_BACKUP_ENABLED_ON_MOBILE,
   MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS,
   MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
 } from "@/map/config";
@@ -157,6 +163,37 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function getMapCompositeProfile(
+  mobileLayout: boolean,
+): MapCompositeTileProfile {
+  return mobileLayout ? "mobile" : "desktop";
+}
+
+function toCaseTilePrefetchManifest(
+  manifest: PublicMapCompositeTileManifest | null,
+): PublicMapCaseTileManifest | null {
+  if (!manifest || manifest.mode !== "composite") {
+    return null;
+  }
+
+  return {
+    mode: "raster",
+    source: "generated",
+    id: manifest.id,
+    tileSize: manifest.tileSize,
+    minZoom: manifest.minZoom,
+    maxZoom: manifest.maxZoom,
+    resolutions: manifest.resolutions,
+    extent: manifest.extent,
+    stateHash: manifest.stateHash,
+    currentStateHash: manifest.currentStateHash,
+    stale: manifest.stale,
+    generatedAt: manifest.generatedAt,
+    tileUrlTemplates: manifest.tileUrlTemplates,
+    picking: manifest.picking,
+  };
+}
+
 export function CasesMap({
   dataUrl,
   activeCaseId,
@@ -193,6 +230,7 @@ export function CasesMap({
   const casePickingHoverRequestRef = useRef(0);
   const caseRasterPrefetchRef = useRef<() => void>(() => {});
   const mobileLayoutRef = useRef(mobileLayout);
+  const mobileRoutesDefaultAppliedRef = useRef(false);
   const publicObjectsPayloadRef = useRef<PublicMapObjectsResponse | null>(null);
   const publicRouteSegmentsRef = useRef<number | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
@@ -203,10 +241,18 @@ export function CasesMap({
   const [caseTileManifest, setCaseTileManifest] =
     useState<PublicMapCaseTileManifest | null>(null);
   const [caseTilesReady, setCaseTilesReady] = useState(false);
+  const [compositeTileManifest, setCompositeTileManifest] =
+    useState<PublicMapCompositeTileManifest | null>(null);
+  const [compositeTilesReady, setCompositeTilesReady] = useState(false);
+  const compositeRasterEnabled = compositeTileManifest?.mode === "composite";
+  const pickingTileManifest = compositeRasterEnabled
+    ? (compositeTileManifest.picking ? compositeTileManifest : caseTileManifest)
+    : caseTileManifest;
   const casePickingEnabled =
-    caseTileManifest?.mode === "raster" && caseTileManifest.picking !== null;
+    Boolean(pickingTileManifest?.picking) &&
+    (compositeRasterEnabled || caseTileManifest?.mode === "raster");
   const caseRenderingMode =
-    caseTileManifest?.mode === "raster"
+    compositeRasterEnabled || caseTileManifest?.mode === "raster"
       ? casePickingEnabled
         ? "raster-picking"
         : "raster-interaction"
@@ -228,6 +274,7 @@ export function CasesMap({
     publicLodEnabled: true,
     mobileLayout,
     caseTileManifest,
+    compositeTileManifest,
     caseRenderingMode,
     clearHoverRequest,
     onCasesHidden: handleCasesHidden,
@@ -272,6 +319,11 @@ export function CasesMap({
   useEffect(() => {
     mobileLayoutRef.current = mobileLayout;
     pointsLayerRef.current?.changed();
+
+    if (mobileLayout && !mobileRoutesDefaultAppliedRef.current) {
+      mobileRoutesDefaultAppliedRef.current = true;
+      setRoutesVisible(false);
+    }
   }, [mobileLayout, pointsLayerRef]);
 
   useEffect(() => {
@@ -296,16 +348,38 @@ export function CasesMap({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const profile = getMapCompositeProfile(mobileLayout);
+
+    async function loadCompositeTilesManifest() {
+      const manifest = await loadCdtmMapCompositeTileManifest(profile);
+
+      if (cancelled) {
+        return;
+      }
+
+      setCompositeTileManifest(manifest);
+      setCompositeTilesReady(true);
+    }
+
+    void loadCompositeTilesManifest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mobileLayout]);
+
+  useEffect(() => {
     casePickingReaderRef.current?.clear();
     casePickingReaderRef.current =
-      caseTileManifest?.mode === "raster" && caseTileManifest.picking
+      pickingTileManifest?.picking
         ? createCasePickingReader({
-            picking: caseTileManifest.picking,
-            extent: caseTileManifest.extent,
-            tileSize: caseTileManifest.tileSize,
-            minZoom: caseTileManifest.minZoom,
-            maxZoom: caseTileManifest.maxZoom,
-            resolutions: caseTileManifest.resolutions,
+            picking: pickingTileManifest.picking,
+            extent: pickingTileManifest.extent,
+            tileSize: pickingTileManifest.tileSize,
+            minZoom: pickingTileManifest.minZoom,
+            maxZoom: pickingTileManifest.maxZoom,
+            resolutions: pickingTileManifest.resolutions,
           })
         : null;
 
@@ -313,7 +387,7 @@ export function CasesMap({
       casePickingReaderRef.current?.clear();
       casePickingReaderRef.current = null;
     };
-  }, [caseTileManifest]);
+  }, [pickingTileManifest]);
 
   const getCurrentPublicRouteSegments = useCallback((): number => {
     return getPublicRouteSegmentsPerInterval(
@@ -414,11 +488,13 @@ export function CasesMap({
   useEffect(() => {
     caseRasterPrefetchRef.current = () => {
       const map = mapRef.current;
+      const prefetchManifest =
+        toCaseTilePrefetchManifest(compositeTileManifest) ?? caseTileManifest;
 
       if (
         !map ||
-        !caseTileManifest ||
-        caseTileManifest.mode !== "raster" ||
+        !prefetchManifest ||
+        prefetchManifest.mode !== "raster" ||
         !casesVisibleRef.current
       ) {
         return;
@@ -432,7 +508,7 @@ export function CasesMap({
       }
 
       prefetchCaseRasterTiles({
-        manifest: caseTileManifest,
+        manifest: prefetchManifest,
         displayMode: displayModeRef.current,
         extent: map.getView().calculateExtent(size) as [
           number,
@@ -443,7 +519,13 @@ export function CasesMap({
         resolution,
       });
     };
-  }, [caseTileManifest, casesVisibleRef, displayModeRef, mapRef]);
+  }, [
+    caseTileManifest,
+    casesVisibleRef,
+    compositeTileManifest,
+    displayModeRef,
+    mapRef,
+  ]);
 
   const showSearchTargetTooltip = useCallback(
     (target: MapSearchTarget) => {
@@ -709,7 +791,7 @@ export function CasesMap({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [caseTileManifest, casesVisible, displayMode]);
+  }, [caseTileManifest, casesVisible, compositeTileManifest, displayMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -731,6 +813,7 @@ export function CasesMap({
     if (
       !mapBackgroundReady ||
       !caseTilesReady ||
+      !compositeTilesReady ||
       !mapElementRef.current ||
       mapRef.current
     ) {
@@ -742,10 +825,21 @@ export function CasesMap({
       "openlayers.layers.create",
       createStandardLayers,
     );
-    const mapLayers = standardLayers.caseRasterLayer
+    const useCaseRasterBackup =
+      Boolean(standardLayers.caseRasterBackupLayer) &&
+      (!mobileLayoutRef.current || MAP_CASE_TILE_BACKUP_ENABLED_ON_MOBILE);
+    const mapLayers = standardLayers.compositeRasterLayer
       ? [
           standardLayers.backgroundLayer,
-          ...(standardLayers.caseRasterBackupLayer
+          standardLayers.compositeRasterLayer,
+          standardLayers.casesLayer,
+          standardLayers.routesLayer,
+          standardLayers.pointsLayer,
+        ]
+      : standardLayers.caseRasterLayer
+      ? [
+          standardLayers.backgroundLayer,
+          ...(useCaseRasterBackup && standardLayers.caseRasterBackupLayer
             ? [standardLayers.caseRasterBackupLayer]
             : []),
           standardLayers.caseRasterLayer,
@@ -1021,7 +1115,7 @@ export function CasesMap({
     const setCaseRasterBackupActive = (active: boolean) => {
       const layer = standardLayers.caseRasterBackupLayer;
 
-      if (!layer) {
+      if (!layer || !useCaseRasterBackup) {
         return;
       }
 
@@ -1056,6 +1150,7 @@ export function CasesMap({
     bindStandardHandles({
       map,
       caseRasterBackupLayer: standardLayers.caseRasterBackupLayer,
+      compositeRasterLayer: standardLayers.compositeRasterLayer,
       caseRasterLayer: standardLayers.caseRasterLayer,
       casesSource: standardLayers.casesSource,
       caseFillLayer: standardLayers.caseFillLayer,
@@ -1089,6 +1184,7 @@ export function CasesMap({
     caseRasterPrefetchRef,
     casePropertiesByIdRef,
     caseTilesReady,
+    compositeTilesReady,
     casesVisibleRef,
     clearHover,
     createMap,
@@ -1108,7 +1204,7 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
-    if (!mapBackgroundReady || !caseTilesReady) {
+    if (!mapBackgroundReady || !caseTilesReady || !compositeTilesReady) {
       return;
     }
 
@@ -1174,6 +1270,7 @@ export function CasesMap({
     casePickingEnabled,
     casePropertiesByIdRef,
     caseTilesReady,
+    compositeTilesReady,
     casesSourceRef,
     dataUrl,
     fitCasesExtent,
@@ -1183,7 +1280,7 @@ export function CasesMap({
   ]);
 
   useEffect(() => {
-    if (!mapBackgroundReady || !caseTilesReady) {
+    if (!mapBackgroundReady || !caseTilesReady || !compositeTilesReady) {
       return;
     }
 
@@ -1270,6 +1367,7 @@ export function CasesMap({
   }, [
     applyPublicObjectsPayload,
     caseTilesReady,
+    compositeTilesReady,
     landmarkCategoryByTypeRef,
     landmarkDefaultAppearanceByTypeRef,
     landmarkDefaultIconKeyByTypeRef,

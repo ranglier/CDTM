@@ -24,6 +24,12 @@ import {
   type PublicMapCaseTileManifest,
 } from "@/map/case-tiles";
 import {
+  createLegacyMapCompositeTileManifest,
+  normalizePublicMapCompositeTileManifest,
+  type MapCompositeTileProfile,
+  type PublicMapCompositeTileManifest,
+} from "@/map/composite-tiles";
+import {
   CASES_EXTENT,
   MAP_BACKGROUND_PATH,
   MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
@@ -47,6 +53,30 @@ export function shouldUseStaticMapBackground(): boolean {
 
 export function shouldUseVectorCaseTiles(): boolean {
   return process.env.NEXT_PUBLIC_CDTM_CASE_TILES === "vector";
+}
+
+export type PublicMapRuntimeMode = "legacy" | "composite" | "auto";
+
+function normalizePublicMapRuntimeMode(
+  value: string | undefined,
+): PublicMapRuntimeMode {
+  return value === "composite" || value === "auto" ? value : "legacy";
+}
+
+export function getCdtmPublicMapRuntimeMode(
+  profile: MapCompositeTileProfile,
+): PublicMapRuntimeMode {
+  return normalizePublicMapRuntimeMode(
+    profile === "mobile"
+      ? process.env.NEXT_PUBLIC_CDTM_MOBILE_MAP_RUNTIME
+      : process.env.NEXT_PUBLIC_CDTM_DESKTOP_MAP_RUNTIME,
+  );
+}
+
+export function shouldLoadCompositeMapRuntime(
+  profile: MapCompositeTileProfile,
+): boolean {
+  return getCdtmPublicMapRuntimeMode(profile) !== "legacy";
 }
 
 function formatMapTileUrl(
@@ -128,6 +158,42 @@ export async function loadCdtmMapCaseTileManifest(): Promise<PublicMapCaseTileMa
   } catch (error) {
     console.error("Impossible de charger le manifeste des tuiles de cases.", error);
     return createVectorFallbackMapCaseTileManifest();
+  }
+}
+
+export async function loadCdtmMapCompositeTileManifest(
+  profile: MapCompositeTileProfile,
+): Promise<PublicMapCompositeTileManifest> {
+  if (
+    !shouldLoadCompositeMapRuntime(profile) ||
+    shouldUseStaticMapBackground() ||
+    shouldUseVectorCaseTiles() ||
+    typeof window === "undefined"
+  ) {
+    return createLegacyMapCompositeTileManifest(profile);
+  }
+
+  try {
+    const response = await measureMapPerformanceAsync(
+      `api.map.composite-tiles.${profile}.manifest`,
+      () => fetch(`/api/map/composite-tiles/manifest?profile=${profile}`),
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const manifest = normalizePublicMapCompositeTileManifest(
+      await response.json(),
+    );
+
+    return manifest ?? createLegacyMapCompositeTileManifest(profile);
+  } catch (error) {
+    console.error(
+      "Impossible de charger le manifeste des tuiles composees.",
+      error,
+    );
+    return createLegacyMapCompositeTileManifest(profile);
   }
 }
 
@@ -266,8 +332,56 @@ export function createCdtmCaseRasterBackupLayer({
   });
 }
 
+export function createCdtmCompositeRasterLayer({
+  manifest,
+  getDisplayMode,
+  visible,
+}: {
+  manifest: PublicMapCompositeTileManifest | null;
+  getDisplayMode: () => MapDisplayMode;
+  visible: boolean;
+}) {
+  if (!manifest || manifest.mode !== "composite") {
+    return null;
+  }
+
+  return new TileLayer({
+    cacheSize: MAP_CASE_TILE_CACHE_SIZE,
+    extent: MAP_EXTENT,
+    preload: MAP_CASE_TILE_PRELOAD_LEVELS,
+    useInterimTilesOnError: true,
+    visible,
+    source: new ImageTileSource({
+      projection: cdtmProjection,
+      tileGrid: new TileGrid({
+        extent: MAP_EXTENT,
+        minZoom: manifest.minZoom,
+        origin: [MAP_EXTENT[0], MAP_EXTENT[3]],
+        resolutions: manifest.resolutions,
+        tileSize: manifest.tileSize,
+      }),
+      interpolate: true,
+      url: (z, x, y) => {
+        const mode = normalizeMapDisplayMode(getDisplayMode());
+        const template = manifest.tileUrlTemplates[mode];
+
+        return formatMapTileUrl(template, z, x, y);
+      },
+      wrapX: false,
+      transition: MAP_CASE_TILE_TRANSITION_MS,
+      zDirection: -1,
+    }),
+  });
+}
+
 export function refreshCdtmCaseRasterLayer(
   layer: ReturnType<typeof createCdtmCaseRasterLayer>,
+): void {
+  layer?.getSource()?.refresh();
+}
+
+export function refreshCdtmCompositeRasterLayer(
+  layer: ReturnType<typeof createCdtmCompositeRasterLayer>,
 ): void {
   layer?.getSource()?.refresh();
 }

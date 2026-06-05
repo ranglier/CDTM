@@ -23,6 +23,7 @@ import type {
 import type { AdminSession } from "@/admin/types";
 import { MapBackgroundAdminPanel } from "@/components/admin/tech/map-background-admin-panel";
 import { MapCaseTilesAdminPanel } from "@/components/admin/tech/map-case-tiles-admin-panel";
+import { MapCompositeTilesAdminPanel } from "@/components/admin/tech/map-composite-tiles-admin-panel";
 import { ReferenceAdminPanel } from "@/components/admin/tech/reference-admin-panel";
 import { TechAdminSidebar } from "@/components/admin/tech/tech-admin-sidebar";
 import { buildAppNavigationItems } from "@/components/layout/admin-navigation";
@@ -61,6 +62,10 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
 import type { MapBackgroundAdminRecord } from "@/map/background";
 import type { MapCaseTileAdminStatus } from "@/map/case-tiles";
+import type {
+  MapCompositeTileAdminStatus,
+  MapCompositeTileProfile,
+} from "@/map/composite-tiles";
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
@@ -300,6 +305,21 @@ export function TechnicalAdminPage() {
     useState(false);
   const [mapCaseTilesRegenerateError, setMapCaseTilesRegenerateError] =
     useState<string | null>(null);
+  const [mapCompositeTileStatus, setMapCompositeTileStatus] =
+    useState<MapCompositeTileAdminStatus | null>(null);
+  const [mapCompositeTilesLoading, setMapCompositeTilesLoading] =
+    useState(false);
+  const [mapCompositeTilesError, setMapCompositeTilesError] = useState<
+    string | null
+  >(null);
+  const [
+    mapCompositeTilesRegeneratingProfile,
+    setMapCompositeTilesRegeneratingProfile,
+  ] = useState<MapCompositeTileProfile | null>(null);
+  const [
+    mapCompositeTilesRegenerateError,
+    setMapCompositeTilesRegenerateError,
+  ] = useState<string | null>(null);
 
   const nomenclatureStatus = useMemo(
     () =>
@@ -581,6 +601,17 @@ export function TechnicalAdminPage() {
                 ? mapCaseTileStatus.latest.length
                 : null,
           },
+          {
+            kind: "map-composite-tiles" as const,
+            id: "__map_composite_tiles__",
+            label: "Tuiles composees",
+            count: mapCompositeTileStatus
+              ? Object.values(mapCompositeTileStatus.profiles).reduce(
+                  (sum, profile) => sum + profile.latest.length,
+                  0,
+                ) || null
+              : null,
+          },
           ...(referenceViewSections
             .find((section) => section.id === "objets-cartographiques")
             ?.views.map((view) => ({
@@ -648,6 +679,7 @@ export function TechnicalAdminPage() {
     [
       mapBackgrounds.length,
       mapCaseTileStatus,
+      mapCompositeTileStatus,
       referenceViewSections,
       schemaSummaries,
       staffAccounts,
@@ -674,7 +706,11 @@ export function TechnicalAdminPage() {
       activeIds.push("accounts");
     }
 
-    if (activeTab === "map-backgrounds" || activeTab === "map-case-tiles") {
+    if (
+      activeTab === "map-backgrounds" ||
+      activeTab === "map-case-tiles" ||
+      activeTab === "map-composite-tiles"
+    ) {
       activeIds.push("objets-cartographiques");
     }
 
@@ -928,6 +964,27 @@ export function TechnicalAdminPage() {
     }
   }, []);
 
+  const loadMapCompositeTileStatus = useCallback(async () => {
+    setMapCompositeTilesLoading(true);
+    setMapCompositeTilesError(null);
+
+    try {
+      const nextStatus = await fetchJson<MapCompositeTileAdminStatus>(
+        "/api/admin/tech/map-composite-tiles",
+      );
+      setMapCompositeTileStatus(nextStatus);
+    } catch (error) {
+      setMapCompositeTilesError(
+        error instanceof Error
+          ? error.message
+          : "Chargement des tuiles composees impossible.",
+      );
+      setMapCompositeTileStatus(null);
+    } finally {
+      setMapCompositeTilesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -942,6 +999,7 @@ export function TechnicalAdminPage() {
         setAccountsLoading(false);
         setMapBackgroundsLoading(false);
         setMapCaseTilesLoading(false);
+        setMapCompositeTilesLoading(false);
       }
     });
 
@@ -961,9 +1019,11 @@ export function TechnicalAdminPage() {
     void loadStaffAccounts();
     void loadMapBackgrounds();
     void loadMapCaseTileStatus();
+    void loadMapCompositeTileStatus();
   }, [
     loadMapBackgrounds,
     loadMapCaseTileStatus,
+    loadMapCompositeTileStatus,
     loadReferenceStatuses,
     loadSchemaSummaries,
     loadStaffAccounts,
@@ -1339,6 +1399,35 @@ export function TechnicalAdminPage() {
       setMapCaseTilesRegenerating(false);
     }
   }, [loadMapCaseTileStatus]);
+
+  const handleRegenerateMapCompositeTiles = useCallback(
+    async (profile: MapCompositeTileProfile) => {
+      setMapCompositeTilesRegeneratingProfile(profile);
+      setMapCompositeTilesRegenerateError(null);
+      setMapCompositeTilesError(null);
+
+      try {
+        const nextStatus = await fetchJson<MapCompositeTileAdminStatus>(
+          "/api/admin/tech/map-composite-tiles/regenerate",
+          {
+            method: "POST",
+            body: JSON.stringify({ profile }),
+          },
+        );
+        setMapCompositeTileStatus(nextStatus);
+      } catch (error) {
+        setMapCompositeTilesRegenerateError(
+          error instanceof Error
+            ? error.message
+            : "Generation des tuiles composees impossible.",
+        );
+        await loadMapCompositeTileStatus();
+      } finally {
+        setMapCompositeTilesRegeneratingProfile(null);
+      }
+    },
+    [loadMapCompositeTileStatus],
+  );
 
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
@@ -2023,6 +2112,11 @@ export function TechnicalAdminPage() {
               setActiveSidebarRootId("objets-cartographiques");
               setActiveReferenceViewId(null);
             }}
+            onSelectMapCompositeTiles={() => {
+              setActiveTab("map-composite-tiles");
+              setActiveSidebarRootId("objets-cartographiques");
+              setActiveReferenceViewId(null);
+            }}
           />
         </SectionPanel>
 
@@ -2075,6 +2169,16 @@ export function TechnicalAdminPage() {
               regenerateError={mapCaseTilesRegenerateError}
               onRefresh={loadMapCaseTileStatus}
               onRegenerate={handleRegenerateMapCaseTiles}
+            />
+          ) : activeTab === "map-composite-tiles" ? (
+            <MapCompositeTilesAdminPanel
+              status={mapCompositeTileStatus}
+              loading={mapCompositeTilesLoading}
+              error={mapCompositeTilesError}
+              regeneratingProfile={mapCompositeTilesRegeneratingProfile}
+              regenerateError={mapCompositeTilesRegenerateError}
+              onRefresh={loadMapCompositeTileStatus}
+              onRegenerate={handleRegenerateMapCompositeTiles}
             />
           ) : activeTab === "schema" ? (
             <>

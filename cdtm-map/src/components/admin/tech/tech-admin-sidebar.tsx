@@ -24,6 +24,7 @@ type TechAdminSidebarProps = {
   onSelectAccountItem: (itemId: string) => void;
   onSelectMapBackgrounds: () => void;
   onSelectMapCaseTiles: () => void;
+  onSelectMapCompositeTiles: () => void;
 };
 
 export function TechAdminSidebar({
@@ -45,6 +46,7 @@ export function TechAdminSidebar({
   onSelectAccountItem,
   onSelectMapBackgrounds,
   onSelectMapCaseTiles,
+  onSelectMapCompositeTiles,
 }: TechAdminSidebarProps) {
   return (
     <div className="mt-6 space-y-4">
@@ -58,7 +60,8 @@ export function TechAdminSidebar({
             (activeTab === "schema" && section.id === "schema") ||
             (activeTab === "accounts" && section.id === "accounts") ||
             ((activeTab === "map-backgrounds" ||
-              activeTab === "map-case-tiles") &&
+              activeTab === "map-case-tiles" ||
+              activeTab === "map-composite-tiles") &&
               section.id === "objets-cartographiques")
           }
           onSelect={() => {
@@ -103,7 +106,9 @@ export function TechAdminSidebar({
                         item.id === String(activeAccountId)
                       : item.kind === "map-backgrounds"
                         ? activeTab === "map-backgrounds"
-                        : activeTab === "map-case-tiles";
+                        : item.kind === "map-case-tiles"
+                          ? activeTab === "map-case-tiles"
+                          : activeTab === "map-composite-tiles";
 
               return (
                 <button
@@ -135,7 +140,12 @@ export function TechAdminSidebar({
                       return;
                     }
 
-                    onSelectMapCaseTiles();
+                    if (item.kind === "map-case-tiles") {
+                      onSelectMapCaseTiles();
+                      return;
+                    }
+
+                    onSelectMapCompositeTiles();
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">
