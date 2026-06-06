@@ -56,6 +56,10 @@ type CaseLookupRow = {
 };
 
 type EditableSectionPatch = Record<string, string | boolean | null | undefined>;
+type ComparableSectionValues = Record<
+  string,
+  string | boolean | null | undefined
+>;
 
 type ControlActorType = "faction" | "controleur";
 
@@ -260,6 +264,25 @@ function getPresentEntries<T extends EditableSectionPatch>(
         currentValue !== undefined
       );
     },
+  );
+}
+
+function areComparableValuesEqual(
+  currentValue: string | boolean | null | undefined,
+  nextValue: string | boolean | null,
+): boolean {
+  return (currentValue ?? null) === nextValue;
+}
+
+function filterChangedSectionPatch(
+  patch: EditableSectionPatch,
+  currentValues: ComparableSectionValues,
+): EditableSectionPatch {
+  return Object.fromEntries(
+    getPresentEntries(patch).filter(
+      ([columnName, nextValue]) =>
+        !areComparableValuesEqual(currentValues[columnName], nextValue),
+    ),
   );
 }
 
@@ -845,24 +868,38 @@ export async function saveAdminCaseRecord(
   try {
     await client.query("BEGIN");
     await ensureCaseExists(client, idCase);
+    const existingRecord = await selectAdminCaseRecord(client, idCase);
     await validateStaticAdminDraftSelections(client, draft);
 
     await applyCurrentSectionPatch(
       client,
       "case_public_current",
       idCase,
-      {
-        public_id_case: normalizePublicId(draft.public.id_case, idCase),
-        region: normalizeNullableField(draft.public.region),
-        sous_region: normalizeNullableField(draft.public.sous_region),
-        cote:
-          draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
-        lac: draft.public.lac.length > 0 ? draft.public.lac === "true" : null,
-        fluvial:
-          draft.public.fluvial.length > 0
-            ? draft.public.fluvial === "true"
-            : null,
-      },
+      filterChangedSectionPatch(
+        {
+          public_id_case: normalizePublicId(draft.public.id_case, idCase),
+          region: normalizeNullableField(draft.public.region),
+          sous_region: normalizeNullableField(draft.public.sous_region),
+          cote:
+            draft.public.cote.length > 0 ? draft.public.cote === "true" : null,
+          lac: draft.public.lac.length > 0 ? draft.public.lac === "true" : null,
+          fluvial:
+            draft.public.fluvial.length > 0
+              ? draft.public.fluvial === "true"
+              : null,
+        },
+        {
+          public_id_case: normalizePublicId(
+            existingRecord.public.id_case,
+            idCase,
+          ),
+          region: existingRecord.public.region,
+          sous_region: existingRecord.public.sous_region,
+          cote: existingRecord.public.cote,
+          lac: existingRecord.public.lac,
+          fluvial: existingRecord.public.fluvial,
+        },
+      ),
       userId,
     );
 
@@ -870,22 +907,31 @@ export async function saveAdminCaseRecord(
       client,
       "case_terrain_current",
       idCase,
-      {
-        terrain_cat: normalizeNullableField(draft.terrain.terrain_cat),
-        terrain_type: normalizeNullableField(draft.terrain.terrain_type),
-        terrain_secondaire: normalizeNullableField(
-          draft.terrain.terrain_secondaire,
-        ),
-        colline:
-          draft.terrain.colline.length > 0
-            ? draft.terrain.colline === "true"
-            : null,
-        relief: normalizeNullableField(draft.terrain.relief),
-      },
+      filterChangedSectionPatch(
+        {
+          terrain_cat: normalizeNullableField(draft.terrain.terrain_cat),
+          terrain_type: normalizeNullableField(draft.terrain.terrain_type),
+          terrain_secondaire: normalizeNullableField(
+            draft.terrain.terrain_secondaire,
+          ),
+          colline:
+            draft.terrain.colline.length > 0
+              ? draft.terrain.colline === "true"
+              : null,
+          relief: normalizeNullableField(draft.terrain.relief),
+        },
+        {
+          terrain_cat: existingRecord.terrain.terrain_cat,
+          terrain_type: existingRecord.terrain.terrain_type,
+          terrain_secondaire: existingRecord.terrain.terrain_secondaire,
+          colline: existingRecord.terrain.colline,
+          relief: existingRecord.terrain.relief,
+        },
+      ),
       userId,
     );
 
-    const existingControl = await getCaseControlValues(client, idCase);
+    const existingControl = existingRecord.control;
     const nextFaction = normalizeNullableField(draft.control.faction);
     const nextControleur = normalizeNullableField(draft.control.controleur);
     const previousPrimaryActor = derivePrimaryControlActor(
@@ -919,7 +965,17 @@ export async function saveAdminCaseRecord(
       client,
       "case_control_current",
       idCase,
-      controlPatch,
+      filterChangedSectionPatch(controlPatch, {
+        faction: existingRecord.control.faction,
+        controleur: existingRecord.control.controleur,
+        controle_type: existingRecord.control.controle_type,
+        controle_principal_type: existingRecord.control.controle_principal_type,
+        controle_principal_id: existingRecord.control.controle_principal_id,
+        controle_secondaire_type:
+          existingRecord.control.controle_secondaire_type,
+        controle_secondaire_id: existingRecord.control.controle_secondaire_id,
+        peuple: existingRecord.control.peuple,
+      }),
       userId,
     );
 
@@ -982,12 +1038,20 @@ export async function saveAdminCaseBulkPatch(
     await validateStaticBulkPatchSelections(client, patch);
 
     for (const idCase of uniqueIds) {
+      const existingRecord = await selectAdminCaseRecord(client, idCase);
+
       if (patch.public) {
         await applyCurrentSectionPatch(
           client,
           "case_public_current",
           idCase,
-          patch.public,
+          filterChangedSectionPatch(patch.public, {
+            region: existingRecord.public.region,
+            sous_region: existingRecord.public.sous_region,
+            cote: existingRecord.public.cote,
+            lac: existingRecord.public.lac,
+            fluvial: existingRecord.public.fluvial,
+          }),
           userId,
         );
       }
@@ -997,7 +1061,13 @@ export async function saveAdminCaseBulkPatch(
           client,
           "case_terrain_current",
           idCase,
-          patch.terrain,
+          filterChangedSectionPatch(patch.terrain, {
+            terrain_cat: existingRecord.terrain.terrain_cat,
+            terrain_type: existingRecord.terrain.terrain_type,
+            terrain_secondaire: existingRecord.terrain.terrain_secondaire,
+            colline: existingRecord.terrain.colline,
+            relief: existingRecord.terrain.relief,
+          }),
           userId,
         );
       }
@@ -1012,7 +1082,19 @@ export async function saveAdminCaseBulkPatch(
           client,
           "case_control_current",
           idCase,
-          controlPatch,
+          filterChangedSectionPatch(controlPatch, {
+            faction: existingRecord.control.faction,
+            controleur: existingRecord.control.controleur,
+            controle_type: existingRecord.control.controle_type,
+            controle_principal_type:
+              existingRecord.control.controle_principal_type,
+            controle_principal_id: existingRecord.control.controle_principal_id,
+            controle_secondaire_type:
+              existingRecord.control.controle_secondaire_type,
+            controle_secondaire_id:
+              existingRecord.control.controle_secondaire_id,
+            peuple: existingRecord.control.peuple,
+          }),
           userId,
         );
       }
