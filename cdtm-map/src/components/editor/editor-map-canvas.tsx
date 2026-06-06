@@ -4005,7 +4005,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     publishedObjectsLocked && selectedRoute?.status === "published";
 
   return (
-    <section className="grid min-h-0 gap-3 sm:gap-4 lg:min-h-[calc(100svh-5rem)] lg:grid-cols-[minmax(0,1fr)_24rem]">
+    <section className="grid min-h-0 gap-3 sm:gap-4 lg:min-h-[calc(100svh-5rem)] lg:grid-cols-[minmax(0,1fr)_25rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
       <div className="relative min-h-[calc(100dvh-8.5rem)] min-w-0 overflow-hidden rounded-[20px] bg-background/70 sm:min-h-[72svh] sm:rounded-[28px] lg:min-h-[calc(100svh-5rem)]">
         <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 sm:left-24 sm:right-4 sm:top-4">
           <div className="pointer-events-auto">

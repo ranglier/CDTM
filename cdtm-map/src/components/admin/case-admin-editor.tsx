@@ -241,9 +241,9 @@ function FormRow({
 }) {
   return (
     <div className="border-b border-border/50 py-3 first:pt-0 last:border-b-0 last:pb-0">
-      <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start">
-        <div className="flex items-center gap-2 sm:pt-2">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="grid gap-3 sm:grid-cols-[8.25rem_minmax(12rem,1fr)] sm:items-start">
+        <div className="flex min-w-0 items-center gap-2 sm:pt-2">
+          <p className="min-w-0 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
           {mixed ? (
@@ -378,11 +378,12 @@ function SelectField({
   }
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative min-w-0">
       <input
         className={`${fieldClassName} pr-10`}
         value={open ? query : selectedLabel}
         placeholder="Non renseigne"
+        title={selectedLabel || undefined}
         role="combobox"
         aria-expanded={open}
         aria-controls={listboxId}
@@ -427,7 +428,7 @@ function SelectField({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-50 max-h-[min(18rem,45dvh)] overflow-y-auto rounded-[16px] border border-border/80 bg-background/98 p-1 shadow-[0_18px_50px_hsl(var(--shadow)/0.45)]"
+          className="absolute right-0 top-[calc(100%+0.35rem)] z-50 max-h-[min(18rem,45dvh)] w-full min-w-[min(24rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-[16px] border border-border/80 bg-background/98 p-1 shadow-[0_18px_50px_hsl(var(--shadow)/0.45)]"
         >
           {visibleOptions.length === 1 && filteredOptions.length === 0 ? (
             <p className="px-3 py-2 text-sm text-muted-foreground">
@@ -456,7 +457,9 @@ function SelectField({
                   commitValue(optionValue);
                 }}
               >
-                <span className="min-w-0 truncate">{optionLabel}</span>
+                <span className="min-w-0 whitespace-normal break-words leading-5">
+                  {optionLabel}
+                </span>
                 {selected ? (
                   <span className="shrink-0 text-xs uppercase tracking-[0.16em] text-primary">
                     Actif
