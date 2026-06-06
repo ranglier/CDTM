@@ -144,6 +144,7 @@ export function createCdtmBackgroundLayer(
     return new TileLayer({
       extent: MAP_EXTENT,
       source: new ImageTileSource({
+        interpolate: false,
         projection: cdtmProjection,
         tileGrid: new TileGrid({
           extent: MAP_EXTENT,
@@ -161,6 +162,7 @@ export function createCdtmBackgroundLayer(
 
   return new ImageLayer({
     source: new ImageStatic({
+      interpolate: false,
       url: manifest.imageUrl ?? MAP_BACKGROUND_PATH,
       imageExtent: MAP_EXTENT,
       projection: cdtmProjection,
@@ -216,7 +218,7 @@ function createCdtmCaseRasterTileLayer({
         resolutions,
         tileSize: manifest.tileSize,
       }),
-      interpolate: true,
+      interpolate: false,
       url: (z, x, y) => {
         const mode = normalizeMapDisplayMode(getDisplayMode());
         const template = manifest.tileUrlTemplates[mode];

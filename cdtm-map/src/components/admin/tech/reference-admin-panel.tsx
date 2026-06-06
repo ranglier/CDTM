@@ -106,6 +106,7 @@ function MarkerDefaultColorEditor({
 export function ReferenceAdminPanel({
   activeReference,
   activeReferenceSection,
+  activeReferenceSectionItems,
   activeReferenceView,
   referenceRowsLoading,
   referenceRows,
@@ -121,6 +122,8 @@ export function ReferenceAdminPanel({
   onSaveReferenceRow,
   onDeleteReferenceRow,
   onSelectReferenceView,
+  onSelectMapBackgrounds,
+  onSelectMapCaseTiles,
   referenceFieldOptions,
   terrainCategoryOptions,
   terrainCategoryLabelByKey,
@@ -874,20 +877,34 @@ export function ReferenceAdminPanel({
 
         <section className="mt-6 rounded-[20px] border border-border/70 bg-background/35 p-4">
           <div className="space-y-3">
-            {activeReferenceSection.views.map((view) => (
+            {(activeReferenceSectionItems ?? []).map((item) => (
               <button
-                key={view.id}
+                key={item.id}
                 type="button"
                 className="w-full rounded-[16px] border border-border/70 bg-background/35 px-4 py-4 text-left transition hover:border-primary/25 hover:bg-background/50"
-                onClick={() => onSelectReferenceView(view.id)}
+                onClick={() => {
+                  if (item.kind === "reference") {
+                    onSelectReferenceView(item.id);
+                    return;
+                  }
+
+                  if (item.kind === "map-backgrounds") {
+                    onSelectMapBackgrounds();
+                    return;
+                  }
+
+                  if (item.kind === "map-case-tiles") {
+                    onSelectMapCaseTiles();
+                  }
+                }}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold text-foreground">
-                    {view.title}
+                    {item.label}
                   </span>
-                  {view.rowCount !== null ? (
+                  {item.count !== null ? (
                     <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      {view.rowCount}
+                      {item.count}
                     </span>
                   ) : null}
                 </div>

@@ -653,6 +653,15 @@ export function TechnicalAdminPage() {
       staffAccounts,
     ],
   );
+  const activeReferenceSectionItems = useMemo(
+    () =>
+      activeReferenceSection
+        ? (sidebarSections.find(
+            (section) => section.id === activeReferenceSection.id,
+          )?.items ?? [])
+        : null,
+    [activeReferenceSection, sidebarSections],
+  );
   const activeSidebarSectionIds = useMemo(() => {
     const activeIds: string[] = [];
 
@@ -2034,6 +2043,7 @@ export function TechnicalAdminPage() {
             <ReferenceAdminPanel
               activeReference={activeReference}
               activeReferenceSection={activeReferenceSection}
+              activeReferenceSectionItems={activeReferenceSectionItems}
               activeReferenceView={activeReferenceView}
               referenceRowsLoading={referenceRowsLoading}
               referenceRows={referenceRows}
@@ -2049,6 +2059,16 @@ export function TechnicalAdminPage() {
               onSaveReferenceRow={handleSaveReferenceRow}
               onDeleteReferenceRow={handleDeleteReferenceRow}
               onSelectReferenceView={setActiveReferenceViewId}
+              onSelectMapBackgrounds={() => {
+                setActiveTab("map-backgrounds");
+                setActiveSidebarRootId("objets-cartographiques");
+                setActiveReferenceViewId(null);
+              }}
+              onSelectMapCaseTiles={() => {
+                setActiveTab("map-case-tiles");
+                setActiveSidebarRootId("objets-cartographiques");
+                setActiveReferenceViewId(null);
+              }}
               referenceFieldOptions={referenceFieldOptions}
               terrainCategoryOptions={terrainCategoryOptions}
               terrainCategoryLabelByKey={terrainCategoryLabelByKey}

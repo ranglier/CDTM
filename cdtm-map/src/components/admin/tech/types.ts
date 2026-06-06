@@ -41,31 +41,33 @@ export type ReferenceViewSection = {
   views: ReferenceView[];
 };
 
+export type SidebarSectionItem =
+  | { kind: "reference"; id: string; label: string; count: number | null }
+  | { kind: "schema"; id: string; label: string; count: number | null }
+  | { kind: "account"; id: string; label: string; count: number | null }
+  | {
+      kind: "map-backgrounds";
+      id: string;
+      label: string;
+      count: number | null;
+    }
+  | {
+      kind: "map-case-tiles";
+      id: string;
+      label: string;
+      count: number | null;
+    };
+
 export type SidebarSection = {
   id: string;
   title: string;
-  items: Array<
-    | { kind: "reference"; id: string; label: string; count: number | null }
-    | { kind: "schema"; id: string; label: string; count: number | null }
-    | { kind: "account"; id: string; label: string; count: number | null }
-    | {
-        kind: "map-backgrounds";
-        id: string;
-        label: string;
-        count: number | null;
-      }
-    | {
-        kind: "map-case-tiles";
-        id: string;
-        label: string;
-        count: number | null;
-      }
-  >;
+  items: SidebarSectionItem[];
 };
 
 export type ReferencePanelProps = {
   activeReference: { definition: ReferenceTableDefinition } | null;
   activeReferenceSection: ReferenceViewSection | null;
+  activeReferenceSectionItems: SidebarSectionItem[] | null;
   activeReferenceView: ReferenceView | null;
   referenceRowsLoading: boolean;
   referenceRows: EditableRow[];
@@ -85,6 +87,8 @@ export type ReferencePanelProps = {
   onSaveReferenceRow: (row: EditableRow) => Promise<void>;
   onDeleteReferenceRow: (row: EditableRow) => Promise<void>;
   onSelectReferenceView: (viewId: string) => void;
+  onSelectMapBackgrounds: () => void;
+  onSelectMapCaseTiles: () => void;
   referenceFieldOptions: Record<string, ReferenceOption[]>;
   terrainCategoryOptions: Array<{ value: string; label: string }>;
   terrainCategoryLabelByKey: Record<string, string>;
