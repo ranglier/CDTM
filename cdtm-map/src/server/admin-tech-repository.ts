@@ -419,7 +419,7 @@ async function listStylesForTargets(
       FROM reference_styles
       WHERE cible_type = $1
         AND cible_id = ANY($2::text[])
-      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC
+      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC, id_style DESC
     `,
     [targetType, uniqueTargetIds],
   );
@@ -1606,7 +1606,7 @@ export async function listPublicMapStyles(): Promise<PublicMapStyles> {
         secondary_ratio
       FROM reference_styles
       WHERE cible_type = ANY($1::text[])
-      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC
+      ORDER BY cible_type, cible_id, updated_at DESC, created_at DESC, id_style DESC
     `,
     [MAP_STYLE_TARGET_TYPES],
   );

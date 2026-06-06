@@ -56,6 +56,14 @@ let cachedPublicStateHash:
   | null = null;
 let pendingPublicStateHashPromise: Promise<string | null> | null = null;
 
+function cachePublicStateHash(value: string | null): void {
+  cachedPublicStateHash = {
+    value,
+    expiresAt: Date.now() + PUBLIC_STATE_HASH_CACHE_TTL_MS,
+  };
+  pendingPublicStateHashPromise = null;
+}
+
 function toIsoStringOrNull(value: Date | string | null): string | null {
   if (!value) {
     return null;
@@ -336,6 +344,7 @@ export async function regenerateMapCaseTiles(
         [idTileSet, userId],
       );
       await client.query("COMMIT");
+      cachePublicStateHash(state.stateHash);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

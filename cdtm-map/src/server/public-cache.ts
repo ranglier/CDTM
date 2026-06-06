@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 export const PUBLIC_MANIFEST_CACHE_CONTROL =
   "public, max-age=30, stale-while-revalidate=300";
+export const PUBLIC_CASE_TILE_MANIFEST_CACHE_CONTROL =
+  "public, max-age=0, must-revalidate";
 export const PUBLIC_DATA_CACHE_CONTROL =
   "public, max-age=300, stale-while-revalidate=3600";
 

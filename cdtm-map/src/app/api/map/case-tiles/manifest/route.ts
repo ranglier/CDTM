@@ -1,7 +1,7 @@
 import { createVectorFallbackMapCaseTileManifest } from "@/map/case-tiles";
 import { getPublicMapCaseTileManifest } from "@/server/map-case-tile-repository";
 import {
-  PUBLIC_MANIFEST_CACHE_CONTROL,
+  PUBLIC_CASE_TILE_MANIFEST_CACHE_CONTROL,
   createPublicJsonResponse,
 } from "@/server/public-cache";
 
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return createPublicJsonResponse(
       request,
       manifest,
-      PUBLIC_MANIFEST_CACHE_CONTROL,
+      PUBLIC_CASE_TILE_MANIFEST_CACHE_CONTROL,
     );
   } catch (error) {
     console.error("Lecture des tuiles de cases impossible.", error);
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     return createPublicJsonResponse(
       request,
       createVectorFallbackMapCaseTileManifest(),
-      PUBLIC_MANIFEST_CACHE_CONTROL,
+      PUBLIC_CASE_TILE_MANIFEST_CACHE_CONTROL,
     );
   }
 }

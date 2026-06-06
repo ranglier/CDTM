@@ -115,7 +115,7 @@ export async function loadCdtmMapCaseTileManifest(): Promise<PublicMapCaseTileMa
   try {
     const response = await measureMapPerformanceAsync(
       "api.map.case-tiles.manifest",
-      () => fetch("/api/map/case-tiles/manifest"),
+      () => fetch("/api/map/case-tiles/manifest", { cache: "no-cache" }),
     );
 
     if (!response.ok) {

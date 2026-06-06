@@ -509,6 +509,7 @@ export function useCdtmMapRuntime({
     caseRasterBackupLayerRef.current = handles.caseRasterBackupLayer;
     caseRasterLayerRef.current = handles.caseRasterLayer;
     casePatternsRendererRef.current?.dispose();
+    const usePatternPerformanceLimits = publicLodEnabledRef.current;
     casePatternsRendererRef.current =
       caseRenderingModeRef.current !== "vector"
         ? null
@@ -522,6 +523,18 @@ export function useCdtmMapRuntime({
               getPublicMapStyles: () => publicMapStylesRef.current,
             },
             visible: casesVisibleRef.current,
+            maxResolution: usePatternPerformanceLimits
+              ? undefined
+              : Number.POSITIVE_INFINITY,
+            maxVisibleFeatures: usePatternPerformanceLimits
+              ? undefined
+              : Number.POSITIVE_INFINITY,
+            interactionMaxResolution: usePatternPerformanceLimits
+              ? undefined
+              : Number.POSITIVE_INFINITY,
+            interactionMaxVisibleFeatures: usePatternPerformanceLimits
+              ? undefined
+              : Number.POSITIVE_INFINITY,
           });
     routesSourceRef.current = handles.routesSource;
     routesLayerRef.current = handles.routesLayer;

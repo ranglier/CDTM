@@ -46,6 +46,10 @@ type AttachCasePatternsRendererOptions = {
   source: VectorSource;
   context: CasePatternRendererContext;
   visible?: boolean;
+  maxResolution?: number;
+  maxVisibleFeatures?: number;
+  interactionMaxResolution?: number;
+  interactionMaxVisibleFeatures?: number;
 };
 
 export type CasePatternsRendererHandle = {
@@ -283,6 +287,10 @@ export function attachCasePatternsRenderer({
   source,
   context,
   visible = true,
+  maxResolution = MAP_CASE_PATTERNS_MAX_RESOLUTION,
+  maxVisibleFeatures = MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES,
+  interactionMaxResolution = MAP_CASE_PATTERNS_INTERACTION_MAX_RESOLUTION,
+  interactionMaxVisibleFeatures = MAP_CASE_PATTERNS_INTERACTION_MAX_VISIBLE_FEATURES,
 }: AttachCasePatternsRendererOptions): CasePatternsRendererHandle {
   let currentVisible = visible;
   let mapMoving = false;
@@ -318,20 +326,20 @@ export function attachCasePatternsRenderer({
       map.getView().getResolution() ??
       Number.POSITIVE_INFINITY;
 
-    const maxResolution = mapMoving
-      ? MAP_CASE_PATTERNS_INTERACTION_MAX_RESOLUTION
-      : MAP_CASE_PATTERNS_MAX_RESOLUTION;
-    const maxVisibleFeatures = mapMoving
-      ? MAP_CASE_PATTERNS_INTERACTION_MAX_VISIBLE_FEATURES
-      : MAP_CASE_PATTERNS_MAX_VISIBLE_FEATURES;
+    const currentMaxResolution = mapMoving
+      ? interactionMaxResolution
+      : maxResolution;
+    const currentMaxVisibleFeatures = mapMoving
+      ? interactionMaxVisibleFeatures
+      : maxVisibleFeatures;
 
-    if (resolution > maxResolution) {
+    if (resolution > currentMaxResolution) {
       return;
     }
 
     const visibleFeatures = source.getFeaturesInExtent(extent);
 
-    if (visibleFeatures.length > maxVisibleFeatures) {
+    if (visibleFeatures.length > currentMaxVisibleFeatures) {
       return;
     }
 
