@@ -5,6 +5,11 @@ const BLANK_CASE_ROW = [{ label: "Etat", value: "Case vierge" }];
 type CaseHoverRow = { label: string; value: string };
 type ControlActorType = "faction" | "controleur";
 
+export type CaseHoverReferenceLabels = {
+  factions?: Record<string, string>;
+  controleurs?: Record<string, string>;
+};
+
 function normalizeControlType(value: string): string {
   return value
     .trim()
@@ -17,11 +22,68 @@ function isVassalControlType(value: string | null): boolean {
   return value === "vassal" || value === "vassalite" || value === "vassalise";
 }
 
-function formatCaseActor(value: string | null | undefined): string | null {
+function getReferenceActorLabel(
+  actorType: ControlActorType,
+  value: string | null | undefined,
+  referenceLabels?: CaseHoverReferenceLabels,
+): string | null {
   const trimmed = value?.trim();
 
   if (!trimmed) {
     return null;
+  }
+
+  const labels =
+    actorType === "faction"
+      ? referenceLabels?.factions
+      : referenceLabels?.controleurs;
+
+  const directLabel = labels?.[trimmed]?.trim();
+
+  if (directLabel) {
+    return directLabel;
+  }
+
+  const normalizedValue = trimmed.toLowerCase();
+  const insensitiveEntry = Object.entries(labels ?? {}).find(
+    ([key]) => key.trim().toLowerCase() === normalizedValue,
+  );
+  const insensitiveLabel = insensitiveEntry?.[1]?.trim();
+
+  return insensitiveLabel && insensitiveLabel.length > 0
+    ? insensitiveLabel
+    : null;
+}
+
+function getActorHoverValue(
+  actorType: ControlActorType,
+  value: string,
+  referenceLabels?: CaseHoverReferenceLabels,
+): string {
+  return getReferenceActorLabel(actorType, value, referenceLabels) ?? value;
+}
+
+function formatCaseActor(
+  value: string | null | undefined,
+  actorType?: ControlActorType,
+  referenceLabels?: CaseHoverReferenceLabels,
+): string | null {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (actorType) {
+    const referenceLabel = getReferenceActorLabel(
+      actorType,
+      trimmed,
+      referenceLabels,
+    );
+
+    if (referenceLabel) {
+      return referenceLabel;
+    }
   }
 
   return trimmed
@@ -44,6 +106,7 @@ function normalizeControlActorType(
 function getExplicitControlActorLabel(
   properties: StableCaseProperties,
   role: "principal" | "secondaire",
+  referenceLabels?: CaseHoverReferenceLabels,
 ): string | null {
   const actorType = normalizeControlActorType(
     role === "principal"
@@ -55,15 +118,26 @@ function getExplicitControlActorLabel(
       ? properties.controle_principal_id
       : properties.controle_secondaire_id;
 
-  return actorType ? formatCaseActor(actorId) : null;
+  return actorType
+    ? formatCaseActor(actorId, actorType, referenceLabels)
+    : null;
 }
 
 function getCurrentControlActorLabel(
   displayMode: MapDisplayMode,
   properties: StableCaseProperties,
+  referenceLabels?: CaseHoverReferenceLabels,
 ): string | null {
-  const faction = formatCaseActor(properties.faction);
-  const controller = formatCaseActor(properties.controleur);
+  const faction = formatCaseActor(
+    properties.faction,
+    "faction",
+    referenceLabels,
+  );
+  const controller = formatCaseActor(
+    properties.controleur,
+    "controleur",
+    referenceLabels,
+  );
 
   return displayMode === "faction"
     ? (faction ?? controller)
@@ -73,10 +147,11 @@ function getCurrentControlActorLabel(
 function getOtherCurrentControlActorLabel(
   properties: StableCaseProperties,
   primaryActor: string | null,
+  referenceLabels?: CaseHoverReferenceLabels,
 ): string | null {
   const candidates = [
-    formatCaseActor(properties.faction),
-    formatCaseActor(properties.controleur),
+    formatCaseActor(properties.faction, "faction", referenceLabels),
+    formatCaseActor(properties.controleur, "controleur", referenceLabels),
   ];
 
   return (
@@ -88,6 +163,7 @@ function getOtherCurrentControlActorLabel(
 function buildControlTypeHoverRow(
   properties: StableCaseProperties,
   displayMode: MapDisplayMode,
+  referenceLabels?: CaseHoverReferenceLabels,
 ): CaseHoverRow | null {
   const controlType = properties.controle_type?.trim();
 
@@ -108,19 +184,26 @@ function buildControlTypeHoverRow(
   const explicitPrimaryActor = getExplicitControlActorLabel(
     properties,
     "principal",
+    referenceLabels,
   );
   const primaryActor =
     explicitPrimaryActor ??
-    getCurrentControlActorLabel(displayMode, properties);
+    getCurrentControlActorLabel(displayMode, properties, referenceLabels);
   const explicitSecondaryActor = getExplicitControlActorLabel(
     properties,
     "secondaire",
+    referenceLabels,
   );
   const fallbackSecondaryActor = getOtherCurrentControlActorLabel(
     properties,
     primaryActor,
+    referenceLabels,
   );
-  const controller = formatCaseActor(properties.controleur);
+  const controller = formatCaseActor(
+    properties.controleur,
+    "controleur",
+    referenceLabels,
+  );
 
   switch (normalizedControlType) {
     case "occupe":
@@ -175,8 +258,13 @@ function appendControlTypeRow(
   rows: CaseHoverRow[],
   properties: StableCaseProperties,
   displayMode: MapDisplayMode,
+  referenceLabels?: CaseHoverReferenceLabels,
 ): CaseHoverRow[] {
-  const controlTypeRow = buildControlTypeHoverRow(properties, displayMode);
+  const controlTypeRow = buildControlTypeHoverRow(
+    properties,
+    displayMode,
+    referenceLabels,
+  );
 
   return controlTypeRow ? [...rows, controlTypeRow] : rows;
 }
@@ -188,6 +276,7 @@ export function getCaseHoverTitle(displayMode: MapDisplayMode): string | null {
 export function buildCaseHoverRows(
   displayMode: MapDisplayMode,
   properties: StableCaseProperties | null,
+  referenceLabels?: CaseHoverReferenceLabels,
 ): CaseHoverRow[] {
   if (!properties) {
     return BLANK_CASE_ROW;
@@ -197,24 +286,66 @@ export function buildCaseHoverRows(
     const rows: CaseHoverRow[] = [];
 
     if (properties.faction) {
-      rows.push({ label: "Faction", value: properties.faction });
+      rows.push({
+        label: "Faction",
+        value: getActorHoverValue(
+          "faction",
+          properties.faction,
+          referenceLabels,
+        ),
+      });
     } else if (properties.controleur) {
-      rows.push({ label: "Controleur", value: properties.controleur });
+      rows.push({
+        label: "Controleur",
+        value: getActorHoverValue(
+          "controleur",
+          properties.controleur,
+          referenceLabels,
+        ),
+      });
     }
 
-    const hoverRows = appendControlTypeRow(rows, properties, displayMode);
+    const hoverRows = appendControlTypeRow(
+      rows,
+      properties,
+      displayMode,
+      referenceLabels,
+    );
 
     return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
   }
 
   if (displayMode === "influence") {
     const rows = properties.controleur
-      ? [{ label: "Controleur", value: properties.controleur }]
+      ? [
+          {
+            label: "Controleur",
+            value: getActorHoverValue(
+              "controleur",
+              properties.controleur,
+              referenceLabels,
+            ),
+          },
+        ]
       : properties.faction
-        ? [{ label: "Faction", value: properties.faction }]
+        ? [
+            {
+              label: "Faction",
+              value: getActorHoverValue(
+                "faction",
+                properties.faction,
+                referenceLabels,
+              ),
+            },
+          ]
         : [];
 
-    const hoverRows = appendControlTypeRow(rows, properties, displayMode);
+    const hoverRows = appendControlTypeRow(
+      rows,
+      properties,
+      displayMode,
+      referenceLabels,
+    );
 
     return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
   }
@@ -226,7 +357,12 @@ export function buildCaseHoverRows(
     properties.colline ? { label: "Attribut", value: "Colline" } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 
-  const hoverRows = appendControlTypeRow(rows, properties, displayMode);
+  const hoverRows = appendControlTypeRow(
+    rows,
+    properties,
+    displayMode,
+    referenceLabels,
+  );
 
   return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
 }

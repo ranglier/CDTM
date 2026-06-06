@@ -59,7 +59,11 @@ import {
   getRegistryCaseId,
   mergeStableCases,
 } from "@/map/case-data";
-import { buildCaseHoverRows, getCaseHoverTitle } from "@/map/case-hover";
+import {
+  buildCaseHoverRows,
+  getCaseHoverTitle,
+  type CaseHoverReferenceLabels,
+} from "@/map/case-hover";
 import {
   readCaseFeatures,
   resolveCaseFeatureProperties,
@@ -782,6 +786,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const routeVertexTranslateInteractionRef = useRef<Translate | null>(null);
   const localityDragOriginRef = useRef<DragOrigin | null>(null);
   const referenceDataRef = useRef<EditorReferenceData | null>(null);
+  const caseHoverReferenceLabelsRef = useRef<CaseHoverReferenceLabels>({});
   const mapIconImagePathByKeyRef = useRef<Record<string, string>>({});
   const [stableCases, setStableCases] = useState<StableCaseProperties[]>([]);
   const [publicMapStyles, setPublicMapStyles] = useState<PublicMapStyles>(
@@ -1097,6 +1102,20 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     let cancelled = false;
 
     referenceDataRef.current = referenceData;
+    caseHoverReferenceLabelsRef.current = {
+      factions: Object.fromEntries(
+        (referenceData?.factions ?? []).map((option) => [
+          option.value,
+          option.label,
+        ]),
+      ),
+      controleurs: Object.fromEntries(
+        (referenceData?.controleurs ?? []).map((option) => [
+          option.value,
+          option.label,
+        ]),
+      ),
+    };
     localityDefaultIconKeyByTypeRef.current = Object.fromEntries(
       (referenceData?.locality_types ?? [])
         .filter(
@@ -2598,7 +2617,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         feature as Feature<Geometry>,
         casePropertiesByIdRef.current,
       );
-      const rows = buildCaseHoverRows(mapDisplayModeRef.current, resolvedCase);
+      const rows = buildCaseHoverRows(
+        mapDisplayModeRef.current,
+        resolvedCase,
+        caseHoverReferenceLabelsRef.current,
+      );
 
       if (rows.length === 0) {
         target.style.cursor = "";

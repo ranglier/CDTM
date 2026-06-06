@@ -133,3 +133,48 @@ test("le type de controle total est masque au survol", () => {
 
   assert.deepEqual(rows, [{ label: "Faction", value: "royaume_des_hommes" }]);
 });
+
+test("le survol peut afficher le libelle de reference d'un controleur", () => {
+  assert.deepEqual(
+    buildCaseHoverRows(
+      "influence",
+      {
+        id_case: "case_controleur_reference",
+        controleur: "c",
+      },
+      {
+        controleurs: {
+          c: "Cornac",
+        },
+      },
+    ),
+    [{ label: "Controleur", value: "Cornac" }],
+  );
+});
+
+test("le survol resout les acteurs explicites depuis les references", () => {
+  assert.deepEqual(
+    buildCaseHoverRows(
+      "influence",
+      {
+        id_case: "case_vassale_reference",
+        controleur: "f",
+        controle_type: "vassalise",
+        controle_secondaire_type: "faction",
+        controle_secondaire_id: "u",
+      },
+      {
+        controleurs: {
+          f: "Faramir",
+        },
+        factions: {
+          u: "Umbar",
+        },
+      },
+    ),
+    [
+      { label: "Controleur", value: "Faramir" },
+      { label: "Controle", value: "Vassal de Umbar" },
+    ],
+  );
+});
