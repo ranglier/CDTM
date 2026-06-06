@@ -201,6 +201,11 @@ function createCdtmCaseRasterTileLayer({
       : manifest.maxZoom;
   const resolutionCount = safeMaxZoom - manifest.minZoom + 1;
   const resolutions = manifest.resolutions.slice(0, resolutionCount);
+  const getTileUrlTemplate = () => {
+    const mode = normalizeMapDisplayMode(getDisplayMode());
+
+    return manifest.tileUrlTemplates[mode];
+  };
 
   return new TileLayer({
     cacheSize: MAP_CASE_TILE_CACHE_SIZE,
@@ -219,12 +224,7 @@ function createCdtmCaseRasterTileLayer({
         tileSize: manifest.tileSize,
       }),
       interpolate: false,
-      url: (z, x, y) => {
-        const mode = normalizeMapDisplayMode(getDisplayMode());
-        const template = manifest.tileUrlTemplates[mode];
-
-        return formatMapTileUrl(template, z, x, y);
-      },
+      url: getTileUrlTemplate(),
       wrapX: false,
       transition,
       zDirection: -1,
@@ -270,8 +270,18 @@ export function createCdtmCaseRasterBackupLayer({
 
 export function refreshCdtmCaseRasterLayer(
   layer: ReturnType<typeof createCdtmCaseRasterLayer>,
+  manifest: PublicMapCaseTileManifest | null,
+  displayMode: MapDisplayMode,
 ): void {
-  layer?.getSource()?.refresh();
+  if (!manifest || manifest.mode !== "raster" || !layer) {
+    return;
+  }
+
+  const source = layer.getSource();
+  const mode = normalizeMapDisplayMode(displayMode);
+  const template = manifest.tileUrlTemplates[mode];
+
+  source?.setUrl(template);
 }
 
 export function preloadCdtmBackgroundImage(): Promise<void> {

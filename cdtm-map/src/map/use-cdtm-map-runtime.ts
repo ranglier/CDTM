@@ -698,8 +698,16 @@ export function useCdtmMapRuntime({
     caseFillLayerRef.current?.changed();
     casesLayerRef.current?.changed();
     casePatternsRendererRef.current?.render();
-    refreshCdtmCaseRasterLayer(caseRasterLayerRef.current);
-    refreshCdtmCaseRasterLayer(caseRasterBackupLayerRef.current);
+    refreshCdtmCaseRasterLayer(
+      caseRasterLayerRef.current,
+      caseTileManifestRef.current,
+      displayModeRef.current,
+    );
+    refreshCdtmCaseRasterLayer(
+      caseRasterBackupLayerRef.current,
+      caseTileManifestRef.current,
+      displayModeRef.current,
+    );
     const frame = requestAnimationFrame(() => {
       clearHover();
     });
