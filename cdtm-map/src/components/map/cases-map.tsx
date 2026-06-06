@@ -79,6 +79,7 @@ import {
 } from "@/map/types";
 import {
   MAP_CASE_TILE_BACKUP_ACTIVE_OPACITY,
+  MAP_CASE_TILE_BACKUP_ENABLED_ON_DESKTOP,
   MAP_CASE_TILE_BACKUP_ENABLED_ON_MOBILE,
   MAP_CASE_TILE_BACKUP_HIDE_DELAY_MS,
   MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
@@ -756,7 +757,9 @@ export function CasesMap({
     );
     const useCaseRasterBackup =
       Boolean(standardLayers.caseRasterBackupLayer) &&
-      (!mobileLayoutRef.current || MAP_CASE_TILE_BACKUP_ENABLED_ON_MOBILE);
+      (mobileLayoutRef.current
+        ? MAP_CASE_TILE_BACKUP_ENABLED_ON_MOBILE
+        : MAP_CASE_TILE_BACKUP_ENABLED_ON_DESKTOP);
     const mapLayers = standardLayers.caseRasterLayer
       ? [
           standardLayers.backgroundLayer,

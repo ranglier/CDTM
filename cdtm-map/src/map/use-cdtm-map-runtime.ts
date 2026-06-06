@@ -10,7 +10,11 @@ import type Map from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import { unByKey } from "ol/Observable";
 
-import { MAP_CASE_TILE_BACKUP_IDLE_OPACITY, MAP_MAX_ZOOM } from "@/map/config";
+import {
+  MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
+  MAP_MAX_ZOOM,
+  MAP_TILE_MAX_ZOOM,
+} from "@/map/config";
 import { measureMapPerformanceSync } from "@/map/map-performance";
 import {
   getPublicPointerMoveThrottleMs,
@@ -496,7 +500,12 @@ export function useCdtmMapRuntime({
         void preloadCdtmBackgroundImage();
       }
 
-      return createCdtmMap(target, layers);
+      return createCdtmMap(target, layers, {
+        maxZoom:
+          caseRenderingModeRef.current === "vector"
+            ? MAP_MAX_ZOOM
+            : MAP_TILE_MAX_ZOOM,
+      });
     },
     [],
   );

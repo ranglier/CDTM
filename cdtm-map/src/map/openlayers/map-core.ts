@@ -69,12 +69,12 @@ export const cdtmProjection = new Projection({
 
 addProjection(cdtmProjection);
 
-export function createCdtmView() {
+export function createCdtmView({ maxZoom = MAP_MAX_ZOOM } = {}) {
   return new View({
     projection: cdtmProjection,
     center: [1600, -2000],
     extent: MAP_EXTENT,
-    maxZoom: MAP_MAX_ZOOM,
+    maxZoom,
     showFullExtent: true,
   });
 }
@@ -321,7 +321,11 @@ export function preloadCdtmBackgroundImage(): Promise<void> {
   return backgroundImagePreloadPromise;
 }
 
-export function createCdtmMap(target: HTMLElement, layers: BaseLayer[]) {
+export function createCdtmMap(
+  target: HTMLElement,
+  layers: BaseLayer[],
+  { maxZoom = MAP_MAX_ZOOM }: { maxZoom?: number } = {},
+) {
   return new Map({
     target,
     layers,
@@ -332,7 +336,7 @@ export function createCdtmMap(target: HTMLElement, layers: BaseLayer[]) {
     interactions: defaultInteractions({
       zoomDuration: 0,
     }),
-    view: createCdtmView(),
+    view: createCdtmView({ maxZoom }),
   });
 }
 
