@@ -1040,9 +1040,12 @@ export function CasesMap({
         return;
       }
 
+      const shouldActivateBackup =
+        active && displayModeRef.current !== "influence";
+
       layer.setVisible(casesVisibleRef.current);
       layer.setOpacity(
-        active
+        shouldActivateBackup
           ? MAP_CASE_TILE_BACKUP_ACTIVE_OPACITY
           : MAP_CASE_TILE_BACKUP_IDLE_OPACITY,
       );
