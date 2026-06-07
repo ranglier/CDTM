@@ -1325,6 +1325,7 @@ export function CasesMap({
             objectDisplayMode={objectDisplayMode}
             panelVisible={panelVisible}
             displayMode={displayMode}
+            onInteraction={clearHover}
             onDisplayModeChange={onDisplayModeChange}
             onToggleCases={() => onCasesVisibilityChange(!casesVisible)}
             onToggleLocalities={() =>

@@ -18,6 +18,7 @@ type MapToolbarProps = {
   showPanelToggle?: boolean;
   rightActions?: ReactNode;
   className?: string;
+  onInteraction?: () => void;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
   onToggleCases: () => void;
   onToggleLocalities: () => void;
@@ -40,6 +41,7 @@ export function MapToolbar({
   showPanelToggle = true,
   rightActions,
   className,
+  onInteraction,
   onDisplayModeChange,
   onToggleCases,
   onToggleLocalities,
@@ -57,6 +59,9 @@ export function MapToolbar({
         "flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-between gap-1.5 rounded-[18px] border border-border/80 bg-background/82 p-1.5 shadow-[0_18px_40px_hsl(var(--shadow)/0.45)] backdrop-blur-md sm:max-w-[calc(100vw-2rem)] sm:gap-2 sm:rounded-[20px]",
         className,
       )}
+      onFocusCapture={() => onInteraction?.()}
+      onPointerDownCapture={() => onInteraction?.()}
+      onPointerOverCapture={() => onInteraction?.()}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
         <details className="group relative">

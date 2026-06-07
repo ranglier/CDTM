@@ -113,6 +113,14 @@ function normalizeErrorMessage(error: unknown): string {
   return message.length > 1000 ? `${message.slice(0, 997)}...` : message;
 }
 
+function assertMapCaseTileSetId(idTileSet: string): string {
+  if (!/^[0-9a-fA-F-]{36}$/.test(idTileSet)) {
+    throw new Error("Jeu de tuiles de cases introuvable.");
+  }
+
+  return idTileSet;
+}
+
 async function toPublicManifest(
   row: MapCaseTileSetRow,
   currentStateHash: string | null,
@@ -361,6 +369,70 @@ export async function regenerateMapCaseTiles(
     });
     throw error;
   }
+
+  return getMapCaseTileAdminStatus();
+}
+
+export async function deleteMapCaseTileSet(
+  idTileSet: string,
+): Promise<MapCaseTileAdminStatus> {
+  const hasDatabase = await ensureDatabaseReady();
+
+  if (!hasDatabase) {
+    throw new Error("La base de donnees n'est pas configuree.");
+  }
+
+  const safeIdTileSet = assertMapCaseTileSetId(idTileSet);
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const currentResult = await client.query<MapCaseTileSetRow>(
+      `
+        SELECT *
+        FROM map_case_tile_sets
+        WHERE id_tile_set = $1
+        FOR UPDATE
+      `,
+      [safeIdTileSet],
+    );
+    const current = currentResult.rows[0];
+
+    if (!current) {
+      throw new Error("Jeu de tuiles de cases introuvable.");
+    }
+
+    if (current.is_active) {
+      throw new Error("Impossible de supprimer le jeu de tuiles actif.");
+    }
+
+    if (current.generation_status === "generating") {
+      throw new Error("Impossible de supprimer une generation en cours.");
+    }
+
+    await client.query(
+      `
+        DELETE FROM map_case_tile_sets
+        WHERE id_tile_set = $1
+      `,
+      [safeIdTileSet],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await rm(getMapCaseTileSetDirectory(safeIdTileSet), {
+    recursive: true,
+    force: true,
+  }).catch((error: unknown) => {
+    console.error("Suppression du dossier de tuiles de cases impossible.", error);
+  });
 
   return getMapCaseTileAdminStatus();
 }

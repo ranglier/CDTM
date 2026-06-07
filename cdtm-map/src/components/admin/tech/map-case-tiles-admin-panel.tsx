@@ -13,8 +13,10 @@ type MapCaseTilesAdminPanelProps = {
   error: string | null;
   regenerating: boolean;
   regenerateError: string | null;
+  deletingId: string | null;
   onRefresh: () => Promise<void>;
   onRegenerate: () => Promise<void>;
+  onDelete: (idTileSet: string) => Promise<void>;
 };
 
 const generationStatusLabels: Record<MapCaseTileGenerationStatus, string> = {
@@ -119,8 +121,10 @@ export function MapCaseTilesAdminPanel({
   error,
   regenerating,
   regenerateError,
+  deletingId,
   onRefresh,
   onRegenerate,
+  onDelete,
 }: MapCaseTilesAdminPanelProps) {
   const active = status?.active ?? null;
 
@@ -141,14 +145,14 @@ export function MapCaseTilesAdminPanel({
           <Button
             type="button"
             variant="outline"
-            disabled={loading || regenerating}
+            disabled={loading || regenerating || deletingId !== null}
             onClick={() => void onRefresh()}
           >
             Actualiser
           </Button>
           <Button
             type="button"
-            disabled={loading || regenerating}
+            disabled={loading || regenerating || deletingId !== null}
             onClick={() => void onRegenerate()}
           >
             {regenerating ? "Generation..." : "Regenerer"}
@@ -276,6 +280,23 @@ export function MapCaseTilesAdminPanel({
                       Cree le {formatDate(item.created_at)}
                     </p>
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      item.is_active ||
+                      item.generation_status === "generating" ||
+                      loading ||
+                      regenerating ||
+                      deletingId !== null
+                    }
+                    onClick={() => void onDelete(item.id_tile_set)}
+                  >
+                    {deletingId === item.id_tile_set
+                      ? "Suppression..."
+                      : "Supprimer"}
+                  </Button>
                 </div>
 
                 <div className="mt-4">

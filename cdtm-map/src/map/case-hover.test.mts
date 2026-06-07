@@ -3,10 +3,10 @@ import test from "node:test";
 
 import { buildCaseHoverRows, getCaseHoverTitle } from "./case-hover.ts";
 
-test("le titre de survol des cases est masque en modes faction et influence", () => {
+test("le titre de survol des cases est masque dans tous les modes", () => {
   assert.equal(getCaseHoverTitle("faction"), null);
   assert.equal(getCaseHoverTitle("influence"), null);
-  assert.equal(getCaseHoverTitle("topographic"), "Case");
+  assert.equal(getCaseHoverTitle("topographic"), null);
 });
 
 test("le controle partiel est explicite au survol", () => {
@@ -132,6 +132,24 @@ test("le type de controle total est masque au survol", () => {
   });
 
   assert.deepEqual(rows, [{ label: "Faction", value: "royaume_des_hommes" }]);
+});
+
+test("le mode topographique affiche region et sous-region avant le terrain", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("topographic", {
+      id_case: "case_topo",
+      region: "Ithilien",
+      sous_region: "Nord",
+      terrain_type: "foret",
+      colline: true,
+    }),
+    [
+      { label: "Region", value: "Ithilien" },
+      { label: "Sous-region", value: "Nord" },
+      { label: "Terrain", value: "foret" },
+      { label: "Attribut", value: "Colline" },
+    ],
+  );
 });
 
 test("le survol peut afficher le libelle de reference d'un controleur", () => {

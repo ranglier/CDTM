@@ -4043,6 +4043,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
               showObjectControls={canEditMapObjects}
               showPanelToggle={false}
               className="w-full bg-background/92 px-2 py-2 sm:px-3 lg:flex-nowrap"
+              onInteraction={clearHover}
               onDisplayModeChange={setMapDisplayMode}
               onToggleCases={handleToggleCasesVisibility}
               onToggleLocalities={() => {

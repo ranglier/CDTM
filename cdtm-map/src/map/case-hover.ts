@@ -270,7 +270,9 @@ function appendControlTypeRow(
 }
 
 export function getCaseHoverTitle(displayMode: MapDisplayMode): string | null {
-  return displayMode === "topographic" ? "Case" : null;
+  void displayMode;
+
+  return null;
 }
 
 export function buildCaseHoverRows(
@@ -351,6 +353,10 @@ export function buildCaseHoverRows(
   }
 
   const rows = [
+    properties.region ? { label: "Region", value: properties.region } : null,
+    properties.sous_region
+      ? { label: "Sous-region", value: properties.sous_region }
+      : null,
     properties.terrain_type
       ? { label: "Terrain", value: properties.terrain_type }
       : null,

@@ -300,6 +300,9 @@ export function TechnicalAdminPage() {
     useState(false);
   const [mapCaseTilesRegenerateError, setMapCaseTilesRegenerateError] =
     useState<string | null>(null);
+  const [deletingMapCaseTileSetId, setDeletingMapCaseTileSetId] = useState<
+    string | null
+  >(null);
 
   const nomenclatureStatus = useMemo(
     () =>
@@ -1352,6 +1355,36 @@ export function TechnicalAdminPage() {
     }
   }, [loadMapCaseTileStatus]);
 
+  const handleDeleteMapCaseTileSet = useCallback(
+    async (idTileSet: string) => {
+      if (!window.confirm("Supprimer ce jeu de tuiles de cases ?")) {
+        return;
+      }
+
+      setDeletingMapCaseTileSetId(idTileSet);
+      setMapCaseTilesError(null);
+      setMapCaseTilesRegenerateError(null);
+
+      try {
+        const nextStatus = await fetchJson<MapCaseTileAdminStatus>(
+          `/api/admin/tech/map-case-tiles/${idTileSet}`,
+          {
+            method: "DELETE",
+          },
+        );
+        setMapCaseTileStatus(nextStatus);
+      } catch (error) {
+        setMapCaseTilesError(
+          error instanceof Error ? error.message : "Suppression impossible.",
+        );
+        await loadMapCaseTileStatus();
+      } finally {
+        setDeletingMapCaseTileSetId(null);
+      }
+    },
+    [loadMapCaseTileStatus],
+  );
+
   const handleAddReferenceRow = useCallback(() => {
     if (!activeReference || !activeReferenceView) {
       return;
@@ -2096,8 +2129,10 @@ export function TechnicalAdminPage() {
               error={mapCaseTilesError}
               regenerating={mapCaseTilesRegenerating}
               regenerateError={mapCaseTilesRegenerateError}
+              deletingId={deletingMapCaseTileSetId}
               onRefresh={loadMapCaseTileStatus}
               onRegenerate={handleRegenerateMapCaseTiles}
+              onDelete={handleDeleteMapCaseTileSet}
             />
           ) : activeTab === "schema" ? (
             <>
