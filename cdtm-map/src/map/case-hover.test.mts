@@ -152,6 +152,26 @@ test("le mode topographique affiche region et sous-region avant le terrain", () 
   );
 });
 
+test("le mode topographique masque les informations de controle au survol", () => {
+  assert.deepEqual(
+    buildCaseHoverRows("topographic", {
+      id_case: "case_topo_controle",
+      region: "Calenardhon",
+      sous_region: "Ouestfolde",
+      terrain_type: "prairie",
+      controleur: "seradan",
+      controle_type: "vassalise",
+      controle_secondaire_type: "faction",
+      controle_secondaire_id: "royaume_des_hommes",
+    }),
+    [
+      { label: "Region", value: "Calenardhon" },
+      { label: "Sous-region", value: "Ouestfolde" },
+      { label: "Terrain", value: "prairie" },
+    ],
+  );
+});
+
 test("le survol peut afficher le libelle de reference d'un controleur", () => {
   assert.deepEqual(
     buildCaseHoverRows(

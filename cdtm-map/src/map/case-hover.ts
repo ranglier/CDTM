@@ -363,12 +363,5 @@ export function buildCaseHoverRows(
     properties.colline ? { label: "Attribut", value: "Colline" } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 
-  const hoverRows = appendControlTypeRow(
-    rows,
-    properties,
-    displayMode,
-    referenceLabels,
-  );
-
-  return hoverRows.length > 0 ? hoverRows : BLANK_CASE_ROW;
+  return rows.length > 0 ? rows : BLANK_CASE_ROW;
 }
