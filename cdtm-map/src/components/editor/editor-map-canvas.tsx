@@ -1434,6 +1434,46 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
     [fetchAdminRecords],
   );
 
+  const refreshImpactedCaseAdminRecords = useCallback(
+    async (caseIds: Array<string | null | undefined>) => {
+      const uniqueCaseIds = Array.from(
+        new Set(
+          caseIds
+            .map((idCase) => idCase?.trim())
+            .filter((idCase): idCase is string => Boolean(idCase)),
+        ),
+      );
+
+      if (uniqueCaseIds.length === 0) {
+        return;
+      }
+
+      const selectedIds = selectedCaseIdsRef.current;
+      const idsToRefresh = caseAdminDirtyRef.current
+        ? uniqueCaseIds.filter((idCase) => !selectedIds.has(idCase))
+        : uniqueCaseIds;
+
+      if (idsToRefresh.length === 0) {
+        return;
+      }
+
+      try {
+        await refreshAdminRecords(idsToRefresh);
+      } catch (error) {
+        console.error(
+          "Impossible de rafraichir les emplacements des cases impactees.",
+          error,
+        );
+        setAdminError(
+          error instanceof Error
+            ? error.message
+            : "Rafraichissement des emplacements impossible.",
+        );
+      }
+    },
+    [refreshAdminRecords, selectedCaseIdsRef],
+  );
+
   const handleCaseSelectionChange = useCallback(
     (nextCaseId: string | null, intent: "replace" | "toggle") => {
       const currentActiveCaseId = activeCaseIdRef.current;
@@ -1884,6 +1924,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             setLocalityEditDraft(nextDraft);
             setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
           }
+          await refreshImpactedCaseAdminRecords([
+            origin.locality.id_case_detected,
+            updated.id_case_detected,
+          ]);
         } else if (origin.family === "landmark" && landmark) {
           const slotOverride =
             selectedLandmarkIdRef.current === landmark.id_landmark &&
@@ -1922,6 +1966,11 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             });
           }
 
+          setLandmarks((items) =>
+            items.map((item) =>
+              item.id_landmark === updated.id_landmark ? updated : item,
+            ),
+          );
           if (selectedLandmarkIdRef.current === updated.id_landmark) {
             const nextDraft = createLandmarkEditDraft(updated);
 
@@ -1929,6 +1978,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
             setLandmarkEditDraft(nextDraft);
             setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
           }
+          await refreshImpactedCaseAdminRecords([
+            origin.landmark.id_case_detected,
+            updated.id_case_detected,
+          ]);
         }
       } catch (error) {
         if (origin.family === "locality") {
@@ -1953,7 +2006,12 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         setLocalityMoveSaving(false);
       }
     },
-    [detectCaseIdAtCoordinate, mapRef, pointsSourceRef],
+    [
+      detectCaseIdAtCoordinate,
+      mapRef,
+      pointsSourceRef,
+      refreshImpactedCaseAdminRecords,
+    ],
   );
 
   const handleRouteVertexTranslateEnd = useCallback((rawEvent: unknown) => {
@@ -3312,6 +3370,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         setLocalitiesCount((count) => (count === null ? 1 : count + 1));
         setLocalities((items) => [...items, created]);
         selectLocality(created);
+        await refreshImpactedCaseAdminRecords([created.id_case_detected]);
       } else {
         const payload: EditorMapLandmarkInput = {
           name: trimmedName,
@@ -3349,6 +3408,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
         setLandmarksCount((count) => (count === null ? 1 : count + 1));
         setLandmarks((items) => [...items, created]);
         selectLandmark(created);
+        await refreshImpactedCaseAdminRecords([created.id_case_detected]);
       }
 
       setPointDraft(null);
@@ -3424,6 +3484,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       setSelectedLocality(updated);
       setLocalityEditDraft(nextDraft);
       setLocalityEditSnapshot(getLocalityEditSnapshot(nextDraft));
+      await refreshImpactedCaseAdminRecords([
+        selectedLocality.id_case_detected,
+        updated.id_case_detected,
+      ]);
     } catch (error) {
       setLocalityEditError(
         error instanceof Error
@@ -3506,6 +3570,10 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       setSelectedLandmark(updated);
       setLandmarkEditDraft(nextDraft);
       setLandmarkEditSnapshot(getLandmarkEditSnapshot(nextDraft));
+      await refreshImpactedCaseAdminRecords([
+        selectedLandmark.id_case_detected,
+        updated.id_case_detected,
+      ]);
     } catch (error) {
       setLocalityEditError(
         error instanceof Error
@@ -3540,6 +3608,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
     try {
       const id = selectedLocality.id_locality;
+      const impactedCaseId = selectedLocality.id_case_detected;
 
       await fetchJson<{ deleted: boolean; id: string }>(
         `/api/admin/editor/localities/${encodeURIComponent(id)}`,
@@ -3567,6 +3636,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       );
       setHoverInfo(null);
       handleCloseLocalitySelection();
+      await refreshImpactedCaseAdminRecords([impactedCaseId]);
     } catch (error) {
       setLocalityEditError(
         error instanceof Error
@@ -3607,6 +3677,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
 
     try {
       const id = selectedLandmark.id_landmark;
+      const impactedCaseId = selectedLandmark.id_case_detected;
 
       await fetchJson<{ deleted: boolean; id: string }>(
         `/api/admin/editor/landmarks/${encodeURIComponent(id)}`,
@@ -3626,6 +3697,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
       setLandmarks((items) => items.filter((item) => item.id_landmark !== id));
       setHoverInfo(null);
       handleCloseLocalitySelection();
+      await refreshImpactedCaseAdminRecords([impactedCaseId]);
     } catch (error) {
       setLocalityEditError(
         error instanceof Error
