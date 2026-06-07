@@ -796,7 +796,7 @@ export function EditorMapCanvas({ canEditMapObjects }: EditorMapCanvasProps) {
   const [, setCasesCount] = useState<number | null>(null);
   const [casesError, setCasesError] = useState<string | null>(null);
   const [, setCasesLoading] = useState(false);
-  const [routesVisible, setRoutesVisible] = useState(true);
+  const [routesVisible, setRoutesVisible] = useState(false);
   const [routes, setRoutes] = useState<EditorMapRoute[]>([]);
   const [, setRoutesCount] = useState<number | null>(null);
   const [, setRoutesLoading] = useState(false);

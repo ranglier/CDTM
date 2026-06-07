@@ -195,12 +195,11 @@ export function CasesMap({
   const casePickingHoverRequestRef = useRef(0);
   const caseRasterPrefetchRef = useRef<() => void>(() => {});
   const mobileLayoutRef = useRef(mobileLayout);
-  const mobileRoutesDefaultAppliedRef = useRef(false);
   const publicObjectsPayloadRef = useRef<PublicMapObjectsResponse | null>(null);
   const publicRouteSegmentsRef = useRef<number | null>(null);
   const [localitiesVisible, setLocalitiesVisible] = useState(true);
   const [landmarksVisible, setLandmarksVisible] = useState(true);
-  const [routesVisible, setRoutesVisible] = useState(true);
+  const [routesVisible, setRoutesVisible] = useState(false);
   const [objectDisplayMode, setObjectDisplayMode] =
     useState<CdtmMapObjectDisplayMode>("points");
   const [caseTileManifest, setCaseTileManifest] =
@@ -275,11 +274,6 @@ export function CasesMap({
   useEffect(() => {
     mobileLayoutRef.current = mobileLayout;
     pointsLayerRef.current?.changed();
-
-    if (mobileLayout && !mobileRoutesDefaultAppliedRef.current) {
-      mobileRoutesDefaultAppliedRef.current = true;
-      setRoutesVisible(false);
-    }
   }, [mobileLayout, pointsLayerRef]);
 
   useEffect(() => {
